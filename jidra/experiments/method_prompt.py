@@ -117,10 +117,9 @@ def build_method_analysis_prompt(input: MethodAnalysisInput) -> str:
         "- log.*\n"
         "- Markers.*\n"
         "- metrics.*\n"
-        "- dogstatsd.*\n"
         "- StatsDClient.*\n"
         "- Counter.*\n"
-        "- CustomMetricCounter.*\n"
+
         "\n"
         "### NOT noise (these ARE logic):\n"
         "- Optional.*\n"

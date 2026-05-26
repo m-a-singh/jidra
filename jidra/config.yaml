@@ -45,6 +45,53 @@ flow:
 # You can also extend these via env vars:
 #   - JIDRA_NON_BUSINESS_SIGNATURE_PARTS=".metrics.,dogstatsdclient#"
 #   - JIDRA_NON_BUSINESS_CALL_NAMES="increment,decrement"
+trace:
+  observability:
+    # mode:
+    #  - extend (default): start with JIDRA's generic defaults, then add config/env
+    #  - replace: use ONLY what's defined here (env can still extend for one-off runs)
+    mode: extend
+    patterns:
+      - "log."
+      - "logger."
+      - "markers."
+      - "statsdclient."
+      - "counter."
+      - "metrics."
+      - "recordexecutiontime"
+
+error_doc:
+  noise:
+    # mode:
+    #  - extend (default): start with JIDRA's generic defaults, then add config/env
+    #  - replace: use ONLY what's defined here (env can still extend for one-off runs)
+    mode: extend
+
+    # If receiver string equals/starts-with these tokens, treat as noise.
+    receiver_prefixes:
+      - "builder"
+      - "log"
+      - "thread"
+
+    # If call name matches any of these, treat as noise.
+    call_names:
+      - "warn"
+      - "error"
+      - "info"
+      - "debug"
+      - "trace"
+      - "increment"
+      - "sleep"
+      - "currentThread"
+      - "interrupt"
+
+    # Exception receiver variable name (often "e"), and common accessor calls.
+    exception_receiver: "e"
+    exception_call_names:
+      - "getMessage"
+      - "getCause"
+      - "getStackTrace"
+
 non_business:
   # mode:
   #  - extend (default): start with JIDRA's generic defaults, then add config/env

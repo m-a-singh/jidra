@@ -8,6 +8,8 @@ from .cli import _parse_stack_trace, _match_stack_frames_to_methods, _is_meaning
 def analyze_stack_trace(
     stack_trace: str,
     graph_path: str | None = None,
+    *,
+    config_path: str | None = None,
     depth: int = 6,
     max_nodes: int = 80,
     include_utility: bool = False,
@@ -38,7 +40,11 @@ def analyze_stack_trace(
 
     method_by_id = {m.id: m for m in graph.methods}
     caller_row = matched_rows[anchor["frame_index"] - 1] if anchor["frame_index"] > 0 else None
-    unresolved_near = [c for c in (flow_result.get("mind_map", {}) or {}).get("unresolved_calls", []) if not _is_error_doc_noise_call(c)]
+    unresolved_near = [
+        c
+        for c in (flow_result.get("mind_map", {}) or {}).get("unresolved_calls", [])
+        if not _is_error_doc_noise_call(c, config_path=config_path)
+    ]
     unresolved_near = unresolved_near[:10]
 
     neighbors = []
@@ -182,6 +188,7 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
     def jidra_analyze_stack_trace(
         stack_trace: str,
         graph_path: str | None = None,
+        config_path: str | None = None,
         depth: int = 6,
         max_nodes: int = 80,
         include_utility: bool = False,
@@ -189,6 +196,7 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
         return analyze_stack_trace(
             stack_trace=stack_trace,
             graph_path=graph_path or default_path,
+            config_path=config_path,
             depth=depth,
             max_nodes=max_nodes,
             include_utility=include_utility,
