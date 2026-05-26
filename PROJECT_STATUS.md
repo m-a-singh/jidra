@@ -103,13 +103,23 @@ Meaning:
 
 ---
 
-## 8) Decision
-Pause further development.
+## 8) Status
+Current baseline validated.
 
-Reason:
-- Core concept validated (navigation + context reduction).
-- Current approach does not fully meet deeper debugging expectations.
-- Next level requires a different approach (runtime or semantic modeling).
+This project has reached a solid, portfolio-ready baseline:
+- deterministic static graph extraction
+- uncertainty-aware navigation
+- measurable context reduction in LLM workflows
+
+### What the next phase would require
+To reliably answer deeper “why did this happen at runtime?” debugging questions, the next step is not incremental heuristics.
+It would require adding **runtime and/or semantic modeling**, e.g.:
+- dynamic dispatch / polymorphism resolution beyond static types
+- framework/runtime semantics (Spring wiring, DI, config, annotations)
+- async/reactive execution modeling
+- experiment/feature-flag/config-driven branches
+
+That scope is a distinct phase of work with different techniques and data sources.
 
 ---
 
