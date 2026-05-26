@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jidra"
+version = "0.1.0"
+description = "JIDRA (Java Intelligent Diagnostic & Reasoning Agent) minimal CLI baseline"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+  "tree-sitter>=0.22.0",
+  "tree-sitter-java>=0.21.0",
+  "litellm>=1.82.0",
+  "pyyaml>=6.0.0",
+  "mcp>=1.27.0"
+]
+
+[project.scripts]
+jidra = "jidra.cli:main"
+
+[project.optional-dependencies]
+mcp = ["mcp"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["jidra"]

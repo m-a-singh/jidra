@@ -1,0 +1,41 @@
+llm:
+  provider: litellm
+  profile: local
+
+  profiles:
+    local:
+      api_base: "http://localhost:4000"
+      api_key_env: "LITELLM_PROXY_API_KEY"
+      default_model: "ollama/qwen2.5-coder:7b"
+      timeout_seconds: 120
+      temperature: 0.2
+      max_tokens: 1200
+
+    enterprise:
+      api_base: "https://your-litellm.example.com"
+      api_key_env: "LITELLM_API_KEY"
+      default_model: "mistral:7b-instruct-v0.2-q4_0"
+      timeout_seconds: 120
+      temperature: 0.2
+      max_tokens: 2000
+
+flow:
+  include:
+    signatures: []
+    package_contains: []
+    method_name_patterns: []
+  exclude:
+    signatures: []
+    package_contains:
+      - "java."
+      - "javax."
+      - "jakarta."
+      - "org.slf4j."
+      - "ch.qos.logback."
+      - "reactor."
+      - "io.micrometer."
+      - "net.logstash."
+      - "org.apache.commons."
+    method_name_patterns: []
+    class_name_patterns:
+      - "ServiceMetrics"
