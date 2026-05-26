@@ -236,31 +236,31 @@ def _is_meaningful_signature(sig: str) -> bool:
     return not any(x in s for x in noisy)
 
 
-def _is_error_doc_noise_call(call: dict) -> bool:
-    receiver = str(call.get("receiver") or "")
-    receiver_type = str(call.get("receiver_type") or "")
-    name = str(call.get("call") or "")
-    combined = f"{receiver} {receiver_type} {name}"
-    noisy_receiver_prefixes = (
-        "builder",
-        "log",
-        "Thread",
-        "metrics",
-    )
-    if any(
-        receiver == p or receiver.startswith(f"{p}.") or receiver.startswith(f"{p}(")
-        for p in noisy_receiver_prefixes
-    ):
-        return True
-    if receiver == "e" and name in {
-        "getMessage",
-        "getCause",
-        "getStackTrace",
-    }:
-        return True
-    if "Health.Builder" in combined:
-        return True
-    if name in {
+def _load_error_doc_noise_filters(config_path: str | None = None) -> dict:
+    """Load filters for error-doc noise suppression.
+
+    config.yaml:
+      error_doc:
+        noise:
+          mode: extend|replace
+          receiver_prefixes: ["log", "thread"]
+          call_names: ["warn", "info"]
+          exception_receiver: "e"
+          exception_call_names: ["getMessage", "getCause"]
+
+    Env (always extends; comma-separated):
+      - JIDRA_ERROR_DOC_NOISE_RECEIVER_PREFIXES
+      - JIDRA_ERROR_DOC_NOISE_CALL_NAMES
+    """
+
+    cfg = _load_cli_config(config_path)
+    ed = cfg.get("error_doc", {}) if isinstance(cfg, dict) else {}
+    noise = ed.get("noise", {}) if isinstance(ed, dict) else {}
+
+    mode = str((noise.get("mode") if isinstance(noise, dict) else None) or "extend").strip().lower()
+
+    default_receiver_prefixes = ["builder", "log", "thread"]
+    default_call_names = [
         "warn",
         "error",
         "info",
@@ -270,8 +270,85 @@ def _is_error_doc_noise_call(call: dict) -> bool:
         "sleep",
         "currentThread",
         "interrupt",
-    }:
+    ]
+    default_exception_receiver = "e"
+    default_exception_call_names = ["getMessage", "getCause", "getStackTrace"]
+
+    if mode == "replace":
+        receiver_prefixes: list[str] = []
+        call_names: list[str] = []
+        exception_receiver = None
+        exception_call_names: list[str] = []
+    else:
+        receiver_prefixes = default_receiver_prefixes[:]
+        call_names = default_call_names[:]
+        exception_receiver = default_exception_receiver
+        exception_call_names = default_exception_call_names[:]
+
+    if isinstance(noise, dict):
+        rp = noise.get("receiver_prefixes")
+        cn = noise.get("call_names")
+        er = noise.get("exception_receiver")
+        ecn = noise.get("exception_call_names")
+
+        if isinstance(rp, list):
+            receiver_prefixes.extend([str(x) for x in rp if str(x).strip()])
+        if isinstance(cn, list):
+            call_names.extend([str(x) for x in cn if str(x).strip()])
+        if isinstance(er, str) and er.strip():
+            exception_receiver = er.strip()
+        if isinstance(ecn, list):
+            exception_call_names.extend([str(x) for x in ecn if str(x).strip()])
+
+    receiver_prefixes.extend(_parse_csv_env("JIDRA_ERROR_DOC_NOISE_RECEIVER_PREFIXES"))
+    call_names.extend(_parse_csv_env("JIDRA_ERROR_DOC_NOISE_CALL_NAMES"))
+
+    # normalize
+    receiver_prefixes = [str(x).lower() for x in receiver_prefixes if str(x).strip()]
+    call_names = [str(x).lower() for x in call_names if str(x).strip()]
+    exception_call_names = [str(x).lower() for x in exception_call_names if str(x).strip()]
+
+    # de-dupe preserve order
+    def _dedupe(xs: list[str]) -> list[str]:
+        out: list[str] = []
+        seen = set()
+        for x in xs:
+            if x in seen:
+                continue
+            seen.add(x)
+            out.append(x)
+        return out
+
+    return {
+        "receiver_prefixes": tuple(_dedupe(receiver_prefixes)),
+        "call_names": set(_dedupe(call_names)),
+        "exception_receiver": (str(exception_receiver).lower() if exception_receiver else None),
+        "exception_call_names": set(_dedupe(exception_call_names)),
+    }
+
+
+def _is_error_doc_noise_call(call: dict, *, config_path: str | None = None) -> bool:
+    f = _load_error_doc_noise_filters(config_path)
+
+    receiver = str(call.get("receiver") or "").lower()
+    name = str(call.get("call") or "").lower()
+
+    noisy_receiver_prefixes = f.get("receiver_prefixes") or ()
+    if any(
+        receiver == p or receiver.startswith(f"{p}.") or receiver.startswith(f"{p}(")
+        for p in noisy_receiver_prefixes
+    ):
         return True
+
+    ex_receiver = f.get("exception_receiver")
+    ex_calls = f.get("exception_call_names") or set()
+    if ex_receiver and receiver == ex_receiver and name in ex_calls:
+        return True
+
+    noisy_names = f.get("call_names") or set()
+    if name in noisy_names:
+        return True
+
     return False
 
 
@@ -1124,7 +1201,9 @@ def main() -> None:
             "unresolved_calls", []
         )
         unresolved_near = [
-            c for c in unresolved_near_all if not _is_error_doc_noise_call(c)
+            c
+            for c in unresolved_near_all
+            if not _is_error_doc_noise_call(c, config_path=getattr(args, "config", None))
         ][:10]
         anchor_id = failing_row.get("matched_method_id")
         meaningful_downstream = []
@@ -1253,7 +1332,9 @@ def main() -> None:
 
     if args.command == "trace":
         method = _resolve_single_method(graph, args.method)
-        result = trace_method(graph, method.id, max_depth=args.max_depth)
+        result = trace_method(
+            graph, method.id, max_depth=args.max_depth, config_path=getattr(args, "config", None)
+        )
         if result.get("error"):
             raise SystemExit(result["error"])
         if args.business_only:
@@ -1303,7 +1384,9 @@ def main() -> None:
         return
 
     if args.command == "trace-route":
-        result = trace_route(graph, args.route, max_depth=args.max_depth)
+        result = trace_route(
+            graph, args.route, max_depth=args.max_depth, config_path=getattr(args, "config", None)
+        )
         if result.get("error"):
             raise SystemExit(result["error"])
 
