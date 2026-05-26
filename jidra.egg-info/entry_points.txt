@@ -1,0 +1,2 @@
+[console_scripts]
+jidra = jidra.cli:main
