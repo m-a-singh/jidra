@@ -24,3 +24,7 @@ jidra.egg-info/dependency_links.txt
 jidra.egg-info/entry_points.txt
 jidra.egg-info/requires.txt
 jidra.egg-info/top_level.txt
+tests/test_cli_utils.py
+tests/test_integration_trace_context.py
+tests/test_models_ids.py
+tests/test_selector.py
