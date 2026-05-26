@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import json
 
-from .agent_schema import MethodAnalysisInput
-
-
-def build_method_analysis_prompt(input: MethodAnalysisInput) -> str:
+def build_method_analysis_prompt(input) -> str:
     method = input.method
     cls = input.class_entry
 
