@@ -39,3 +39,35 @@ flow:
     method_name_patterns: []
     class_name_patterns:
       - "ServiceMetrics"
+
+# Filters used by --business-only to hide infrastructure/utility calls.
+# These are matched case-insensitively.
+# You can also extend these via env vars:
+#   - JIDRA_NON_BUSINESS_SIGNATURE_PARTS=".metrics.,dogstatsdclient#"
+#   - JIDRA_NON_BUSINESS_CALL_NAMES="increment,decrement"
+non_business:
+  # mode:
+  #  - extend (default): start with JIDRA's generic defaults, then add config/env
+  #  - replace: use ONLY what's defined here (env can still extend for one-off runs)
+  mode: extend
+
+  # Substrings to look for within a call's signature/target_signature.
+  # Examples:
+  #   - ".metrics." (package segment)
+  #   - "dogstatsdclient#" (receiver/method prefix style)
+  signature_parts:
+    - ".metrics."
+    - ".datadog."
+    - ".prometheus."
+    - ".logging."
+    - ".log."
+    - ".utils."
+    - ".constants."
+
+  # Call names (method names) to treat as non-business.
+  call_names:
+    - "increment"
+    - "decrement"
+    - "recordExecutionTime"
+    - "getMarker"
+    - "build"

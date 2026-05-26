@@ -23,32 +23,100 @@ from .selector import (
 from .trace_engine import trace_method, trace_route
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
-NON_BUSINESS_SIGNATURE_PARTS = (
+
+
+def _parse_csv_env(name: str) -> list[str]:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return []
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+# Keep these defaults generic (no employer-specific identifiers).
+# Extend/override via env vars or config.yaml.
+DEFAULT_NON_BUSINESS_SIGNATURE_PARTS = (
     ".metrics.",
     ".datadog.",
-    ".config.datadog.",
     ".prometheus.",
     ".logging.",
     ".log.",
     ".utils.",
     ".constants.",
-    "servicemetrics#",
-    "dogstatsdclient#",
-    "metriccounter",
-    "builder#",
-    "constants#",
 )
-NON_BUSINESS_CALL_NAMES = {
+DEFAULT_NON_BUSINESS_CALL_NAMES = {
     "getMarker",
     "increment",
     "decrement",
-    "decrementCounter",
-    "incrementCounter",
     "recordExecutionTime",
-    "createTag",
-    "createHeadersMap",
     "build",
 }
+
+
+def _load_non_business_filters(
+    config_path: str | None = None,
+) -> tuple[tuple[str, ...], set[str]]:
+    """Load non-business filters from env/config, with safe generic defaults.
+
+    Env vars (comma-separated):
+      - JIDRA_NON_BUSINESS_SIGNATURE_PARTS
+      - JIDRA_NON_BUSINESS_CALL_NAMES
+
+    config.yaml (optional):
+      non_business:
+        # mode: "extend" (default) or "replace"
+        mode: extend
+        signature_parts: [".metrics.", "foo#"]
+        call_names: ["increment", "decrement"]
+
+    Behavior:
+      - values are normalized to lowercase for case-insensitive matching
+      - mode=extend: config/env add to defaults
+      - mode=replace: config replaces defaults (env still extends after)
+    """
+
+    cfg = _load_cli_config(config_path)
+    nb = cfg.get("non_business", {}) if isinstance(cfg, dict) else {}
+
+    cfg_mode = None
+    cfg_sig = None
+    cfg_calls = None
+    if isinstance(nb, dict):
+        cfg_mode = nb.get("mode")
+        cfg_sig = nb.get("signature_parts")
+        cfg_calls = nb.get("call_names")
+
+    mode = str(cfg_mode or "extend").strip().lower()
+
+    if mode == "replace":
+        sig_parts: list[str] = []
+        call_names: set[str] = set()
+    else:
+        sig_parts = [s.lower() for s in DEFAULT_NON_BUSINESS_SIGNATURE_PARTS]
+        call_names = {c.lower() for c in DEFAULT_NON_BUSINESS_CALL_NAMES}
+
+    if isinstance(cfg_sig, list):
+        sig_parts.extend([str(s).lower() for s in cfg_sig if str(s).strip()])
+    if isinstance(cfg_calls, list):
+        call_names.update([str(s).lower() for s in cfg_calls if str(s).strip()])
+
+    # Env always extends (useful for quick one-off experiments without editing config).
+    sig_parts.extend(
+        [s.lower() for s in _parse_csv_env("JIDRA_NON_BUSINESS_SIGNATURE_PARTS")]
+    )
+    call_names.update(
+        [s.lower() for s in _parse_csv_env("JIDRA_NON_BUSINESS_CALL_NAMES")]
+    )
+
+    # de-dupe while preserving order for signature parts
+    deduped_sig_parts: list[str] = []
+    seen = set()
+    for s in sig_parts:
+        if s in seen:
+            continue
+        seen.add(s)
+        deduped_sig_parts.append(s)
+
+    return tuple(deduped_sig_parts), call_names
 STACK_RE = re.compile(
     r"^\s*at\s+([A-Za-z0-9_.$]+)\.([A-Za-z0-9_$<>]+)\(([^:()]+):(\d+)\)\s*$"
 )
@@ -314,29 +382,46 @@ def _print_diagnose_report(result: dict) -> None:
     print(result.get("analysis", ""))
 
 
-def is_business_entry(entry: dict) -> bool:
-    call_name = str(entry.get("call") or "")
-    if call_name in NON_BUSINESS_CALL_NAMES:
+def is_business_entry(
+    entry: dict,
+    *,
+    non_business_signature_parts: tuple[str, ...] = DEFAULT_NON_BUSINESS_SIGNATURE_PARTS,
+    non_business_call_names: set[str] = DEFAULT_NON_BUSINESS_CALL_NAMES,
+) -> bool:
+    call_name = str(entry.get("call") or "").lower()
+    if call_name in non_business_call_names:
         return False
 
     signature = str(
         entry.get("target_signature") or entry.get("signature") or ""
     ).lower()
-    if any(part in signature for part in NON_BUSINESS_SIGNATURE_PARTS):
+    if any(part in signature for part in non_business_signature_parts):
         return False
     return True
 
 
-def _apply_business_only_context(result: dict) -> int:
+def _apply_business_only_context(result: dict, *, config_path: str | None = None) -> int:
+    sig_parts, call_names = _load_non_business_filters(config_path)
+
     resolved = result.get("resolved_callees", [])
-    filtered = [entry for entry in resolved if is_business_entry(entry)]
+    filtered = [
+        entry
+        for entry in resolved
+        if is_business_entry(
+            entry,
+            non_business_signature_parts=sig_parts,
+            non_business_call_names=call_names,
+        )
+    ]
     removed = len(resolved) - len(filtered)
     result["resolved_callees"] = filtered
     result["business_flow"] = filtered
     return removed
 
 
-def _apply_business_only_trace(result: dict) -> int:
+def _apply_business_only_trace(result: dict, *, config_path: str | None = None) -> int:
+    sig_parts, call_names = _load_non_business_filters(config_path)
+
     flow = result.get("flow", [])
     filtered = []
     removed = 0
@@ -344,7 +429,11 @@ def _apply_business_only_trace(result: dict) -> int:
         if entry.get("depth") == 0:
             filtered.append(entry)
             continue
-        if is_business_entry(entry):
+        if is_business_entry(
+            entry,
+            non_business_signature_parts=sig_parts,
+            non_business_call_names=call_names,
+        ):
             filtered.append(entry)
         else:
             removed += 1
@@ -1168,7 +1257,7 @@ def main() -> None:
         if result.get("error"):
             raise SystemExit(result["error"])
         if args.business_only:
-            removed = _apply_business_only_trace(result)
+            removed = _apply_business_only_trace(result, config_path=getattr(args, "config", None))
             result["filters"] = {"business_only": True, "removed_count": removed}
             filename = (
                 f"trace_business_{args.graph_type}_{_method_filename_part(method)}.json"
@@ -1184,7 +1273,7 @@ def main() -> None:
         if result.get("error"):
             raise SystemExit(result["error"])
         if args.business_only:
-            removed = _apply_business_only_context(result)
+            removed = _apply_business_only_context(result, config_path=getattr(args, "config", None))
             result["filters"] = {"business_only": True, "removed_count": removed}
             filename = f"context_business_{args.graph_type}_{_method_filename_part(method)}.json"
         else:
@@ -1262,7 +1351,9 @@ def main() -> None:
             if context.get("error"):
                 raise SystemExit(context["error"])
             if args.business_only:
-                removed = _apply_business_only_context(context)
+                removed = _apply_business_only_context(
+                    context, config_path=getattr(args, "config", None)
+                )
                 context["filters"] = {
                     "business_only": True,
                     "removed_count": removed,
@@ -1331,7 +1422,9 @@ def main() -> None:
             if context.get("error"):
                 raise SystemExit(context["error"])
             if args.business_only:
-                removed = _apply_business_only_context(context)
+                removed = _apply_business_only_context(
+                    context, config_path=getattr(args, "config", None)
+                )
                 context["filters"] = {
                     "business_only": True,
                     "removed_count": removed,
