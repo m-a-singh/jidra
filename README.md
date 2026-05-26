@@ -58,14 +58,13 @@ This project is released under the MIT License (see `LICENSE`).
 From project root:
 
 ```bash
-cd scripts/jidra
 pip install -e .
 ```
 
 If you use the local venv:
 
 ```bash
-./venv/bin/pip install -e .
+.venv/bin/pip install -e .
 ```
 
 ## Quick Start
