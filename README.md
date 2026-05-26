@@ -482,6 +482,18 @@ No endpoint matched that route in graph. Validate route annotations and graph so
 
 Check Python/venv and package index/network availability.
 
+## Experiments (Optional / Unshipped)
+
+This repo includes an `jidra/experiments/` package with exploratory agent-style components:
+
+- `enrichment_agent.py`, `enrichment_judge.py`, `enrichment_orchestrator.py`, `enrichment_ui.py`
+- `method_prompt.py`, `token_count.py`
+
+These modules are **optional** and not required for the core deterministic CLI workflow.
+They are currently used only when you enable agent visibility in `flow-doc` via `--show-agents`.
+
+If you are vendoring JIDRA or aiming for a minimal footprint, you can ignore this folder.
+
 ## Development Notes
 
 - `cli.py` handles command orchestration only.
