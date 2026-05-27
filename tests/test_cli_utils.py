@@ -1,7 +1,6 @@
 import os
 from types import SimpleNamespace
 
-import pytest
 
 from jidra.cli import (
     _extract_focused_map_sections,
@@ -15,10 +14,6 @@ from jidra.cli import (
 )
 
 
-
-
-
-
 def test_safe_filename_part_basic():
     assert _safe_filename_part("Hello World") == "hello_world"
     assert _safe_filename_part("a---b") == "a_b"
@@ -27,7 +22,9 @@ def test_safe_filename_part_basic():
 
 
 def test_method_filename_part_prefers_class_and_method_name():
-    m = SimpleNamespace(class_full_name="com.example.FooService", method_name="doThing", id="mid")
+    m = SimpleNamespace(
+        class_full_name="com.example.FooService", method_name="doThing", id="mid"
+    )
     assert _method_filename_part(m) == "fooservice_dothing"
 
 
@@ -67,12 +64,18 @@ def test_is_meaningful_signature_filters_infra():
 
 def test_is_business_entry_call_name_filter_is_case_insensitive():
     entry = {"call": "INCREMENT", "target_signature": "com.x.Foo#increment()"}
-    assert not is_business_entry(entry, non_business_call_names={"increment"}, non_business_signature_parts=())
+    assert not is_business_entry(
+        entry, non_business_call_names={"increment"}, non_business_signature_parts=()
+    )
 
 
 def test_is_business_entry_signature_part_filter_is_case_insensitive():
     entry = {"call": "doThing", "target_signature": "com.x.Metrics.Foo#doThing()"}
-    assert not is_business_entry(entry, non_business_call_names=set(), non_business_signature_parts=(".metrics.",))
+    assert not is_business_entry(
+        entry,
+        non_business_call_names=set(),
+        non_business_signature_parts=(".metrics.",),
+    )
 
 
 def test_extract_focused_map_sections_stops_at_root_flow_header():
@@ -95,7 +98,9 @@ def test_match_stack_frames_respects_project_prefix_env(sample_graph, monkeypatc
     assert methods, "sample graph should contain methods"
     m = methods[0]
 
-    monkeypatch.setenv("JIDRA_PROJECT_PREFIXES", (m.class_full_name.split(".")[0] + "."))
+    monkeypatch.setenv(
+        "JIDRA_PROJECT_PREFIXES", (m.class_full_name.split(".")[0] + ".")
+    )
 
     frames = [
         {

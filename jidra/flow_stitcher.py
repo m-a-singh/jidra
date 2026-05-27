@@ -64,7 +64,11 @@ def _parse_signature(signature: str) -> tuple[str, str]:
 def _selector_candidates(signature: str) -> tuple[str, str, str]:
     class_full, method_name = _parse_signature(signature)
     short_class = class_full.split(".")[-1] if class_full else ""
-    return f"{class_full}.{method_name}" if class_full else method_name, f"{short_class}.{method_name}".strip("."), method_name
+    return (
+        f"{class_full}.{method_name}" if class_full else method_name,
+        f"{short_class}.{method_name}".strip("."),
+        method_name,
+    )
 
 
 def _matches_selector(selector: str, node_signature: str, bare_name_unique: bool) -> bool:
@@ -90,7 +94,9 @@ def _base_match(node: dict, rules: dict) -> tuple[bool, str | None]:
     return False, None
 
 
-def _apply_selector_rules(nodes: list[dict], flow_config: dict) -> tuple[set[str], dict[str, str], set[str], dict[str, str]]:
+def _apply_selector_rules(
+    nodes: list[dict], flow_config: dict
+) -> tuple[set[str], dict[str, str], set[str], dict[str, str]]:
     include = (flow_config or {}).get("include", {}) if isinstance(flow_config, dict) else {}
     exclude = (flow_config or {}).get("exclude", {}) if isinstance(flow_config, dict) else {}
 
@@ -162,7 +168,10 @@ def _bridge_edges(edges: list[dict], removed_ids: set[str], kept_ids: set[str]) 
         in_map[e["to"]].append(e)
 
     kept_edges = [e for e in edges if e["from"] in kept_ids and e["to"] in kept_ids]
-    seen = {(e["from"], e["to"], e.get("call"), tuple(e.get("lines", [])), e.get("resolution")) for e in kept_edges}
+    seen = {
+        (e["from"], e["to"], e.get("call"), tuple(e.get("lines", [])), e.get("resolution"))
+        for e in kept_edges
+    }
 
     for rid in removed_ids:
         incoming = [e for e in in_map.get(rid, []) if e["from"] in kept_ids]
@@ -190,7 +199,13 @@ def _bridge_edges(edges: list[dict], removed_ids: set[str], kept_ids: set[str]) 
                             "lines": lines,
                             "resolution": "excluded_bridge",
                         }
-                        key = (bridged["from"], bridged["to"], bridged.get("call"), tuple(bridged.get("lines", [])), bridged.get("resolution"))
+                        key = (
+                            bridged["from"],
+                            bridged["to"],
+                            bridged.get("call"),
+                            tuple(bridged.get("lines", [])),
+                            bridged.get("resolution"),
+                        )
                         if key not in seen:
                             seen.add(key)
                             kept_edges.append(bridged)
@@ -275,7 +290,10 @@ def stitch_flow(
         raw_unresolved = [
             c
             for c in graph.callsites
-            if c.caller_method_id == method_id and not c.resolved_candidates and (c.receiver or "").strip() and (c.callee_name or "").strip()
+            if c.caller_method_id == method_id
+            and not c.resolved_candidates
+            and (c.receiver or "").strip()
+            and (c.callee_name or "").strip()
         ]
 
         existing = nodes_map.get(method_id)
@@ -415,7 +433,9 @@ def stitch_flow(
     walk(entry_method.id, 0, set())
 
     nodes = list(nodes_map.values())
-    include_ids, include_reason, exclude_ids, exclude_reason = _apply_selector_rules(nodes, flow_config)
+    include_ids, include_reason, exclude_ids, exclude_reason = _apply_selector_rules(
+        nodes, flow_config
+    )
 
     for node in nodes:
         nid = node["id"]

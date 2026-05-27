@@ -100,12 +100,8 @@ def _load_non_business_filters(
         call_names.update([str(s).lower() for s in cfg_calls if str(s).strip()])
 
     # Env always extends (useful for quick one-off experiments without editing config).
-    sig_parts.extend(
-        [s.lower() for s in _parse_csv_env("JIDRA_NON_BUSINESS_SIGNATURE_PARTS")]
-    )
-    call_names.update(
-        [s.lower() for s in _parse_csv_env("JIDRA_NON_BUSINESS_CALL_NAMES")]
-    )
+    sig_parts.extend([s.lower() for s in _parse_csv_env("JIDRA_NON_BUSINESS_SIGNATURE_PARTS")])
+    call_names.update([s.lower() for s in _parse_csv_env("JIDRA_NON_BUSINESS_CALL_NAMES")])
 
     # de-dupe while preserving order for signature parts
     deduped_sig_parts: list[str] = []
@@ -117,9 +113,9 @@ def _load_non_business_filters(
         deduped_sig_parts.append(s)
 
     return tuple(deduped_sig_parts), call_names
-STACK_RE = re.compile(
-    r"^\s*at\s+([A-Za-z0-9_.$]+)\.([A-Za-z0-9_$<>]+)\(([^:()]+):(\d+)\)\s*$"
-)
+
+
+STACK_RE = re.compile(r"^\s*at\s+([A-Za-z0-9_.$]+)\.([A-Za-z0-9_$<>]+)\(([^:()]+):(\d+)\)\s*$")
 
 
 def _default_graph_for_type(graph_type: str) -> Path:
@@ -173,9 +169,7 @@ def _parse_stack_trace(text: str) -> list[dict]:
     return frames
 
 
-def _match_stack_frames_to_methods(
-    graph, frames: list[dict]
-) -> tuple[list[dict], dict | None]:
+def _match_stack_frames_to_methods(graph, frames: list[dict]) -> tuple[list[dict], dict | None]:
     methods = list(graph.methods)
     matched_rows: list[dict] = []
     anchor = None
@@ -184,9 +178,7 @@ def _match_stack_frames_to_methods(
     # Example: export JIDRA_PROJECT_PREFIXES="com.myco.,org.example."
     raw_prefixes = (os.getenv("JIDRA_PROJECT_PREFIXES") or "").strip()
     if raw_prefixes:
-        project_prefixes = tuple(
-            p.strip() for p in raw_prefixes.split(",") if p.strip()
-        )
+        project_prefixes = tuple(p.strip() for p in raw_prefixes.split(",") if p.strip())
     else:
         # Default: treat any Java package as "project" for anchoring purposes.
         project_prefixes = ""
@@ -372,9 +364,7 @@ def _no_stack_frame_error_payload(raw_text: str) -> dict:
     }
 
 
-def _write_or_print_json(
-    result: dict, output: str | None, default_filename: str
-) -> None:
+def _write_or_print_json(result: dict, output: str | None, default_filename: str) -> None:
     if not output:
         print(json.dumps(result, ensure_ascii=True, indent=2))
         return
@@ -469,9 +459,7 @@ def is_business_entry(
     if call_name in non_business_call_names:
         return False
 
-    signature = str(
-        entry.get("target_signature") or entry.get("signature") or ""
-    ).lower()
+    signature = str(entry.get("target_signature") or entry.get("signature") or "").lower()
     if any(part in signature for part in non_business_signature_parts):
         return False
     return True
@@ -525,7 +513,9 @@ def _build_prompt(context: dict, target: str) -> str:
     unresolved = context.get("unresolved_calls", [])
 
     if target == "claude":
-        target_instruction = "Reason carefully. Be explicit about uncertainty. Do not invent missing call edges."
+        target_instruction = (
+            "Reason carefully. Be explicit about uncertainty. Do not invent missing call edges."
+        )
     elif target == "codex":
         target_instruction = "Focus on code navigation, likely next files/methods to inspect, and implementation-relevant details."
     else:
@@ -633,7 +623,9 @@ def _build_flow_prompt(
     graph,
 ) -> str:
     if target == "claude":
-        target_instruction = "Reason carefully. Be explicit about uncertainty. Do not invent missing call edges."
+        target_instruction = (
+            "Reason carefully. Be explicit about uncertainty. Do not invent missing call edges."
+        )
     elif target == "codex":
         target_instruction = "Focus on code navigation, likely next files/methods to inspect, and implementation-relevant details."
     else:
@@ -678,9 +670,7 @@ def _build_flow_prompt(
             call_counts[call] = call_counts.get(call, 0) + count
         top_calls = sorted(call_counts.items(), key=lambda x: x[1], reverse=True)[:8]
         top_lines = (
-            "\n".join(
-                [f"  - call: {call}, count: {count}" for call, count in top_calls]
-            )
+            "\n".join([f"  - call: {call}, count: {count}" for call, count in top_calls])
             or "  - None"
         )
         uncertain_section = (
@@ -696,9 +686,7 @@ def _build_flow_prompt(
         method_by_id = {m.id: m for m in graph.methods}
         budget = max_chars
         chunks = []
-        wanted_ids = [method.id] + [
-            n.get("method_id") for n in top_nodes if n.get("method_id")
-        ]
+        wanted_ids = [method.id] + [n.get("method_id") for n in top_nodes if n.get("method_id")]
         seen = set()
         for mid in wanted_ids:
             if mid in seen:
@@ -778,17 +766,11 @@ def _call_llm(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog="jidra", description="JIDRA Java trace/context CLI"
-    )
+    parser = argparse.ArgumentParser(prog="jidra", description="JIDRA Java trace/context CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    index_parser = subparsers.add_parser(
-        "index", help="Build graph JSONL from a Java codebase"
-    )
-    index_parser.add_argument(
-        "--codebase", required=True, help="Path to Java repository root"
-    )
+    index_parser = subparsers.add_parser("index", help="Build graph JSONL from a Java codebase")
+    index_parser.add_argument("--codebase", required=True, help="Path to Java repository root")
     index_parser.add_argument(
         "--output", required=True, help="Output graph file or output directory"
     )
@@ -799,9 +781,7 @@ def _parse_args() -> argparse.Namespace:
     )
     trace_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     trace_parser.add_argument("--method", required=True, help="Method selector")
-    trace_parser.add_argument(
-        "--max-depth", type=int, default=5, help="Traversal depth"
-    )
+    trace_parser.add_argument("--max-depth", type=int, default=5, help="Traversal depth")
     trace_parser.add_argument(
         "--business-only",
         action="store_true",
@@ -813,13 +793,9 @@ def _parse_args() -> argparse.Namespace:
     context_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
-    context_parser.add_argument(
-        "--graph-type", choices=("main", "test"), default="main"
-    )
+    context_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     context_parser.add_argument("--method", required=True, help="Method selector")
-    context_parser.add_argument(
-        "--max-chars", type=int, default=12000, help="Max context size"
-    )
+    context_parser.add_argument("--max-chars", type=int, default=12000, help="Max context size")
     context_parser.add_argument("--max-tokens", type=int)
     context_parser.add_argument(
         "--business-only",
@@ -828,19 +804,13 @@ def _parse_args() -> argparse.Namespace:
     )
     context_parser.add_argument("--output", help="Output JSON file path or directory")
 
-    route_parser = subparsers.add_parser(
-        "trace-route", help="Trace flow from endpoint route"
-    )
+    route_parser = subparsers.add_parser("trace-route", help="Trace flow from endpoint route")
     route_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
     route_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
-    route_parser.add_argument(
-        "--route", required=True, help="Route path, e.g. /api/v1/users"
-    )
-    route_parser.add_argument(
-        "--max-depth", type=int, default=5, help="Traversal depth"
-    )
+    route_parser.add_argument("--route", required=True, help="Route path, e.g. /api/v1/users")
+    route_parser.add_argument("--max-depth", type=int, default=5, help="Traversal depth")
     route_parser.add_argument("--output", help="Output JSON file path or directory")
 
     flow_parser = subparsers.add_parser(
@@ -855,29 +825,21 @@ def _parse_args() -> argparse.Namespace:
     flow_parser.add_argument(
         "--business-only", dest="business_only", action="store_true", default=True
     )
-    flow_parser.add_argument(
-        "--no-business-only", dest="business_only", action="store_false"
-    )
+    flow_parser.add_argument("--no-business-only", dest="business_only", action="store_false")
     flow_parser.add_argument("--output", help="Output JSON file path or directory")
 
-    prompt_parser = subparsers.add_parser(
-        "prompt", help="Build prompt-ready method context text"
-    )
+    prompt_parser = subparsers.add_parser("prompt", help="Build prompt-ready method context text")
     prompt_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
     prompt_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     prompt_parser.add_argument("--method", required=True, help="Method selector")
-    prompt_parser.add_argument(
-        "--max-chars", type=int, default=12000, help="Max context size"
-    )
+    prompt_parser.add_argument("--max-chars", type=int, default=12000, help="Max context size")
     prompt_parser.add_argument("--max-tokens", type=int)
     prompt_parser.add_argument(
         "--business-only", dest="business_only", action="store_true", default=True
     )
-    prompt_parser.add_argument(
-        "--no-business-only", dest="business_only", action="store_false"
-    )
+    prompt_parser.add_argument("--no-business-only", dest="business_only", action="store_false")
     prompt_parser.add_argument(
         "--target", choices=("claude", "codex", "generic"), default="generic"
     )
@@ -894,27 +856,19 @@ def _parse_args() -> argparse.Namespace:
     diagnose_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
-    diagnose_parser.add_argument(
-        "--graph-type", choices=("main", "test"), default="main"
-    )
+    diagnose_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     diagnose_parser.add_argument("--method", required=True)
     diagnose_parser.add_argument(
         "--target", choices=("claude", "codex", "generic"), default="generic"
     )
     diagnose_parser.add_argument("--model")
-    diagnose_parser.add_argument(
-        "--max-chars", type=int, default=12000, help="Max context size"
-    )
+    diagnose_parser.add_argument("--max-chars", type=int, default=12000, help="Max context size")
     diagnose_parser.add_argument("--max-tokens", type=int)
     diagnose_parser.add_argument(
         "--business-only", dest="business_only", action="store_true", default=True
     )
-    diagnose_parser.add_argument(
-        "--no-business-only", dest="business_only", action="store_false"
-    )
-    diagnose_parser.add_argument(
-        "--use-flow", dest="use_flow", action="store_true", default=True
-    )
+    diagnose_parser.add_argument("--no-business-only", dest="business_only", action="store_false")
+    diagnose_parser.add_argument("--use-flow", dest="use_flow", action="store_true", default=True)
     diagnose_parser.add_argument("--no-use-flow", dest="use_flow", action="store_false")
     diagnose_parser.add_argument("--top-n", type=int, default=6)
     diagnose_parser.add_argument("--include-source", action="store_true")
@@ -935,16 +889,12 @@ def _parse_args() -> argparse.Namespace:
     flow_doc_parser = subparsers.add_parser(
         "flow-doc", help="Generate recursive deterministic flow markdown"
     )
-    flow_doc_parser.add_argument(
-        "--method", required=True, help="Method selector or method id"
-    )
+    flow_doc_parser.add_argument("--method", required=True, help="Method selector or method id")
     flow_doc_parser.add_argument("--output", required=True, help="Output markdown path")
     flow_doc_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
-    flow_doc_parser.add_argument(
-        "--graph-type", choices=("main", "test"), default="main"
-    )
+    flow_doc_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     flow_doc_parser.add_argument("--depth", type=int, default=4)
     flow_doc_parser.add_argument("--top-n", type=int, default=8)
     flow_doc_parser.add_argument("--max-subflows", type=int, default=8)
@@ -971,15 +921,11 @@ def _parse_args() -> argparse.Namespace:
     error_doc_parser.add_argument(
         "--stack-trace", required=True, help="Path to stack trace text file"
     )
-    error_doc_parser.add_argument(
-        "--output", required=True, help="Output markdown path"
-    )
+    error_doc_parser.add_argument("--output", required=True, help="Output markdown path")
     error_doc_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
-    error_doc_parser.add_argument(
-        "--graph-type", choices=("main", "test"), default="main"
-    )
+    error_doc_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     error_doc_parser.add_argument("--depth", type=int, default=6)
     error_doc_parser.add_argument("--max-nodes", type=int, default=200)
     error_doc_parser.add_argument("--include-utility", action="store_true")
@@ -1100,11 +1046,7 @@ def main() -> None:
                 slots = ["root"]
                 if prepared and not prepared.get("error"):
                     for c in prepared.get("queue", []):
-                        label = (
-                            c.signature
-                            if getattr(c, "signature", None)
-                            else c.method_id
-                        )
+                        label = c.signature if getattr(c, "signature", None) else c.method_id
                         if "#" in label:
                             label = label.split("#", 1)[1]
                         slots.append(str(label))
@@ -1135,12 +1077,8 @@ def main() -> None:
                 {
                     "output": str(output_path),
                     "expanded_methods": len(result.get("expanded_methods", [])),
-                    "important_unresolved_calls": len(
-                        result.get("important_unresolved_calls", [])
-                    ),
-                    "suggested_next_methods": len(
-                        result.get("suggested_next_methods", [])
-                    ),
+                    "important_unresolved_calls": len(result.get("important_unresolved_calls", [])),
+                    "suggested_next_methods": len(result.get("suggested_next_methods", [])),
                 },
                 ensure_ascii=True,
                 indent=2,
@@ -1156,9 +1094,7 @@ def main() -> None:
         if not frames:
             raise SystemExit("No Java stack frames parsed from stack trace input.")
         if anchor is None:
-            raise SystemExit(
-                "No project frame matched/ambiguous for primary failure anchor."
-            )
+            raise SystemExit("No project frame matched/ambiguous for primary failure anchor.")
         if anchor["match_status"] == "ambiguous":
             method_selector = anchor["ambiguous_method_ids"][0]
         else:
@@ -1178,11 +1114,7 @@ def main() -> None:
             raise SystemExit(flow_result["error"])
         mind_map_md = _extract_focused_map_sections(agent.render_markdown(flow_result))
         failing_row = anchor
-        caller_row = (
-            matched_rows[anchor["frame_index"] - 1]
-            if anchor["frame_index"] > 0
-            else None
-        )
+        caller_row = matched_rows[anchor["frame_index"] - 1] if anchor["frame_index"] > 0 else None
         method_by_id = {m.id: m for m in graph.methods}
         neighbors = []
         if failing_row.get("matched_method_id"):
@@ -1197,9 +1129,7 @@ def main() -> None:
                     if src:
                         neighbors.append(src.signature)
         neighbors = sorted(set(neighbors))[:10]
-        unresolved_near_all = (flow_result.get("mind_map", {}) or {}).get(
-            "unresolved_calls", []
-        )
+        unresolved_near_all = (flow_result.get("mind_map", {}) or {}).get("unresolved_calls", [])
         unresolved_near = [
             c
             for c in unresolved_near_all
@@ -1217,14 +1147,12 @@ def main() -> None:
 
         matched_frame0 = (
             matched_rows[0]
-            if len(matched_rows) > 0
-            and matched_rows[0]["match_status"] in {"matched", "ambiguous"}
+            if len(matched_rows) > 0 and matched_rows[0]["match_status"] in {"matched", "ambiguous"}
             else None
         )
         matched_frame1 = (
             matched_rows[1]
-            if len(matched_rows) > 1
-            and matched_rows[1]["match_status"] in {"matched", "ambiguous"}
+            if len(matched_rows) > 1 and matched_rows[1]["match_status"] in {"matched", "ambiguous"}
             else None
         )
         nearest_controller = None
@@ -1276,7 +1204,9 @@ def main() -> None:
                 failing_location = m.signature
         lines.append(f"| 1 | `{failing_location}` | failing project frame |")
         if caller_row:
-            caller_loc = f"{caller_row['class_full_name']}#{caller_row['method_name']}:{caller_row['line']}"
+            caller_loc = (
+                f"{caller_row['class_full_name']}#{caller_row['method_name']}:{caller_row['line']}"
+            )
             lines.append(f"| 2 | `{caller_loc}` | caller frame above failure |")
         unresolved_priority = 3
         for c in unresolved_near:
@@ -1293,9 +1223,7 @@ def main() -> None:
             )
         caller_priority = 4
         for sig in caller_signatures:
-            lines.append(
-                f"| {caller_priority} | `{sig}` | graph caller of failing method |"
-            )
+            lines.append(f"| {caller_priority} | `{sig}` | graph caller of failing method |")
         if upstream_mode:
             if matched_frame0:
                 loc0 = f"{matched_frame0['class_full_name']}#{matched_frame0['method_name']}:{matched_frame0['line']}"
@@ -1308,9 +1236,7 @@ def main() -> None:
                 lines.append(f"| 2 | `{locc}` | nearest matched controller frame |")
         elif neighbors:
             for sig in neighbors[:10]:
-                lines.append(
-                    f"| 4 | `{sig}` | callee graph neighbor of failing method |"
-                )
+                lines.append(f"| 4 | `{sig}` | callee graph neighbor of failing method |")
         output_path = Path(args.output).resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -1340,9 +1266,7 @@ def main() -> None:
         if args.business_only:
             removed = _apply_business_only_trace(result, config_path=getattr(args, "config", None))
             result["filters"] = {"business_only": True, "removed_count": removed}
-            filename = (
-                f"trace_business_{args.graph_type}_{_method_filename_part(method)}.json"
-            )
+            filename = f"trace_business_{args.graph_type}_{_method_filename_part(method)}.json"
         else:
             filename = f"trace_{args.graph_type}_{_method_filename_part(method)}.json"
         _write_or_print_json(result, args.output, filename)
@@ -1354,7 +1278,9 @@ def main() -> None:
         if result.get("error"):
             raise SystemExit(result["error"])
         if args.business_only:
-            removed = _apply_business_only_context(result, config_path=getattr(args, "config", None))
+            removed = _apply_business_only_context(
+                result, config_path=getattr(args, "config", None)
+            )
             result["filters"] = {"business_only": True, "removed_count": removed}
             filename = f"context_business_{args.graph_type}_{_method_filename_part(method)}.json"
         else:
@@ -1375,9 +1301,7 @@ def main() -> None:
             flow_config=flow_config,
         )
         if args.business_only:
-            filename = (
-                f"flow_business_{args.graph_type}_{_method_filename_part(method)}.json"
-            )
+            filename = f"flow_business_{args.graph_type}_{_method_filename_part(method)}.json"
         else:
             filename = f"flow_{args.graph_type}_{_method_filename_part(method)}.json"
         _write_or_print_json(result, args.output, filename)
@@ -1395,9 +1319,7 @@ def main() -> None:
         if "#" in root_sig:
             class_name, method_part = root_sig.split("#", 1)
             method_name = method_part.split("(", 1)[0]
-            route_part = _safe_filename_part(
-                f"{class_name.split('.')[-1]}_{method_name}"
-            )
+            route_part = _safe_filename_part(f"{class_name.split('.')[-1]}_{method_name}")
 
         filename = f"trace_route_{args.graph_type}_{route_part}.json"
         _write_or_print_json(result, args.output, filename)
@@ -1428,7 +1350,9 @@ def main() -> None:
                 max_chars=args.max_chars,
                 graph=graph,
             )
-            filename = f"prompt_flow_{args.target}_{args.graph_type}_{_method_filename_part(method)}.txt"
+            filename = (
+                f"prompt_flow_{args.target}_{args.graph_type}_{_method_filename_part(method)}.txt"
+            )
         else:
             context = build_method_context(graph, method.id, max_chars=args.max_chars)
             if context.get("error"):
@@ -1525,9 +1449,7 @@ def main() -> None:
             args.max_tokens,
         )
         print(f"Time Taken by LLM: {(time.time() - startTime)}")
-        business_flow = context.get("business_flow") or context.get(
-            "resolved_callees", []
-        )
+        business_flow = context.get("business_flow") or context.get("resolved_callees", [])
 
         result = {
             "method": method.signature,
@@ -1580,7 +1502,9 @@ def main() -> None:
         if args.use_flow:
             filename = f"diagnose_flow_{args.target}_{args.graph_type}_{_method_filename_part(method)}.json"
         else:
-            filename = f"diagnose_{args.target}_{args.graph_type}_{_method_filename_part(method)}.json"
+            filename = (
+                f"diagnose_{args.target}_{args.graph_type}_{_method_filename_part(method)}.json"
+            )
         if args.output:
             _write_or_print_json(result, args.output, filename)
             if not args.quiet:

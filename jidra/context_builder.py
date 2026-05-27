@@ -13,22 +13,65 @@ NOISY_RECEIVER_PREFIXES = (
 )
 
 NOISY_RECEIVER_TYPES = {
-    "String", "Boolean", "Integer", "Long", "Double", "Float", "Object",
-    "List", "Map", "Set", "Collection", "Optional", "Stream", "Mono", "Flux",
+    "String",
+    "Boolean",
+    "Integer",
+    "Long",
+    "Double",
+    "Float",
+    "Object",
+    "List",
+    "Map",
+    "Set",
+    "Collection",
+    "Optional",
+    "Stream",
+    "Mono",
+    "Flux",
 }
 
 NOISY_METHOD_NAMES = {
-    "debug", "info", "warn", "error", "trace",
-    "isDebugEnabled", "isInfoEnabled",
-    "map", "flatMap", "filter", "forEach", "stream", "collect", "toList",
-    "isPresent", "orElse", "orElseGet", "orElseThrow",
-    "get", "put", "add", "remove", "clear", "size", "isEmpty",
-    "toString", "equals", "hashCode",
+    "debug",
+    "info",
+    "warn",
+    "error",
+    "trace",
+    "isDebugEnabled",
+    "isInfoEnabled",
+    "map",
+    "flatMap",
+    "filter",
+    "forEach",
+    "stream",
+    "collect",
+    "toList",
+    "isPresent",
+    "orElse",
+    "orElseGet",
+    "orElseThrow",
+    "get",
+    "put",
+    "add",
+    "remove",
+    "clear",
+    "size",
+    "isEmpty",
+    "toString",
+    "equals",
+    "hashCode",
 }
 
 FLUENT_CHAIN_CALLS = {
-    "and", "map", "flatMap", "filter", "doOnNext", "doOnError",
-    "doOnCancel", "doOnTerminate", "subscribeOn", "elapsed",
+    "and",
+    "map",
+    "flatMap",
+    "filter",
+    "doOnNext",
+    "doOnError",
+    "doOnCancel",
+    "doOnTerminate",
+    "subscribeOn",
+    "elapsed",
 }
 
 LOW_PRIORITY_SIGNATURE_PARTS = (
@@ -148,7 +191,10 @@ def _dedupe_and_sort_resolved(callsites, method_by_id: dict) -> list[dict]:
 
     return sorted(
         items,
-        key=lambda item: (_resolved_priority(item), item.get("target_signature") or item.get("call") or ""),
+        key=lambda item: (
+            _resolved_priority(item),
+            item.get("target_signature") or item.get("call") or "",
+        ),
     )
 
 
@@ -237,7 +283,9 @@ def build_method_context(graph, method_id: str, max_chars: int = 12000) -> dict:
         "method_signature": method.signature,
         "method_source": method.source,
         "class_annotations": class_entry.annotations if class_entry else [],
-        "class_stereotype": (class_entry.stereotypes[0] if class_entry and class_entry.stereotypes else "unknown"),
+        "class_stereotype": (
+            class_entry.stereotypes[0] if class_entry and class_entry.stereotypes else "unknown"
+        ),
         "endpoint": {
             "is_endpoint": method.is_endpoint,
             "http_method": method.http_method,
