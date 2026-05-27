@@ -1,11 +1,6 @@
-
-
 from jidra.context_builder import build_method_context
 
 from jidra.trace_engine import trace_method
-
-
-
 
 
 def test_trace_method_smoke(sample_graph):

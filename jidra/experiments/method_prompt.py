@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+
 def build_method_analysis_prompt(input) -> str:
     method = input.method
     cls = input.class_entry
@@ -15,7 +16,9 @@ def build_method_analysis_prompt(input) -> str:
     local_variables = sorted(input.local_variable_types.items(), key=lambda x: x[0])
 
     call_lines: list[str] = []
-    for call in sorted(input.callsites, key=lambda c: (c.get("line", 0), c.get("column", 0), c.get("id", ""))):
+    for call in sorted(
+        input.callsites, key=lambda c: (c.get("line", 0), c.get("column", 0), c.get("id", ""))
+    ):
         call_lines.append(
             json.dumps(
                 {
@@ -116,7 +119,6 @@ def build_method_analysis_prompt(input) -> str:
         "- metrics.*\n"
         "- StatsDClient.*\n"
         "- Counter.*\n"
-
         "\n"
         "### NOT noise (these ARE logic):\n"
         "- Optional.*\n"
@@ -142,84 +144,84 @@ def build_method_analysis_prompt(input) -> str:
         "Return JSON:\n"
         "\n"
         "{\n"
-        "  \"method_id\": \"\",\n"
-        "  \"class_name\": \"\",\n"
-        "  \"method_name\": \"\",\n"
-        "  \"signature\": \"\",\n"
+        '  "method_id": "",\n'
+        '  "class_name": "",\n'
+        '  "method_name": "",\n'
+        '  "signature": "",\n'
         "\n"
-        "  \"inputs_used\": [],\n"
-        "  \"fields_used\": [],\n"
+        '  "inputs_used": [],\n'
+        '  "fields_used": [],\n'
         "\n"
-        "  \"constants_used\": [\n"
+        '  "constants_used": [\n'
         "    {\n"
-        "      \"name\": \"\",\n"
-        "      \"owner\": \"\",\n"
-        "      \"usage\": \"\"\n"
+        '      "name": "",\n'
+        '      "owner": "",\n'
+        '      "usage": ""\n'
         "    }\n"
         "  ],\n"
         "\n"
-        "  \"objects_created_or_built\": [\n"
+        '  "objects_created_or_built": [\n'
         "    {\n"
-        "      \"variable\": \"\",\n"
-        "      \"type\": \"\",\n"
-        "      \"creation\": \"\",\n"
-        "      \"reason\": \"\"\n"
+        '      "variable": "",\n'
+        '      "type": "",\n'
+        '      "creation": "",\n'
+        '      "reason": ""\n'
         "    }\n"
         "  ],\n"
         "\n"
-        "  \"logical_calls\": [\n"
+        '  "logical_calls": [\n'
         "    {\n"
-        "      \"callee_name\": \"\",\n"
-        "      \"receiver_type\": \"\",\n"
-        "      \"resolution_status\": \"\",\n"
-        "      \"reason\": \"\"\n"
+        '      "callee_name": "",\n'
+        '      "receiver_type": "",\n'
+        '      "resolution_status": "",\n'
+        '      "reason": ""\n'
         "    }\n"
         "  ],\n"
         "\n"
-        "  \"noise_calls\": [\n"
+        '  "noise_calls": [\n'
         "    {\n"
-        "      \"callee_name\": \"\",\n"
-        "      \"reason\": \"\"\n"
+        '      "callee_name": "",\n'
+        '      "reason": ""\n'
         "    }\n"
         "  ],\n"
         "\n"
-        "  \"business_branches\": [\n"
+        '  "business_branches": [\n'
         "    {\n"
-        "      \"condition\": \"\",\n"
-        "      \"uses\": []\n"
+        '      "condition": "",\n'
+        '      "uses": []\n'
         "    }\n"
         "  ],\n"
         "\n"
-        "  \"data_transformations\": [\n"
+        '  "data_transformations": [\n'
         "    {\n"
-        "      \"target\": \"\",\n"
-        "      \"expression\": \"\",\n"
-        "      \"type\": \"defaulting|mapping|filtering|building\"\n"
+        '      "target": "",\n'
+        '      "expression": "",\n'
+        '      "type": "defaulting|mapping|filtering|building"\n'
         "    }\n"
         "  ],\n"
         "\n"
-        "  \"state_changes\": [],\n"
+        '  "state_changes": [],\n'
         "\n"
-        "  \"side_effects\": [],\n"
+        '  "side_effects": [],\n'
         "\n"
-        "  \"possible_failure_points\": [\n"
+        '  "possible_failure_points": [\n'
         "    {\n"
-        "      \"type\": \"ambiguous_call|unresolved_call|null_risk|external_dependency\",\n"
-        "      \"detail\": \"\"\n"
+        '      "type": "ambiguous_call|unresolved_call|null_risk|external_dependency",\n'
+        '      "detail": ""\n'
         "    }\n"
         "  ],\n"
         "\n"
-        "  \"next_debug_locations\": [\n"
+        '  "next_debug_locations": [\n'
         "    {\n"
-        "      \"class_name\": \"\",\n"
-        "      \"method_name\": \"\",\n"
-        "      \"reason\": \"\",\n"
-        "      \"priority\": \"high|medium|low\"\n"
+        '      "class_name": "",\n'
+        '      "method_name": "",\n'
+        '      "reason": "",\n'
+        '      "priority": "high|medium|low"\n'
         "    }\n"
         "  ],\n"
         "\n"
-        "  \"unknowns\": [\n"
-        "    \"string\"\n"
+        '  "unknowns": [\n'
+        '    "string"\n'
         "  ]\n"
         "}\n"
         "\n"

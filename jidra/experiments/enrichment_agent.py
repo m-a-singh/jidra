@@ -40,10 +40,10 @@ class MethodEnrichmentAgent:
 
 **Class Context:**
 - Full name: {class_full_name}
-- Annotations: {', '.join(class_annotations) if class_annotations else 'none'}
+- Annotations: {", ".join(class_annotations) if class_annotations else "none"}
 
 **Method Annotations:**
-{', '.join(method_entry.annotations) if method_entry.annotations else 'none'}
+{", ".join(method_entry.annotations) if method_entry.annotations else "none"}
 
 **Method Source Code:**
 ```java
@@ -115,8 +115,8 @@ Extract semantic fields in JSON format:
         text = response_text.strip()
 
         # Normalize markdown fences: strip both ` ``` ` and ` ```json `, case-insensitive
-        text = re.sub(r'^```[a-zA-Z]*\s*\n?', '', text)
-        text = re.sub(r'\n?```\s*$', '', text)
+        text = re.sub(r"^```[a-zA-Z]*\s*\n?", "", text)
+        text = re.sub(r"\n?```\s*$", "", text)
         text = text.strip()
 
         # Try direct parse first
@@ -124,7 +124,7 @@ Extract semantic fields in JSON format:
             result = json.loads(text)
         except json.JSONDecodeError:
             # Fallback: extract first {...} block to handle trailing prose
-            match = re.search(r'\{.*\}', text, re.DOTALL)
+            match = re.search(r"\{.*\}", text, re.DOTALL)
             if not match:
                 raise ValueError("json_parse_error")
             try:
@@ -135,6 +135,8 @@ Extract semantic fields in JSON format:
         # Validate structure
         required_keys = {"summary", "business_intent", "risk_notes", "confidence"}
         if not required_keys.issubset(result.keys()):
-            raise ValueError(f"Missing required keys {required_keys - result.keys()}. Got: {result.keys()}")
+            raise ValueError(
+                f"Missing required keys {required_keys - result.keys()}. Got: {result.keys()}"
+            )
 
         return result

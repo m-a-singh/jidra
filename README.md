@@ -1,5 +1,7 @@
 # JIDRA
 
+[![CI](https://github.com/m-a-singh/jidra/actions/workflows/ci.yml/badge.svg)](https://github.com/m-a-singh/jidra/actions/workflows/ci.yml)
+
 JIDRA (Java Intelligent Diagnostic & Reasoning Agent) is a focused CLI for Java codebase graph indexing, call tracing, context extraction, prompt generation, and optional LLM-based diagnosis.
 
 This project is intentionally minimal and graph-driven.

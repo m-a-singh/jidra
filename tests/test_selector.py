@@ -1,10 +1,4 @@
-import pytest
-
-
 from jidra.selector import _resolve_method_selector
-
-
-
 
 
 def test_resolve_method_selector_by_id(sample_graph):

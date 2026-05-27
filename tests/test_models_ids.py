@@ -1,9 +1,4 @@
-import pytest
-
 from jidra.graph_io import load_graph_jsonl
-
-
-
 
 
 def test_method_ids_are_unique_and_stable(sample_graph):
@@ -22,7 +17,9 @@ def test_method_ids_are_unique_and_stable(sample_graph):
     methods2 = list(g2.methods)
 
     # Map by signature+file_path+start_line to avoid depending on ordering.
-    key = lambda m: (m.signature, m.file_path, m.start_line, m.end_line)
+    def key(m):
+        return (m.signature, m.file_path, m.start_line, m.end_line)
+
     map1 = {key(m): m.id for m in methods}
     map2 = {key(m): m.id for m in methods2}
 
