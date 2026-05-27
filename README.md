@@ -53,6 +53,77 @@ jidra/
     └── cache.py
 ```
 
+## Architecture
+
+```mermaid
+graph TD
+     subgraph Java Codebase
+        JavaSource[Java Files (*.java)]
+    end
+
+    subgraph JIDRA CLI
+        JidraCLI(JIDRA CLI)
+        direction LR
+        JavaSource -->|`index` command| Extractor(Graph Extractor)
+        Extractor --> GraphJSONL(Graph JSONL)
+
+        GraphJSONL -->|Input| Selector(Method Selector)
+        Selector --> MethodEntry(Method Entry)
+
+        MethodEntry -->|`trace`| TraceEngine(Trace Engine)
+        TraceEngine --> FlowResult(Flow Result)
+
+        MethodEntry -->|`context`| ContextBuilder(Context Builder)
+        ContextBuilder --> ContextOutput(Context Output)
+
+        FlowResult -->|`flow-doc`| FlowDocAgent(Flow Doc Agent)
+        FlowDocAgent --> MarkdownDoc(Markdown Doc)
+
+        ContextOutput -->|`prompt`| PromptGenerator(Prompt Generator)
+        PromptGenerator --> LLMPrompt(LLM Prompt)
+
+        LLMPrompt -->|`diagnose`| LLMClient(LLM Client)
+        LLMClient --> Diagnosis(LLM Diagnosis)
+
+        CLIInput[User Input (CLI Args)]
+        CLIInput --> JidraCLI
+
+        JidraCLI -->|Executes| Extractor
+        JidraCLI -->|Executes| Selector
+        JidraCLI -->|Executes| TraceEngine
+        JidraCLI -->|Executes| ContextBuilder
+        JidraCLI -->|Executes| FlowDocAgent
+        JidraCLI -->|Executes| PromptGenerator
+        JidraCLI -->|Executes| LLMClient
+
+        style JidraCLI fill:#ACC6DE,stroke:#23588F,stroke-width:2px
+        style GraphJSONL fill:#FFECB3,stroke:#FFA000,stroke-width:2px
+        style LLMPrompt fill:#C8E6C9,stroke:#388E3C,stroke-width:2px
+        style Diagnosis fill:#BBDEFB,stroke:#1976D2,stroke-width:2px
+
+        classDef accent0 fill:#FFF0CC,stroke:#F7C500,stroke-width:2px;
+        classDef accent1 fill:#F3E5F5,stroke:#9C27B0,stroke-width:2px;
+        classDef accent2 fill:#E1F5FE,stroke:#2196F3,stroke-width:2px;
+        classDef accent3 fill:#DCEDC8,stroke:#8BC34A,stroke-width:2px;
+        classDef accent4 fill:#FFEBEE,stroke:#E91E63,stroke-width:2px;
+        classDef accent5 fill:#FBE9E7,stroke:#FF5722,stroke-width:2px;
+        classDef accent6 fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px;
+        classDef accent7 fill:#E0F7FA,stroke:#00BCD4,stroke-width:2px;
+
+        Extractor:::accent0
+        GraphJSONL:::accent1
+        Selector:::accent2
+        TraceEngine:::accent3
+        ContextBuilder:::accent4
+        FlowDocAgent:::accent5
+        PromptGenerator:::accent6
+        LLMClient:::accent7
+
+    end
+
+
+```
+
 ## Installation
 
 This project is released under the MIT License (see `LICENSE`).
