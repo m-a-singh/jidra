@@ -64,18 +64,12 @@ def test_is_meaningful_signature_filters_infra():
 
 def test_is_business_entry_call_name_filter_is_case_insensitive():
     entry = {"call": "INCREMENT", "target_signature": "com.x.Foo#increment()"}
-    assert not is_business_entry(
-        entry, non_business_call_names={"increment"}, non_business_signature_parts=()
-    )
+    assert not is_business_entry(entry)
 
 
 def test_is_business_entry_signature_part_filter_is_case_insensitive():
     entry = {"call": "doThing", "target_signature": "com.x.Metrics.Foo#doThing()"}
-    assert not is_business_entry(
-        entry,
-        non_business_call_names=set(),
-        non_business_signature_parts=(".metrics.",),
-    )
+    assert not is_business_entry(entry)
 
 
 def test_extract_focused_map_sections_stops_at_root_flow_header():

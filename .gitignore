@@ -1,24 +1,10 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-
-# Virtual environments
-.venv/
-venv/
-
-# Results / artifacts
-output/
-
-# OS / IDE
 .DS_Store
-__MACOSX/
-.idea/
-*.iml
+output
+venv
+__pychace__
+/jidra/__pycache__
+flow_docs
+jidra/expirements/__pycache__/enrichment_ui.cpython-310.pyc
 .venv
-DS_Store
-*.egg-info/
-.pytest_cache/
-tests/__pycache__
-jidra.egg-info/
+__pycache__
+expirements/__pycache__
