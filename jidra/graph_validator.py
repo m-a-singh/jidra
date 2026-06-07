@@ -5,7 +5,7 @@ Removes phantom edges to confirmed non-bean classes.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .models import CallSite, Graph, MethodEntry, ResolvedCallEdge
@@ -160,17 +160,23 @@ def validate_graph(
         # else: all resolved candidates unconfirmed, remove
 
     # Upgrade unresolved callsites where receiver type matches a confirmed bean
+    # Create new callsites to avoid mutating original graph
     upgraded = 0
+    upgraded_callsites = []
     for callsite in filtered_callsites:
         if (
             callsite.resolution_status == "unresolved_receiver"
             and callsite.receiver_type_normalized
             and callsite.receiver_type_normalized in confirmed_beans
         ):
-            callsite.resolution_status = "actuator_resolved"
+            # Use dataclass replace() to create new instance without mutation
+            upgraded_callsites.append(replace(callsite, resolution_status="actuator_resolved"))
             upgraded += 1
+        else:
+            upgraded_callsites.append(callsite)
 
     report.callsites_upgraded = upgraded
+    filtered_callsites = upgraded_callsites
     report.edges_after = len(filtered_edges)
 
     if verbose:

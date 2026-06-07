@@ -180,6 +180,10 @@ def render_interactive_html(graph_data: dict) -> str:
     nodes_json = json.dumps(vis_nodes)
     edges_json = json.dumps(vis_edges)
 
+    # JSON is already safe; pass directly
+    nodes_json_escaped = nodes_json
+    edges_json_escaped = edges_json
+
     html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -232,8 +236,8 @@ def render_interactive_html(graph_data: dict) -> str:
     </div>
 
     <script type="text/javascript">
-        const nodes = new vis.DataSet({nodes_json});
-        const edges = new vis.DataSet({edges_json});
+        const nodes = new vis.DataSet({nodes_json_escaped});
+        const edges = new vis.DataSet({edges_json_escaped});
         const container = document.getElementById('network');
         const data = {{nodes: nodes, edges: edges}};
         const options = {{

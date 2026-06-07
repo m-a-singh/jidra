@@ -4,7 +4,6 @@
 from setuptools import setup, find_packages
 from pathlib import Path
 
-# Read README
 readme_file = Path(__file__).parent / "README.md"
 long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists() else ""
 
@@ -16,10 +15,9 @@ setup(
     long_description_content_type="text/markdown",
     author="JIDRA Contributors",
     license="MIT",
-    url="https://github.com/jidra/jidra",
+    url="https://github.com/akhilsinghcodes/jidra",
 
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
+    packages=find_packages(),
 
     entry_points={
         "console_scripts": ["jidra=jidra.cli:main"],
@@ -62,8 +60,8 @@ setup(
     ],
 
     project_urls={
-        "Bug Tracker": "https://github.com/jidra/jidra/issues",
-        "Documentation": "https://github.com/jidra/jidra#readme",
-        "Source": "https://github.com/jidra/jidra",
+        "Bug Tracker": "https://github.com/akhilsinghcodes/jidra/issues",
+        "Documentation": "https://github.com/akhilsinghcodes/jidra#readme",
+        "Source": "https://github.com/akhilsinghcodes/jidra",
     },
 )

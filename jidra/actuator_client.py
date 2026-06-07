@@ -391,7 +391,7 @@ def run_docker_and_fetch_beans(
                 print(f"Service '{service_name}' not found in docker-compose.yml, falling back to Dockerfile...", flush=True)
                 use_compose = False
             else:
-                # Clean up any orphaned containers
+                # Clean up any orphaned containers ONLY when service is confirmed
                 print(f"Cleaning up orphaned containers...", flush=True)
                 subprocess.run(
                     ["docker-compose", "down", "--remove-orphans"],
@@ -401,12 +401,16 @@ def run_docker_and_fetch_beans(
                 )
 
                 print(f"Starting all services with docker-compose up...", flush=True)
-                subprocess.run(
-                    ["docker-compose", "--profile", "service", "up", "-d", "--build"],
-                    cwd=root,
-                    check=True,
-                    timeout=300,
-                )
+                try:
+                    subprocess.run(
+                        ["docker-compose", "up", "-d", "--build"],
+                        cwd=root,
+                        check=True,
+                        timeout=300,
+                    )
+                except subprocess.CalledProcessError as e:
+                    print(f"docker-compose up failed: {e.stderr if e.stderr else str(e)}", flush=True)
+                    raise ActuatorError(f"Failed to start docker-compose: {e}") from e
                 print(f"✓ All services started", flush=True)
 
         if not use_compose:
