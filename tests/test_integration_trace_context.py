@@ -8,7 +8,7 @@ def test_trace_method_smoke(sample_graph):
     assert methods
     m = methods[0]
 
-    result = trace_method(sample_graph, m.id, max_depth=2, config_path=None)
+    result = trace_method(sample_graph, m.id, max_depth=2)
     assert "error" not in result
     assert result["root"]["id"] == m.id
     assert isinstance(result.get("flow"), list)

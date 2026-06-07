@@ -2,23 +2,20 @@ Metadata-Version: 2.4
 Name: jidra
 Version: 0.1.0
 Summary: JIDRA (Java Intelligent Diagnostic & Reasoning Agent) minimal CLI baseline
-Home-page: https://github.com/akhilsinghcodes/jidra
-Author: JIDRA Contributors
 License: MIT
-Requires-Python: >=3.9
+Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: tree-sitter>=0.22.0
 Requires-Dist: tree-sitter-java>=0.21.0
 Requires-Dist: litellm>=1.82.0
 Requires-Dist: pyyaml>=6.0.0
-Requires-Dist: mcp>=1.27.0
+Provides-Extra: test
+Requires-Dist: pytest>=8.0.0; extra == "test"
+Requires-Dist: ruff>=0.6.0; extra == "test"
 Provides-Extra: mcp
-Requires-Dist: mcp; extra == "mcp"
-Dynamic: author
-Dynamic: home-page
+Requires-Dist: mcp>=1.27.0; extra == "mcp"
 Dynamic: license-file
-Dynamic: requires-python
 
 # JIDRA: Enterprise Java Context Backend for LLM Workflows
 
@@ -167,7 +164,7 @@ Use JIDRA with Claude via Model Context Protocol:
 ```python
 # MCP tools available
 - jidra_get_method_context      # Get local method scope
-- jidra_get_flow                # Get full stitched flow
+- jidra_get_flow                # Get full stitched flow  
 - jidra_get_agent_flow          # Get compact agent view
 - jidra_get_method_source       # Retrieve source code
 - jidra_get_call_chain          # Find paths between methods

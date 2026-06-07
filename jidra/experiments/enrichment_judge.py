@@ -108,7 +108,7 @@ Focus on: accuracy, completeness, and usefulness. Reject if:
             except Exception as e:
                 logger.warning(f"Judgment failed with model {model}: {e}")
                 if model == models_to_try[-1]:
-                    logger.error(f"All judgment models failed for extraction")
+                    logger.error("All judgment models failed for extraction")
                     return {
                         "success": False,
                         "error": str(e),
