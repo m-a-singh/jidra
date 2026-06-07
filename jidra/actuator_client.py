@@ -296,7 +296,7 @@ def _build_java_app(codebase_root: str, build_dir: str | None = None) -> None:
 
         if result_code != 0:
             raise ActuatorError(f"Build failed with {build_tool} (exit code {result_code})")
-        print(f"✓ Build successful", flush=True)
+        print("✓ Build successful", flush=True)
 
         # Verify artifacts exist - check both build_path and root
         gradle_jars = list((build_path / "build" / "libs").glob("*.jar")) if (build_path / "build" / "libs").exists() else []
@@ -324,7 +324,7 @@ def _build_java_app(codebase_root: str, build_dir: str | None = None) -> None:
         print(f"✓ Found {len(all_jars)} JAR file(s): {', '.join(str(j.name) for j in all_jars[:3])}")
 
     except subprocess.TimeoutExpired:
-        raise ActuatorError(f"Build timeout after 15 minutes") from None
+        raise ActuatorError("Build timeout after 15 minutes") from None
 
 
 def _compute_image_tag(codebase_root: str) -> str:
@@ -378,12 +378,12 @@ def run_docker_and_fetch_beans(
     try:
         # Auto-build Java app (unless explicitly skipped)
         if skip_build:
-            print(f"⊘ Skipping Java build (--skip-build)", flush=True)
+            print("⊘ Skipping Java build (--skip-build)", flush=True)
         else:
             _build_java_app(codebase_root, build_dir)
 
         if use_compose:
-            print(f"Using docker-compose.yml for orchestration...", flush=True)
+            print("Using docker-compose.yml for orchestration...", flush=True)
             # Check if service exists in docker-compose
             service = _find_service_in_compose(compose_file, service_name)
             if not service:
@@ -392,7 +392,7 @@ def run_docker_and_fetch_beans(
                 use_compose = False
             else:
                 # Clean up any orphaned containers ONLY when service is confirmed
-                print(f"Cleaning up orphaned containers...", flush=True)
+                print("Cleaning up orphaned containers...", flush=True)
                 subprocess.run(
                     ["docker-compose", "down", "--remove-orphans"],
                     cwd=root,
@@ -400,7 +400,7 @@ def run_docker_and_fetch_beans(
                     timeout=60,
                 )
 
-                print(f"Starting all services with docker-compose up...", flush=True)
+                print("Starting all services with docker-compose up...", flush=True)
                 try:
                     subprocess.run(
                         ["docker-compose", "up", "-d", "--build"],
@@ -411,11 +411,11 @@ def run_docker_and_fetch_beans(
                 except subprocess.CalledProcessError as e:
                     print(f"docker-compose up failed: {e.stderr if e.stderr else str(e)}", flush=True)
                     raise ActuatorError(f"Failed to start docker-compose: {e}") from e
-                print(f"✓ All services started", flush=True)
+                print("✓ All services started", flush=True)
 
         if not use_compose:
-            print(f"Using Dockerfile for single-container build...", flush=True)
-            dockerfile = _find_dockerfile(codebase_root)
+            print("Using Dockerfile for single-container build...", flush=True)
+            _find_dockerfile(codebase_root)
             image_tag = _compute_image_tag(codebase_root)
 
             # Build Docker image
@@ -425,7 +425,7 @@ def run_docker_and_fetch_beans(
                 check=True,
                 timeout=600,
             )
-            print(f"✓ Docker image built", flush=True)
+            print("✓ Docker image built", flush=True)
 
             # Run container
             print(f"Starting container on port {port}...", flush=True)
@@ -439,15 +439,15 @@ def run_docker_and_fetch_beans(
                 check=True,
                 timeout=60,
             )
-            print(f"✓ Container started", flush=True)
+            print("✓ Container started", flush=True)
 
         # Wait for health
         print(f"Waiting for app to be ready (timeout: {timeout}s)...", flush=True)
         _wait_for_health(actuator_url, timeout=timeout)
-        print(f"✓ App is healthy", flush=True)
+        print("✓ App is healthy", flush=True)
 
         # Fetch beans
-        print(f"Fetching /actuator/beans...", flush=True)
+        print("Fetching /actuator/beans...", flush=True)
         beans = fetch_beans_from_url(actuator_url)
         # Count total beans across all contexts
         total_bean_count = 0
@@ -460,7 +460,7 @@ def run_docker_and_fetch_beans(
         raise ActuatorError(f"Docker operation failed: {e}") from e
     finally:
         # Cleanup
-        print(f"Cleaning up Docker resources...", flush=True)
+        print("Cleaning up Docker resources...", flush=True)
         if use_compose:
             subprocess.run(
                 ["docker-compose", "down"],
@@ -476,4 +476,4 @@ def run_docker_and_fetch_beans(
                 ["docker", "rmi", image_tag],
             ]:
                 subprocess.run(cmd, capture_output=True, timeout=30)
-        print(f"✓ Cleanup complete", flush=True)
+        print("✓ Cleanup complete", flush=True)
