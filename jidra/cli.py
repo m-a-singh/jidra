@@ -8,6 +8,7 @@ import sys
 import time
 from pathlib import Path
 
+from .actuator_client import ActuatorError, fetch_beans_from_url, run_docker_and_fetch_beans
 from .context_builder import build_method_context
 from .engine import JidraEngine
 from .exporter import export_jsonl, graph_records, split_graph_records_by_source
@@ -15,6 +16,8 @@ from .extractor import build_graph
 from .flow_doc_agent import FlowDocAgent
 from .flow_stitcher import stitch_flow
 from .graph_io import load_graph_jsonl, resolve_graph_paths
+from .graph_validator import parse_actuator_beans, validate_graph
+from .graph_visualizer import build_graph_data, render_interactive_html
 from .selector import (
     _method_ambiguous_error,
     _method_not_found_error,
@@ -23,99 +26,35 @@ from .selector import (
 from .trace_engine import trace_method, trace_route
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
-
-
-def _parse_csv_env(name: str) -> list[str]:
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return []
-    return [p.strip() for p in raw.split(",") if p.strip()]
-
-
-# Keep these defaults generic (no employer-specific identifiers).
-# Extend/override via env vars or config.yaml.
-DEFAULT_NON_BUSINESS_SIGNATURE_PARTS = (
+NON_BUSINESS_SIGNATURE_PARTS = (
     ".metrics.",
     ".datadog.",
+    ".config.datadog.",
     ".prometheus.",
     ".logging.",
     ".log.",
     ".utils.",
     ".constants.",
+    "servicemetrics#",
+    "metricsclient#",
+    "metriccounter",
+    "builder#",
+    "constants#",
 )
-DEFAULT_NON_BUSINESS_CALL_NAMES = {
+NON_BUSINESS_CALL_NAMES = {
     "getMarker",
     "increment",
     "decrement",
+    "decrementCounter",
+    "incrementCounter",
     "recordExecutionTime",
+    "createTag",
+    "createHeadersMap",
     "build",
 }
-
-
-def _load_non_business_filters(
-    config_path: str | None = None,
-) -> tuple[tuple[str, ...], set[str]]:
-    """Load non-business filters from env/config, with safe generic defaults.
-
-    Env vars (comma-separated):
-      - JIDRA_NON_BUSINESS_SIGNATURE_PARTS
-      - JIDRA_NON_BUSINESS_CALL_NAMES
-
-    config.yaml (optional):
-      non_business:
-        # mode: "extend" (default) or "replace"
-        mode: extend
-        signature_parts: [".metrics.", "foo#"]
-        call_names: ["increment", "decrement"]
-
-    Behavior:
-      - values are normalized to lowercase for case-insensitive matching
-      - mode=extend: config/env add to defaults
-      - mode=replace: config replaces defaults (env still extends after)
-    """
-
-    cfg = _load_cli_config(config_path)
-    nb = cfg.get("non_business", {}) if isinstance(cfg, dict) else {}
-
-    cfg_mode = None
-    cfg_sig = None
-    cfg_calls = None
-    if isinstance(nb, dict):
-        cfg_mode = nb.get("mode")
-        cfg_sig = nb.get("signature_parts")
-        cfg_calls = nb.get("call_names")
-
-    mode = str(cfg_mode or "extend").strip().lower()
-
-    if mode == "replace":
-        sig_parts: list[str] = []
-        call_names: set[str] = set()
-    else:
-        sig_parts = [s.lower() for s in DEFAULT_NON_BUSINESS_SIGNATURE_PARTS]
-        call_names = {c.lower() for c in DEFAULT_NON_BUSINESS_CALL_NAMES}
-
-    if isinstance(cfg_sig, list):
-        sig_parts.extend([str(s).lower() for s in cfg_sig if str(s).strip()])
-    if isinstance(cfg_calls, list):
-        call_names.update([str(s).lower() for s in cfg_calls if str(s).strip()])
-
-    # Env always extends (useful for quick one-off experiments without editing config).
-    sig_parts.extend([s.lower() for s in _parse_csv_env("JIDRA_NON_BUSINESS_SIGNATURE_PARTS")])
-    call_names.update([s.lower() for s in _parse_csv_env("JIDRA_NON_BUSINESS_CALL_NAMES")])
-
-    # de-dupe while preserving order for signature parts
-    deduped_sig_parts: list[str] = []
-    seen = set()
-    for s in sig_parts:
-        if s in seen:
-            continue
-        seen.add(s)
-        deduped_sig_parts.append(s)
-
-    return tuple(deduped_sig_parts), call_names
-
-
-STACK_RE = re.compile(r"^\s*at\s+([A-Za-z0-9_.$]+)\.([A-Za-z0-9_$<>]+)\(([^:()]+):(\d+)\)\s*$")
+STACK_RE = re.compile(
+    r"^\s*at\s+([A-Za-z0-9_.$]+)\.([A-Za-z0-9_$<>]+)\(([^:()]+):(\d+)\)\s*$"
+)
 
 
 def _default_graph_for_type(graph_type: str) -> Path:
@@ -169,7 +108,9 @@ def _parse_stack_trace(text: str) -> list[dict]:
     return frames
 
 
-def _match_stack_frames_to_methods(graph, frames: list[dict]) -> tuple[list[dict], dict | None]:
+def _match_stack_frames_to_methods(
+    graph, frames: list[dict]
+) -> tuple[list[dict], dict | None]:
     methods = list(graph.methods)
     matched_rows: list[dict] = []
     anchor = None
@@ -178,7 +119,9 @@ def _match_stack_frames_to_methods(graph, frames: list[dict]) -> tuple[list[dict
     # Example: export JIDRA_PROJECT_PREFIXES="com.myco.,org.example."
     raw_prefixes = (os.getenv("JIDRA_PROJECT_PREFIXES") or "").strip()
     if raw_prefixes:
-        project_prefixes = tuple(p.strip() for p in raw_prefixes.split(",") if p.strip())
+        project_prefixes = tuple(
+            p.strip() for p in raw_prefixes.split(",") if p.strip()
+        )
     else:
         # Default: treat any Java package as "project" for anchoring purposes.
         project_prefixes = ""
@@ -228,31 +171,31 @@ def _is_meaningful_signature(sig: str) -> bool:
     return not any(x in s for x in noisy)
 
 
-def _load_error_doc_noise_filters(config_path: str | None = None) -> dict:
-    """Load filters for error-doc noise suppression.
-
-    config.yaml:
-      error_doc:
-        noise:
-          mode: extend|replace
-          receiver_prefixes: ["log", "thread"]
-          call_names: ["warn", "info"]
-          exception_receiver: "e"
-          exception_call_names: ["getMessage", "getCause"]
-
-    Env (always extends; comma-separated):
-      - JIDRA_ERROR_DOC_NOISE_RECEIVER_PREFIXES
-      - JIDRA_ERROR_DOC_NOISE_CALL_NAMES
-    """
-
-    cfg = _load_cli_config(config_path)
-    ed = cfg.get("error_doc", {}) if isinstance(cfg, dict) else {}
-    noise = ed.get("noise", {}) if isinstance(ed, dict) else {}
-
-    mode = str((noise.get("mode") if isinstance(noise, dict) else None) or "extend").strip().lower()
-
-    default_receiver_prefixes = ["builder", "log", "thread"]
-    default_call_names = [
+def _is_error_doc_noise_call(call: dict) -> bool:
+    receiver = str(call.get("receiver") or "")
+    receiver_type = str(call.get("receiver_type") or "")
+    name = str(call.get("call") or "")
+    combined = f"{receiver} {receiver_type} {name}"
+    noisy_receiver_prefixes = (
+        "builder",
+        "log",
+        "Thread",
+        "metrics",
+    )
+    if any(
+        receiver == p or receiver.startswith(f"{p}.") or receiver.startswith(f"{p}(")
+        for p in noisy_receiver_prefixes
+    ):
+        return True
+    if receiver == "e" and name in {
+        "getMessage",
+        "getCause",
+        "getStackTrace",
+    }:
+        return True
+    if "Health.Builder" in combined:
+        return True
+    if name in {
         "warn",
         "error",
         "info",
@@ -262,85 +205,8 @@ def _load_error_doc_noise_filters(config_path: str | None = None) -> dict:
         "sleep",
         "currentThread",
         "interrupt",
-    ]
-    default_exception_receiver = "e"
-    default_exception_call_names = ["getMessage", "getCause", "getStackTrace"]
-
-    if mode == "replace":
-        receiver_prefixes: list[str] = []
-        call_names: list[str] = []
-        exception_receiver = None
-        exception_call_names: list[str] = []
-    else:
-        receiver_prefixes = default_receiver_prefixes[:]
-        call_names = default_call_names[:]
-        exception_receiver = default_exception_receiver
-        exception_call_names = default_exception_call_names[:]
-
-    if isinstance(noise, dict):
-        rp = noise.get("receiver_prefixes")
-        cn = noise.get("call_names")
-        er = noise.get("exception_receiver")
-        ecn = noise.get("exception_call_names")
-
-        if isinstance(rp, list):
-            receiver_prefixes.extend([str(x) for x in rp if str(x).strip()])
-        if isinstance(cn, list):
-            call_names.extend([str(x) for x in cn if str(x).strip()])
-        if isinstance(er, str) and er.strip():
-            exception_receiver = er.strip()
-        if isinstance(ecn, list):
-            exception_call_names.extend([str(x) for x in ecn if str(x).strip()])
-
-    receiver_prefixes.extend(_parse_csv_env("JIDRA_ERROR_DOC_NOISE_RECEIVER_PREFIXES"))
-    call_names.extend(_parse_csv_env("JIDRA_ERROR_DOC_NOISE_CALL_NAMES"))
-
-    # normalize
-    receiver_prefixes = [str(x).lower() for x in receiver_prefixes if str(x).strip()]
-    call_names = [str(x).lower() for x in call_names if str(x).strip()]
-    exception_call_names = [str(x).lower() for x in exception_call_names if str(x).strip()]
-
-    # de-dupe preserve order
-    def _dedupe(xs: list[str]) -> list[str]:
-        out: list[str] = []
-        seen = set()
-        for x in xs:
-            if x in seen:
-                continue
-            seen.add(x)
-            out.append(x)
-        return out
-
-    return {
-        "receiver_prefixes": tuple(_dedupe(receiver_prefixes)),
-        "call_names": set(_dedupe(call_names)),
-        "exception_receiver": (str(exception_receiver).lower() if exception_receiver else None),
-        "exception_call_names": set(_dedupe(exception_call_names)),
-    }
-
-
-def _is_error_doc_noise_call(call: dict, *, config_path: str | None = None) -> bool:
-    f = _load_error_doc_noise_filters(config_path)
-
-    receiver = str(call.get("receiver") or "").lower()
-    name = str(call.get("call") or "").lower()
-
-    noisy_receiver_prefixes = f.get("receiver_prefixes") or ()
-    if any(
-        receiver == p or receiver.startswith(f"{p}.") or receiver.startswith(f"{p}(")
-        for p in noisy_receiver_prefixes
-    ):
+    }:
         return True
-
-    ex_receiver = f.get("exception_receiver")
-    ex_calls = f.get("exception_call_names") or set()
-    if ex_receiver and receiver == ex_receiver and name in ex_calls:
-        return True
-
-    noisy_names = f.get("call_names") or set()
-    if name in noisy_names:
-        return True
-
     return False
 
 
@@ -364,7 +230,9 @@ def _no_stack_frame_error_payload(raw_text: str) -> dict:
     }
 
 
-def _write_or_print_json(result: dict, output: str | None, default_filename: str) -> None:
+def _write_or_print_json(
+    result: dict, output: str | None, default_filename: str
+) -> None:
     if not output:
         print(json.dumps(result, ensure_ascii=True, indent=2))
         return
@@ -449,44 +317,29 @@ def _print_diagnose_report(result: dict) -> None:
     print(result.get("analysis", ""))
 
 
-def is_business_entry(
-    entry: dict,
-    *,
-    non_business_signature_parts: tuple[str, ...] = DEFAULT_NON_BUSINESS_SIGNATURE_PARTS,
-    non_business_call_names: set[str] = DEFAULT_NON_BUSINESS_CALL_NAMES,
-) -> bool:
-    call_name = str(entry.get("call") or "").lower()
-    if call_name in non_business_call_names:
+def is_business_entry(entry: dict) -> bool:
+    call_name = str(entry.get("call") or "")
+    if call_name in NON_BUSINESS_CALL_NAMES:
         return False
 
-    signature = str(entry.get("target_signature") or entry.get("signature") or "").lower()
-    if any(part in signature for part in non_business_signature_parts):
+    signature = str(
+        entry.get("target_signature") or entry.get("signature") or ""
+    ).lower()
+    if any(part in signature for part in NON_BUSINESS_SIGNATURE_PARTS):
         return False
     return True
 
 
-def _apply_business_only_context(result: dict, *, config_path: str | None = None) -> int:
-    sig_parts, call_names = _load_non_business_filters(config_path)
-
+def _apply_business_only_context(result: dict) -> int:
     resolved = result.get("resolved_callees", [])
-    filtered = [
-        entry
-        for entry in resolved
-        if is_business_entry(
-            entry,
-            non_business_signature_parts=sig_parts,
-            non_business_call_names=call_names,
-        )
-    ]
+    filtered = [entry for entry in resolved if is_business_entry(entry)]
     removed = len(resolved) - len(filtered)
     result["resolved_callees"] = filtered
     result["business_flow"] = filtered
     return removed
 
 
-def _apply_business_only_trace(result: dict, *, config_path: str | None = None) -> int:
-    sig_parts, call_names = _load_non_business_filters(config_path)
-
+def _apply_business_only_trace(result: dict) -> int:
     flow = result.get("flow", [])
     filtered = []
     removed = 0
@@ -494,11 +347,7 @@ def _apply_business_only_trace(result: dict, *, config_path: str | None = None) 
         if entry.get("depth") == 0:
             filtered.append(entry)
             continue
-        if is_business_entry(
-            entry,
-            non_business_signature_parts=sig_parts,
-            non_business_call_names=call_names,
-        ):
+        if is_business_entry(entry):
             filtered.append(entry)
         else:
             removed += 1
@@ -513,9 +362,7 @@ def _build_prompt(context: dict, target: str) -> str:
     unresolved = context.get("unresolved_calls", [])
 
     if target == "claude":
-        target_instruction = (
-            "Reason carefully. Be explicit about uncertainty. Do not invent missing call edges."
-        )
+        target_instruction = "Reason carefully. Be explicit about uncertainty. Do not invent missing call edges."
     elif target == "codex":
         target_instruction = "Focus on code navigation, likely next files/methods to inspect, and implementation-relevant details."
     else:
@@ -623,9 +470,7 @@ def _build_flow_prompt(
     graph,
 ) -> str:
     if target == "claude":
-        target_instruction = (
-            "Reason carefully. Be explicit about uncertainty. Do not invent missing call edges."
-        )
+        target_instruction = "Reason carefully. Be explicit about uncertainty. Do not invent missing call edges."
     elif target == "codex":
         target_instruction = "Focus on code navigation, likely next files/methods to inspect, and implementation-relevant details."
     else:
@@ -670,7 +515,9 @@ def _build_flow_prompt(
             call_counts[call] = call_counts.get(call, 0) + count
         top_calls = sorted(call_counts.items(), key=lambda x: x[1], reverse=True)[:8]
         top_lines = (
-            "\n".join([f"  - call: {call}, count: {count}" for call, count in top_calls])
+            "\n".join(
+                [f"  - call: {call}, count: {count}" for call, count in top_calls]
+            )
             or "  - None"
         )
         uncertain_section = (
@@ -686,7 +533,9 @@ def _build_flow_prompt(
         method_by_id = {m.id: m for m in graph.methods}
         budget = max_chars
         chunks = []
-        wanted_ids = [method.id] + [n.get("method_id") for n in top_nodes if n.get("method_id")]
+        wanted_ids = [method.id] + [
+            n.get("method_id") for n in top_nodes if n.get("method_id")
+        ]
         seen = set()
         for mid in wanted_ids:
             if mid in seen:
@@ -766,11 +615,17 @@ def _call_llm(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="jidra", description="JIDRA Java trace/context CLI")
+    parser = argparse.ArgumentParser(
+        prog="jidra", description="JIDRA Java trace/context CLI"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    index_parser = subparsers.add_parser("index", help="Build graph JSONL from a Java codebase")
-    index_parser.add_argument("--codebase", required=True, help="Path to Java repository root")
+    index_parser = subparsers.add_parser(
+        "index", help="Build graph JSONL from a Java codebase"
+    )
+    index_parser.add_argument(
+        "--codebase", required=True, help="Path to Java repository root"
+    )
     index_parser.add_argument(
         "--output", required=True, help="Output graph file or output directory"
     )
@@ -781,7 +636,9 @@ def _parse_args() -> argparse.Namespace:
     )
     trace_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     trace_parser.add_argument("--method", required=True, help="Method selector")
-    trace_parser.add_argument("--max-depth", type=int, default=5, help="Traversal depth")
+    trace_parser.add_argument(
+        "--max-depth", type=int, default=5, help="Traversal depth"
+    )
     trace_parser.add_argument(
         "--business-only",
         action="store_true",
@@ -793,9 +650,13 @@ def _parse_args() -> argparse.Namespace:
     context_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
-    context_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
+    context_parser.add_argument(
+        "--graph-type", choices=("main", "test"), default="main"
+    )
     context_parser.add_argument("--method", required=True, help="Method selector")
-    context_parser.add_argument("--max-chars", type=int, default=12000, help="Max context size")
+    context_parser.add_argument(
+        "--max-chars", type=int, default=12000, help="Max context size"
+    )
     context_parser.add_argument("--max-tokens", type=int)
     context_parser.add_argument(
         "--business-only",
@@ -804,13 +665,19 @@ def _parse_args() -> argparse.Namespace:
     )
     context_parser.add_argument("--output", help="Output JSON file path or directory")
 
-    route_parser = subparsers.add_parser("trace-route", help="Trace flow from endpoint route")
+    route_parser = subparsers.add_parser(
+        "trace-route", help="Trace flow from endpoint route"
+    )
     route_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
     route_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
-    route_parser.add_argument("--route", required=True, help="Route path, e.g. /api/v1/users")
-    route_parser.add_argument("--max-depth", type=int, default=5, help="Traversal depth")
+    route_parser.add_argument(
+        "--route", required=True, help="Route path, e.g. /api/v1/users"
+    )
+    route_parser.add_argument(
+        "--max-depth", type=int, default=5, help="Traversal depth"
+    )
     route_parser.add_argument("--output", help="Output JSON file path or directory")
 
     flow_parser = subparsers.add_parser(
@@ -825,21 +692,29 @@ def _parse_args() -> argparse.Namespace:
     flow_parser.add_argument(
         "--business-only", dest="business_only", action="store_true", default=True
     )
-    flow_parser.add_argument("--no-business-only", dest="business_only", action="store_false")
+    flow_parser.add_argument(
+        "--no-business-only", dest="business_only", action="store_false"
+    )
     flow_parser.add_argument("--output", help="Output JSON file path or directory")
 
-    prompt_parser = subparsers.add_parser("prompt", help="Build prompt-ready method context text")
+    prompt_parser = subparsers.add_parser(
+        "prompt", help="Build prompt-ready method context text"
+    )
     prompt_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
     prompt_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     prompt_parser.add_argument("--method", required=True, help="Method selector")
-    prompt_parser.add_argument("--max-chars", type=int, default=12000, help="Max context size")
+    prompt_parser.add_argument(
+        "--max-chars", type=int, default=12000, help="Max context size"
+    )
     prompt_parser.add_argument("--max-tokens", type=int)
     prompt_parser.add_argument(
         "--business-only", dest="business_only", action="store_true", default=True
     )
-    prompt_parser.add_argument("--no-business-only", dest="business_only", action="store_false")
+    prompt_parser.add_argument(
+        "--no-business-only", dest="business_only", action="store_false"
+    )
     prompt_parser.add_argument(
         "--target", choices=("claude", "codex", "generic"), default="generic"
     )
@@ -856,19 +731,27 @@ def _parse_args() -> argparse.Namespace:
     diagnose_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
-    diagnose_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
+    diagnose_parser.add_argument(
+        "--graph-type", choices=("main", "test"), default="main"
+    )
     diagnose_parser.add_argument("--method", required=True)
     diagnose_parser.add_argument(
         "--target", choices=("claude", "codex", "generic"), default="generic"
     )
     diagnose_parser.add_argument("--model")
-    diagnose_parser.add_argument("--max-chars", type=int, default=12000, help="Max context size")
+    diagnose_parser.add_argument(
+        "--max-chars", type=int, default=12000, help="Max context size"
+    )
     diagnose_parser.add_argument("--max-tokens", type=int)
     diagnose_parser.add_argument(
         "--business-only", dest="business_only", action="store_true", default=True
     )
-    diagnose_parser.add_argument("--no-business-only", dest="business_only", action="store_false")
-    diagnose_parser.add_argument("--use-flow", dest="use_flow", action="store_true", default=True)
+    diagnose_parser.add_argument(
+        "--no-business-only", dest="business_only", action="store_false"
+    )
+    diagnose_parser.add_argument(
+        "--use-flow", dest="use_flow", action="store_true", default=True
+    )
     diagnose_parser.add_argument("--no-use-flow", dest="use_flow", action="store_false")
     diagnose_parser.add_argument("--top-n", type=int, default=6)
     diagnose_parser.add_argument("--include-source", action="store_true")
@@ -889,12 +772,16 @@ def _parse_args() -> argparse.Namespace:
     flow_doc_parser = subparsers.add_parser(
         "flow-doc", help="Generate recursive deterministic flow markdown"
     )
-    flow_doc_parser.add_argument("--method", required=True, help="Method selector or method id")
+    flow_doc_parser.add_argument(
+        "--method", required=True, help="Method selector or method id"
+    )
     flow_doc_parser.add_argument("--output", required=True, help="Output markdown path")
     flow_doc_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
-    flow_doc_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
+    flow_doc_parser.add_argument(
+        "--graph-type", choices=("main", "test"), default="main"
+    )
     flow_doc_parser.add_argument("--depth", type=int, default=4)
     flow_doc_parser.add_argument("--top-n", type=int, default=8)
     flow_doc_parser.add_argument("--max-subflows", type=int, default=8)
@@ -921,11 +808,15 @@ def _parse_args() -> argparse.Namespace:
     error_doc_parser.add_argument(
         "--stack-trace", required=True, help="Path to stack trace text file"
     )
-    error_doc_parser.add_argument("--output", required=True, help="Output markdown path")
+    error_doc_parser.add_argument(
+        "--output", required=True, help="Output markdown path"
+    )
     error_doc_parser.add_argument(
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
-    error_doc_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
+    error_doc_parser.add_argument(
+        "--graph-type", choices=("main", "test"), default="main"
+    )
     error_doc_parser.add_argument("--depth", type=int, default=6)
     error_doc_parser.add_argument("--max-nodes", type=int, default=200)
     error_doc_parser.add_argument("--include-utility", action="store_true")
@@ -933,6 +824,115 @@ def _parse_args() -> argparse.Namespace:
         "--mind-map",
         action="store_true",
         help="Compatibility flag; error-doc already renders focused mind-map",
+    )
+
+    validate_parser = subparsers.add_parser(
+        "validate",
+        help="Validate graph against running Spring Boot app actuator beans",
+    )
+    validate_parser.add_argument(
+        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+    )
+    validate_parser.add_argument(
+        "--graph-type", choices=("main", "test"), default="main"
+    )
+    validate_parser.add_argument(
+        "--codebase", help="Path to Java codebase root (for Docker build)"
+    )
+    validate_parser.add_argument(
+        "--actuator-url",
+        help="Spring Boot actuator base URL (e.g. http://localhost:8080). Skips Docker if provided.",
+    )
+    validate_parser.add_argument(
+        "--port", type=int, default=8080, help="Host port for Docker container"
+    )
+    validate_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=120,
+        help="Seconds to wait for actuator health check",
+    )
+    validate_parser.add_argument(
+        "--output",
+        help="Output directory for graph_validated.jsonl (default: same dir as --graph)",
+    )
+    validate_parser.add_argument(
+        "--report",
+        help="Write validation report JSON to this path (default: stdout)",
+    )
+    validate_parser.add_argument(
+        "--no-filter",
+        action="store_true",
+        help="Annotate only, do not remove edges (debug mode)",
+    )
+    validate_parser.add_argument(
+        "--skip-build",
+        action="store_true",
+        help="Skip auto-building Java app (assume already built)",
+    )
+    validate_parser.add_argument(
+        "--service-name",
+        default="thingsboard",
+        help="Service name in docker-compose.yml (default: thingsboard)",
+    )
+    validate_parser.add_argument(
+        "--build-dir",
+        help="Build directory for multi-module projects (relative to codebase root, e.g., search-api)",
+    )
+
+    graph_view_parser = subparsers.add_parser(
+        "graph-view",
+        help="Visualize call graph with interactive HTML",
+    )
+    graph_view_parser.add_argument(
+        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+    )
+    graph_view_parser.add_argument(
+        "--graph-type", choices=("main", "test"), default="main"
+    )
+    graph_view_parser.add_argument(
+        "--output", help="Output HTML path (default: graph.html)"
+    )
+    graph_view_parser.add_argument(
+        "--method", help="Focus on method subgraph (optional)"
+    )
+    graph_view_parser.add_argument(
+        "--depth", type=int, default=4, help="Traversal depth for focused view"
+    )
+    graph_view_parser.add_argument(
+        "--package", help="Filter to package prefix (e.g., com.example.service)"
+    )
+
+    process_parser = subparsers.add_parser(
+        "process",
+        help="Complete end-to-end: index codebase → validate with actuator → generate visualization",
+    )
+    process_parser.add_argument(
+        "--codebase", required=True, help="Path to Java codebase root"
+    )
+    process_parser.add_argument(
+        "--actuator-url",
+        help="Spring Boot actuator URL (e.g. http://localhost:8080). If omitted, uses Docker.",
+    )
+    process_parser.add_argument(
+        "--port", type=int, default=8080, help="Docker container port"
+    )
+    process_parser.add_argument(
+        "--timeout", type=int, default=180, help="Actuator health check timeout"
+    )
+    process_parser.add_argument(
+        "--output", help="Output directory for all generated files"
+    )
+    process_parser.add_argument(
+        "--skip-build",
+        action="store_true",
+        help="Skip Java build (assume already built)",
+    )
+    process_parser.add_argument(
+        "--service-name", default="thingsboard", help="Service name in docker-compose.yml"
+    )
+    process_parser.add_argument(
+        "--build-dir", help="Build directory for multi-module projects"
     )
 
     return parser.parse_args()
@@ -1004,11 +1004,247 @@ def _index(codebase: str, output: str) -> None:
     )
 
 
+def _validate(
+    graph_arg: str | None,
+    graph_type: str,
+    codebase: str | None,
+    actuator_url: str | None,
+    port: int,
+    timeout: int,
+    output: str | None,
+    report: str | None,
+    no_filter: bool,
+    skip_build: bool,
+    service_name: str,
+    build_dir: str | None,
+) -> None:
+    graph_path = _resolve_graph_path(graph_arg, graph_type)
+    graph = load_graph_jsonl(graph_path)
+
+    try:
+        if actuator_url:
+            beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
+        elif codebase:
+            with run_docker_and_fetch_beans(codebase, port=port, timeout=timeout, skip_build=skip_build, service_name=service_name, build_dir=build_dir) as beans_response:
+                pass
+        else:
+            raise SystemExit("Either --actuator-url or --codebase is required")
+    except ActuatorError as e:
+        raise SystemExit(f"Actuator error: {e}") from e
+
+    confirmed_beans = parse_actuator_beans(beans_response)
+    filtered_graph, validation_report = validate_graph(graph, confirmed_beans, no_filter=no_filter)
+
+    # Determine output path
+    if output:
+        output_path = Path(output).resolve()
+    else:
+        output_path = graph_path.parent / f"graph_validated.jsonl"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Export filtered graph
+    records = graph_records(filtered_graph)
+    export_jsonl(output_path, records)
+
+    # Prepare report
+    report_dict = {
+        "total_classes": validation_report.total_classes,
+        "confirmed_beans": validation_report.confirmed_beans,
+        "unconfirmed_classes_sample": validation_report.unconfirmed_classes[:20],
+        "edges_before": validation_report.edges_before,
+        "edges_after": validation_report.edges_after,
+        "edges_removed": validation_report.edges_removed,
+        "callsites_upgraded": validation_report.callsites_upgraded,
+        "removed_edges_sample": [
+            {"caller": c, "callee": m}
+            for c, m in validation_report.removed_edges[:20]
+        ],
+    }
+
+    if report:
+        report_path = Path(report).resolve()
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
+        print(json.dumps({"graph": str(output_path), "report": str(report_path)}, indent=2))
+    else:
+        print(json.dumps(report_dict, indent=2))
+
+
+def _progress(step: int, total: int, msg: str) -> None:
+    pct = int(100 * step / total)
+    bar = "█" * (pct // 5) + "░" * (20 - pct // 5)
+    print(f"  [{bar}] {pct:3d}% • {msg}", flush=True)
+
+
+def _process(
+    codebase: str,
+    actuator_url: str | None,
+    port: int,
+    timeout: int,
+    output: str | None,
+    skip_build: bool,
+    service_name: str,
+    build_dir: str | None,
+) -> None:
+    print("\n" + "=" * 80)
+    print("JIDRA FULL PROCESSING PIPELINE")
+    print("=" * 80)
+
+    codebase_path = Path(codebase).resolve()
+    output_dir = Path(output).resolve() if output else OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # ===== STEP 1: INDEX (Build static call graph) =====
+    print("\n[1/3] INDEXING CODEBASE")
+    print(f"     Scanning: {codebase_path}")
+    _progress(0, 3, "Starting index...")
+
+    index_output = output_dir / "graph.jsonl"
+    try:
+        _index(str(codebase_path), str(index_output))
+        graph = load_graph_jsonl(index_output)
+        _progress(1, 3, f"✓ Indexed {len(graph.classes)} classes, {len(graph.methods)} methods, {len(graph.resolved_call_edges)} edges")
+    except Exception as e:
+        raise SystemExit(f"Indexing failed: {e}")
+
+    # ===== STEP 2: VALIDATE (Filter phantom edges with actuator) =====
+    print("\n[2/3] VALIDATING WITH SPRING ACTUATOR")
+    print(f"     Connecting to: {actuator_url or 'Docker (will auto-build)'}")
+    _progress(1, 3, "Fetching actuator beans...")
+
+    try:
+        if actuator_url:
+            beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
+        elif codebase:
+            with run_docker_and_fetch_beans(
+                str(codebase_path),
+                port=port,
+                timeout=timeout,
+                skip_build=skip_build,
+                service_name=service_name,
+                build_dir=build_dir,
+            ) as beans_response:
+                pass
+        else:
+            raise SystemExit("Either --actuator-url or --codebase is required")
+    except ActuatorError as e:
+        raise SystemExit(f"Actuator error: {e}") from e
+
+    _progress(2, 3, "Filtering phantom edges...")
+    confirmed_beans = parse_actuator_beans(beans_response)
+    filtered_graph, validation_report = validate_graph(graph, confirmed_beans, verbose=True)
+
+    # Write validated graph
+    validated_path = output_dir / "graph_validated.jsonl"
+    records = graph_records(filtered_graph)
+    export_jsonl(validated_path, records)
+
+    # Write report
+    report_path = output_dir / "validation_report.json"
+    report_dict = {
+        "total_classes": validation_report.total_classes,
+        "confirmed_beans": validation_report.confirmed_beans,
+        "edges_before": validation_report.edges_before,
+        "edges_after": validation_report.edges_after,
+        "edges_removed": validation_report.edges_removed,
+        "edges_removed_pct": round(100 * validation_report.edges_removed / max(1, validation_report.edges_before), 1),
+        "callsites_upgraded": validation_report.callsites_upgraded,
+    }
+    report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
+    _progress(2, 3, f"✓ Removed {validation_report.edges_removed} phantom edges ({report_dict['edges_removed_pct']:.1f}%)")
+
+    # ===== STEP 3: VISUALIZE (Generate interactive HTML) =====
+    print("\n[3/3] GENERATING INTERACTIVE VISUALIZATION")
+    print(f"     Output: {output_dir}")
+    _progress(2, 3, "Building graph visualization...")
+
+    graph_data = build_graph_data(filtered_graph, verbose=True)
+    html = render_interactive_html(graph_data)
+
+    html_path = output_dir / "graph_visualization.html"
+    html_path.write_text(html, encoding="utf-8")
+    _progress(3, 3, f"✓ Generated visualization: {html_path.name}")
+
+    # ===== SUMMARY =====
+    print("\n" + "=" * 80)
+    print("✓ PIPELINE COMPLETE")
+    print("=" * 80)
+    print(f"\nGenerated files in: {output_dir}")
+    print(f"  • {index_output.name}")
+    print(f"      {len(graph.classes)} classes, {len(graph.methods)} methods")
+    print(f"  • {validated_path.name}")
+    print(f"      {len(filtered_graph.resolved_call_edges)} edges ({100 - report_dict['edges_removed_pct']:.1f}% of original)")
+    print(f"  • {report_path.name}")
+    print(f"      Validation metrics")
+    print(f"  • {html_path.name}")
+    print(f"      Interactive graph with 3 tabs (Interactive | Graphviz | JSON)")
+    print(f"\nView graph: file://{html_path}")
+    print("=" * 80 + "\n")
+
+
 def main() -> None:
     args = _parse_args()
 
     if args.command == "index":
         _index(args.codebase, args.output)
+        return
+
+    if args.command == "validate":
+        _validate(
+            args.graph,
+            args.graph_type,
+            args.codebase,
+            args.actuator_url,
+            args.port,
+            args.timeout,
+            args.output,
+            args.report,
+            args.no_filter,
+            args.skip_build,
+            args.service_name,
+            args.build_dir,
+        )
+        return
+
+    if args.command == "process":
+        _process(
+            args.codebase,
+            args.actuator_url,
+            args.port,
+            args.timeout,
+            args.output,
+            args.skip_build,
+            args.service_name,
+            args.build_dir,
+        )
+        return
+
+    if args.command == "graph-view":
+        graph_path = _resolve_graph_path(args.graph, args.graph_type)
+        graph = load_graph_jsonl(graph_path)
+
+        # Build graph data
+        graph_data = build_graph_data(
+            graph,
+            method_selector=args.method,
+            depth=args.depth,
+            package_filter=args.package,
+        )
+
+        # Generate HTML
+        html = render_interactive_html(graph_data)
+
+        # Determine output path
+        if args.output:
+            output_path = Path(args.output)
+        else:
+            output_path = graph_path.parent / "graph.html"
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(html, encoding="utf-8")
+
+        print(json.dumps({"output": str(output_path), "nodes": len(graph_data["nodes"]), "edges": len(graph_data["edges"])}, indent=2))
         return
 
     if args.command == "mcp":
@@ -1046,7 +1282,11 @@ def main() -> None:
                 slots = ["root"]
                 if prepared and not prepared.get("error"):
                     for c in prepared.get("queue", []):
-                        label = c.signature if getattr(c, "signature", None) else c.method_id
+                        label = (
+                            c.signature
+                            if getattr(c, "signature", None)
+                            else c.method_id
+                        )
                         if "#" in label:
                             label = label.split("#", 1)[1]
                         slots.append(str(label))
@@ -1077,8 +1317,12 @@ def main() -> None:
                 {
                     "output": str(output_path),
                     "expanded_methods": len(result.get("expanded_methods", [])),
-                    "important_unresolved_calls": len(result.get("important_unresolved_calls", [])),
-                    "suggested_next_methods": len(result.get("suggested_next_methods", [])),
+                    "important_unresolved_calls": len(
+                        result.get("important_unresolved_calls", [])
+                    ),
+                    "suggested_next_methods": len(
+                        result.get("suggested_next_methods", [])
+                    ),
                 },
                 ensure_ascii=True,
                 indent=2,
@@ -1094,7 +1338,9 @@ def main() -> None:
         if not frames:
             raise SystemExit("No Java stack frames parsed from stack trace input.")
         if anchor is None:
-            raise SystemExit("No project frame matched/ambiguous for primary failure anchor.")
+            raise SystemExit(
+                "No project frame matched/ambiguous for primary failure anchor."
+            )
         if anchor["match_status"] == "ambiguous":
             method_selector = anchor["ambiguous_method_ids"][0]
         else:
@@ -1114,7 +1360,11 @@ def main() -> None:
             raise SystemExit(flow_result["error"])
         mind_map_md = _extract_focused_map_sections(agent.render_markdown(flow_result))
         failing_row = anchor
-        caller_row = matched_rows[anchor["frame_index"] - 1] if anchor["frame_index"] > 0 else None
+        caller_row = (
+            matched_rows[anchor["frame_index"] - 1]
+            if anchor["frame_index"] > 0
+            else None
+        )
         method_by_id = {m.id: m for m in graph.methods}
         neighbors = []
         if failing_row.get("matched_method_id"):
@@ -1129,11 +1379,11 @@ def main() -> None:
                     if src:
                         neighbors.append(src.signature)
         neighbors = sorted(set(neighbors))[:10]
-        unresolved_near_all = (flow_result.get("mind_map", {}) or {}).get("unresolved_calls", [])
+        unresolved_near_all = (flow_result.get("mind_map", {}) or {}).get(
+            "unresolved_calls", []
+        )
         unresolved_near = [
-            c
-            for c in unresolved_near_all
-            if not _is_error_doc_noise_call(c, config_path=getattr(args, "config", None))
+            c for c in unresolved_near_all if not _is_error_doc_noise_call(c)
         ][:10]
         anchor_id = failing_row.get("matched_method_id")
         meaningful_downstream = []
@@ -1147,12 +1397,14 @@ def main() -> None:
 
         matched_frame0 = (
             matched_rows[0]
-            if len(matched_rows) > 0 and matched_rows[0]["match_status"] in {"matched", "ambiguous"}
+            if len(matched_rows) > 0
+            and matched_rows[0]["match_status"] in {"matched", "ambiguous"}
             else None
         )
         matched_frame1 = (
             matched_rows[1]
-            if len(matched_rows) > 1 and matched_rows[1]["match_status"] in {"matched", "ambiguous"}
+            if len(matched_rows) > 1
+            and matched_rows[1]["match_status"] in {"matched", "ambiguous"}
             else None
         )
         nearest_controller = None
@@ -1204,9 +1456,7 @@ def main() -> None:
                 failing_location = m.signature
         lines.append(f"| 1 | `{failing_location}` | failing project frame |")
         if caller_row:
-            caller_loc = (
-                f"{caller_row['class_full_name']}#{caller_row['method_name']}:{caller_row['line']}"
-            )
+            caller_loc = f"{caller_row['class_full_name']}#{caller_row['method_name']}:{caller_row['line']}"
             lines.append(f"| 2 | `{caller_loc}` | caller frame above failure |")
         unresolved_priority = 3
         for c in unresolved_near:
@@ -1223,7 +1473,9 @@ def main() -> None:
             )
         caller_priority = 4
         for sig in caller_signatures:
-            lines.append(f"| {caller_priority} | `{sig}` | graph caller of failing method |")
+            lines.append(
+                f"| {caller_priority} | `{sig}` | graph caller of failing method |"
+            )
         if upstream_mode:
             if matched_frame0:
                 loc0 = f"{matched_frame0['class_full_name']}#{matched_frame0['method_name']}:{matched_frame0['line']}"
@@ -1236,7 +1488,9 @@ def main() -> None:
                 lines.append(f"| 2 | `{locc}` | nearest matched controller frame |")
         elif neighbors:
             for sig in neighbors[:10]:
-                lines.append(f"| 4 | `{sig}` | callee graph neighbor of failing method |")
+                lines.append(
+                    f"| 4 | `{sig}` | callee graph neighbor of failing method |"
+                )
         output_path = Path(args.output).resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -1258,15 +1512,15 @@ def main() -> None:
 
     if args.command == "trace":
         method = _resolve_single_method(graph, args.method)
-        result = trace_method(
-            graph, method.id, max_depth=args.max_depth, config_path=getattr(args, "config", None)
-        )
+        result = trace_method(graph, method.id, max_depth=args.max_depth)
         if result.get("error"):
             raise SystemExit(result["error"])
         if args.business_only:
-            removed = _apply_business_only_trace(result, config_path=getattr(args, "config", None))
+            removed = _apply_business_only_trace(result)
             result["filters"] = {"business_only": True, "removed_count": removed}
-            filename = f"trace_business_{args.graph_type}_{_method_filename_part(method)}.json"
+            filename = (
+                f"trace_business_{args.graph_type}_{_method_filename_part(method)}.json"
+            )
         else:
             filename = f"trace_{args.graph_type}_{_method_filename_part(method)}.json"
         _write_or_print_json(result, args.output, filename)
@@ -1278,9 +1532,7 @@ def main() -> None:
         if result.get("error"):
             raise SystemExit(result["error"])
         if args.business_only:
-            removed = _apply_business_only_context(
-                result, config_path=getattr(args, "config", None)
-            )
+            removed = _apply_business_only_context(result)
             result["filters"] = {"business_only": True, "removed_count": removed}
             filename = f"context_business_{args.graph_type}_{_method_filename_part(method)}.json"
         else:
@@ -1301,16 +1553,16 @@ def main() -> None:
             flow_config=flow_config,
         )
         if args.business_only:
-            filename = f"flow_business_{args.graph_type}_{_method_filename_part(method)}.json"
+            filename = (
+                f"flow_business_{args.graph_type}_{_method_filename_part(method)}.json"
+            )
         else:
             filename = f"flow_{args.graph_type}_{_method_filename_part(method)}.json"
         _write_or_print_json(result, args.output, filename)
         return
 
     if args.command == "trace-route":
-        result = trace_route(
-            graph, args.route, max_depth=args.max_depth, config_path=getattr(args, "config", None)
-        )
+        result = trace_route(graph, args.route, max_depth=args.max_depth)
         if result.get("error"):
             raise SystemExit(result["error"])
 
@@ -1319,7 +1571,9 @@ def main() -> None:
         if "#" in root_sig:
             class_name, method_part = root_sig.split("#", 1)
             method_name = method_part.split("(", 1)[0]
-            route_part = _safe_filename_part(f"{class_name.split('.')[-1]}_{method_name}")
+            route_part = _safe_filename_part(
+                f"{class_name.split('.')[-1]}_{method_name}"
+            )
 
         filename = f"trace_route_{args.graph_type}_{route_part}.json"
         _write_or_print_json(result, args.output, filename)
@@ -1350,17 +1604,13 @@ def main() -> None:
                 max_chars=args.max_chars,
                 graph=graph,
             )
-            filename = (
-                f"prompt_flow_{args.target}_{args.graph_type}_{_method_filename_part(method)}.txt"
-            )
+            filename = f"prompt_flow_{args.target}_{args.graph_type}_{_method_filename_part(method)}.txt"
         else:
             context = build_method_context(graph, method.id, max_chars=args.max_chars)
             if context.get("error"):
                 raise SystemExit(context["error"])
             if args.business_only:
-                removed = _apply_business_only_context(
-                    context, config_path=getattr(args, "config", None)
-                )
+                removed = _apply_business_only_context(context)
                 context["filters"] = {
                     "business_only": True,
                     "removed_count": removed,
@@ -1429,9 +1679,7 @@ def main() -> None:
             if context.get("error"):
                 raise SystemExit(context["error"])
             if args.business_only:
-                removed = _apply_business_only_context(
-                    context, config_path=getattr(args, "config", None)
-                )
+                removed = _apply_business_only_context(context)
                 context["filters"] = {
                     "business_only": True,
                     "removed_count": removed,
@@ -1449,7 +1697,9 @@ def main() -> None:
             args.max_tokens,
         )
         print(f"Time Taken by LLM: {(time.time() - startTime)}")
-        business_flow = context.get("business_flow") or context.get("resolved_callees", [])
+        business_flow = context.get("business_flow") or context.get(
+            "resolved_callees", []
+        )
 
         result = {
             "method": method.signature,
@@ -1502,9 +1752,7 @@ def main() -> None:
         if args.use_flow:
             filename = f"diagnose_flow_{args.target}_{args.graph_type}_{_method_filename_part(method)}.json"
         else:
-            filename = (
-                f"diagnose_{args.target}_{args.graph_type}_{_method_filename_part(method)}.json"
-            )
+            filename = f"diagnose_{args.target}_{args.graph_type}_{_method_filename_part(method)}.json"
         if args.output:
             _write_or_print_json(result, args.output, filename)
             if not args.quiet:
