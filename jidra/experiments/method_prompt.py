@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 
+from .agent_schema import MethodAnalysisInput
 
-def build_method_analysis_prompt(input) -> str:
+
+def build_method_analysis_prompt(input: MethodAnalysisInput) -> str:
     method = input.method
     cls = input.class_entry
 
@@ -117,8 +119,10 @@ def build_method_analysis_prompt(input) -> str:
         "- log.*\n"
         "- Markers.*\n"
         "- metrics.*\n"
+        "- dogstatsd.*\n"
         "- StatsDClient.*\n"
         "- Counter.*\n"
+        "- CustomMetricCounter.*\n"
         "\n"
         "### NOT noise (these ARE logic):\n"
         "- Optional.*\n"

@@ -15,8 +15,6 @@ from .cli import (
 def analyze_stack_trace(
     stack_trace: str,
     graph_path: str | None = None,
-    *,
-    config_path: str | None = None,
     depth: int = 6,
     max_nodes: int = 80,
     include_utility: bool = False,
@@ -58,7 +56,7 @@ def analyze_stack_trace(
     unresolved_near = [
         c
         for c in (flow_result.get("mind_map", {}) or {}).get("unresolved_calls", [])
-        if not _is_error_doc_noise_call(c, config_path=config_path)
+        if not _is_error_doc_noise_call(c)
     ]
     unresolved_near = unresolved_near[:10]
 
@@ -219,7 +217,6 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
     def jidra_analyze_stack_trace(
         stack_trace: str,
         graph_path: str | None = None,
-        config_path: str | None = None,
         depth: int = 6,
         max_nodes: int = 80,
         include_utility: bool = False,
@@ -227,7 +224,6 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
         return analyze_stack_trace(
             stack_trace=stack_trace,
             graph_path=graph_path or default_path,
-            config_path=config_path,
             depth=depth,
             max_nodes=max_nodes,
             include_utility=include_utility,
