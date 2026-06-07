@@ -35,7 +35,7 @@ NON_BUSINESS_SIGNATURE_PARTS = (
     ".log.",
     ".utils.",
     ".constants.",
-    "servicemetrics#",
+    "ServiceMetrics#",
     "dogstatsdclient#",
     "metriccounter",
     "builder#",
@@ -872,8 +872,8 @@ def _parse_args() -> argparse.Namespace:
     )
     validate_parser.add_argument(
         "--service-name",
-        default="search-service",
-        help="Service name in docker-compose.yml (default: search-service)",
+        default="search",
+        help="Service name in docker-compose.yml (default: search)",
     )
     validate_parser.add_argument(
         "--build-dir",
@@ -929,7 +929,7 @@ def _parse_args() -> argparse.Namespace:
         help="Skip Java build (assume already built)",
     )
     process_parser.add_argument(
-        "--service-name", default="search-service", help="Service name in docker-compose.yml"
+        "--service-name", default="search", help="Service name in docker-compose.yml"
     )
     process_parser.add_argument(
         "--build-dir", help="Build directory for multi-module projects"

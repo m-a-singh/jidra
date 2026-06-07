@@ -228,7 +228,7 @@ jidra validate --codebase . --port 8080
 
 | Project | Type | Traditional | Graph | Reduction |
 |---------|------|-------------|-------|-----------|
-| search-service | Proprietary | 10,811 | 869 | **95.9%** |
+| search | Proprietary | 10,811 | 869 | **95.9%** |
 | Spring Petclinic | Public | 2,736-5,304 | 320-383 | **87.4%** |
 
 ### Safety Metrics

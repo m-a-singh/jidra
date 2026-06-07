@@ -77,13 +77,13 @@ def _find_docker_compose(codebase_root: str) -> Path | None:
     return None
 
 
-def _find_service_in_compose(compose_file: Path, service_name: str = "search-service") -> dict | None:
+def _find_service_in_compose(compose_file: Path, service_name: str = "search") -> dict | None:
     """
     Parse docker-compose.yml and extract service config.
 
     Args:
         compose_file: Path to docker-compose.yml
-        service_name: Name of service to find (default: search-service)
+        service_name: Name of service to find (default: search)
 
     Returns:
         Service config dict or None if not found.
@@ -99,7 +99,7 @@ def _find_service_in_compose(compose_file: Path, service_name: str = "search-ser
         raise ActuatorError(f"Failed to parse docker-compose.yml: {e}") from e
 
 
-def _extract_port_from_compose(compose_file: Path, service_name: str = "search-service") -> int | None:
+def _extract_port_from_compose(compose_file: Path, service_name: str = "search") -> int | None:
     """
     Extract the host port from docker-compose service.
 
@@ -107,7 +107,7 @@ def _extract_port_from_compose(compose_file: Path, service_name: str = "search-s
 
     Args:
         compose_file: Path to docker-compose.yml
-        service_name: Name of service to find (default: search-service)
+        service_name: Name of service to find (default: search)
 
     Returns:
         Host port number or None if not found.
@@ -339,7 +339,7 @@ def run_docker_and_fetch_beans(
     port: int = 8080,
     timeout: int = 120,
     skip_build: bool = False,
-    service_name: str = "search-service",
+    service_name: str = "search",
     build_dir: str | None = None,
 ) -> Generator[dict, None, None]:
     """
@@ -353,7 +353,7 @@ def run_docker_and_fetch_beans(
         port: Host port to map to container's 8080.
         timeout: Max seconds to wait for app startup.
         skip_build: If True, skip auto-building Java app (assume already built).
-        service_name: Service name in docker-compose.yml (default: search-service).
+        service_name: Service name in docker-compose.yml (default: search).
         build_dir: Optional build directory (relative to codebase_root) for multi-module projects.
 
     Yields:

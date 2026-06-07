@@ -22,7 +22,7 @@
   - Multi-module Gradle project detection with auto-selection
   - Auto-detection of docker-compose port configuration
   - Automatic service discovery and bean extraction
-- **Results:** Removed 78.6% phantom edges (3,569 edges) from search-service
+- **Results:** Removed 78.6% phantom edges (3,569 edges) from search
 
 ### 2. **Graph Validator** (`jidra/graph_validator.py`)
 - **Purpose:** Filter unrealistic edges and upgrade unresolved callsites
@@ -120,13 +120,11 @@
 
 ### Two Controllers Tested
 
-**SearchServiceController** (9 methods in graph)
+**SearchController** (9 methods in graph)
 - search() - Primary text search endpoint
 - suggest() - Auto-suggestion endpoint  
 - history() - Recent search history
-- getSearchFilters() - Filter metadata
-- trendingSearches() - Trending data
-- (+ 4 more)
+- (+ 6 more)
 
 **SearchExperienceServiceController** (3 methods in graph)
 - experienceSearch() - Experience-focused search
@@ -134,7 +132,7 @@
 - history() - Experience history
 
 ### Confirmed Spring Beans
-- CacheEnabledSearchProcessor ✓
+- SearchCacheProcessor ✓
 - ServiceMetrics ✓
 - DogStatsdClient ✓
 - RecentSearchService ✓
@@ -196,10 +194,9 @@ jidra graph-view --graph graph_validated.jsonl --package com.example.search.comp
 
 ## Method Discovery Validation
 
-### SearchServiceController in Graph
+### SearchController in Graph
 ✓ checkIfEmptySet()  
 ✓ createMockedData()  
-✓ getSearchFilters()  
 ✓ hasFilterCriteria() (2 overloads)  
 ✓ history()  
 ✓ search()  
@@ -228,13 +225,6 @@ jidra graph-view --graph graph_validated.jsonl --package com.example.search.comp
 
 ### Phantom Edges Removed (Expected & Safe)
 - SearchUtils.createHeadersMap - Utility ✓
-- SearchUtils.isCitc - Utility ✓
-- SearchUtils.mergeExperimentAssignments - Utility ✓
-- TagBuilder.build - Utility ✓
-- MediaTypeUtils.fromV1Request - Utility ✓
-- FilterUtils.getEntityTypesV1 - Utility ✓
-- SearchUtils.getMediaTypes - Utility ✓
-- SearchUtils.createTag - Utility ✓
 - SearchUtils.createHeadersMap - Utility ✓
 
 **Risk Assessment: SAFE ✓**
@@ -249,8 +239,8 @@ jidra graph-view --graph graph_validated.jsonl --package com.example.search.comp
 ### Traditional Approach (Loading Raw Source)
 ```
 Input:
-  • SearchServiceController.java (599 lines)
-  • CacheEnabledSearchProcessor.java (374 lines)
+  • SearchController.java (599 lines)
+  • SearchCacheProcessor.java (374 lines)
   • ServiceMetrics.java (64 lines)
   • + 5 more dependency files
   = 43,251 characters
@@ -376,4 +366,3 @@ Quality: Excellent (faster)
 **Sample Size:** 10 API calls (5 traditional + 5 graph-based)  
 **Validation:** Completeness audit + call coverage analysis  
 **Result:** PASS - Enterprise ready ✓
-

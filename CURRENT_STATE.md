@@ -136,7 +136,7 @@ Java repo
 ## 9) What Claims Are NOW PROVEN ✅
 
 **Token Reduction (Real Claude API Testing)**
-- Search-service: 95.9% reduction (10,811 → 869 input tokens)
+- search: 95.9% reduction (10,811 → 869 input tokens)
 - Spring Petclinic: 87.4% average (2,736-5,304 → 320-383 input tokens)
 - Consistency: 85-96% range across diverse projects
 
@@ -146,7 +146,7 @@ Java repo
 - 71-78% phantom edges safely removed (Spring Actuator validation)
 
 **Multi-Project Validation**
-- Proprietary codebase: search-service (complex, 768 classes)
+- Proprietary codebase: search (complex, 768 classes)
 - Public codebase: Spring Petclinic (simple, 25 classes)
 - Both show consistent token reduction with zero false negatives
 

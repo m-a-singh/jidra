@@ -81,7 +81,7 @@ What We Added:
 
 ### Empirical Proof (Real Claude API Testing)
 
-**Search-Service (Proprietary, Complex)**
+**search (Proprietary, Complex)**
 ```
 Traditional:  10,811 input tokens
 Graph-based:    869 input tokens
@@ -137,7 +137,7 @@ Safety audit:                       ✅ PASSED
 | 0% false negatives | ✅ Proven | Completeness validation |
 | Safe phantom edge removal | ✅ Proven | Spring Actuator validation |
 | Multi-framework support | ✅ Proven | Spring Boot on Gradle + Maven |
-| Public + proprietary proof | ✅ Proven | Search-service + Spring Petclinic |
+| Public + proprietary proof | ✅ Proven | search + Spring Petclinic |
 | Production-ready automation | ✅ Proven | Docker + Actuator pipeline |
 
 ---
@@ -346,7 +346,7 @@ False Negatives:     0% ✅
 Phantom Edge Removal: 71-78% ✅
 Deployment Time:     <5 minutes ✅
 Public Proof:        Spring Petclinic ✅
-Proprietary Proof:   Search-service ✅
+Proprietary Proof:   search ✅
 ```
 
 ---
@@ -369,4 +369,3 @@ That's a better product.
 - **New Vision:** "Be the best Java context backend for LLMs" → Achievable, valuable
 - **Status:** Pivot complete, documentation updated, ready for production
 - **Next Steps:** (1) Update all documentation, (2) Create deployment guide, (3) Production rollout
-

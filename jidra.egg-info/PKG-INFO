@@ -167,7 +167,7 @@ Use JIDRA with Claude via Model Context Protocol:
 ```python
 # MCP tools available
 - jidra_get_method_context      # Get local method scope
-- jidra_get_flow                # Get full stitched flow  
+- jidra_get_flow                # Get full stitched flow
 - jidra_get_agent_flow          # Get compact agent view
 - jidra_get_method_source       # Retrieve source code
 - jidra_get_call_chain          # Find paths between methods
@@ -250,7 +250,7 @@ jidra validate --codebase . --port 8080
 
 | Project | Type | Traditional | Graph | Reduction |
 |---------|------|-------------|-------|-----------|
-| search-service | Proprietary | 10,811 | 869 | **95.9%** |
+| search | Proprietary | 10,811 | 869 | **95.9%** |
 | Spring Petclinic | Public | 2,736-5,304 | 320-383 | **87.4%** |
 
 ### Safety Metrics

@@ -33,7 +33,7 @@ See [PIVOT_RATIONALE.md](./PIVOT_RATIONALE.md) for detailed strategic context.
 - ✅ **71-78% phantom edge removal** (Spring Actuator validation)
 
 ### Multi-Project Validation
-- ✅ Proprietary: search-service (complex, 768 classes, 95.9% reduction)
+- ✅ Proprietary: search (complex, 768 classes, 95.9% reduction)
 - ✅ Public: Spring Petclinic (simple, 25 classes, 87.4% reduction)
 
 ---
@@ -56,7 +56,7 @@ See [PIVOT_RATIONALE.md](./PIVOT_RATIONALE.md) for detailed strategic context.
 
 ## 3) Empirical Validation (Real Claude API Testing)
 
-### Search-Service (Proprietary, Complex)
+### search (Proprietary, Complex)
 ```
 Traditional approach (raw source files):
   • Context size: 43,251 characters
