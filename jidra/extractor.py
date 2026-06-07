@@ -99,7 +99,7 @@ CLASS_LIKE_NODES = {
 
 
 def _text(node: Node, source: bytes) -> str:
-    return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
+    return source[node.start_byte: node.end_byte].decode("utf-8", errors="replace")
 
 
 def _find_child(node: Node, kind: str) -> Node | None:
@@ -168,11 +168,8 @@ def _extract_modifiers(node: Node, source: bytes) -> list[str]:
     mods = _find_child(node, "modifiers")
     if not mods:
         return []
-    return [
-        _text(c, source)
-        for c in mods.children
-        if c.type in {"public", "private", "protected", "static", "final", "abstract"}
-    ]
+    return [_text(c, source) for c in mods.children if
+            c.type in {"public", "private", "protected", "static", "final", "abstract"}]
 
 
 def _extract_annotations(node: Node, source: bytes) -> list[str]:
@@ -202,9 +199,7 @@ def _extract_annotation_value(annotation: str) -> str | None:
     return None
 
 
-def _class_stereotypes(
-    class_name: str, annotations: list[str], node_type: str = "class_declaration"
-) -> list[str]:
+def _class_stereotypes(class_name: str, annotations: list[str], node_type: str = "class_declaration") -> list[str]:
     out: list[str] = []
 
     # Structural kind takes priority for non-class declarations.
@@ -269,14 +264,12 @@ def _endpoint_meta(
             elif name == "RequestMapping":
                 # Use re.findall to handle both single and array forms:
                 # method = RequestMethod.GET  or  method = {RequestMethod.GET, RequestMethod.POST}
-                found = re.findall(r"RequestMethod\.(\w+)", ann)
+                found = re.findall(r'RequestMethod\.(\w+)', ann)
                 if found:
                     http_method = found[0].upper()
     full_route = None
     if controller_route or route:
-        full_route = f"{(controller_route or '').rstrip('/')}/{(route or '').lstrip('/')}".replace(
-            "//", "/"
-        )
+        full_route = f"{(controller_route or '').rstrip('/')}/{(route or '').lstrip('/')}".replace("//", "/")
     return is_endpoint, http_method, route, controller_route, full_route
 
 
@@ -285,9 +278,7 @@ def _extract_extends_implements(class_node: Node, source: bytes) -> tuple[str | 
     implements_values: list[str] = []
     for child in class_node.children:
         if child.type == "superclass":
-            target = _find_child(child, "type_identifier") or _find_child(
-                child, "scoped_type_identifier"
-            )
+            target = _find_child(child, "type_identifier") or _find_child(child, "scoped_type_identifier")
             if target:
                 extends_value = _text(target, source)
         # super_interfaces: class implements X, Y
@@ -396,8 +387,9 @@ def _extract_local_variable_types(body_node: Node, source: bytes) -> dict[str, s
         elif node.type == "lambda_expression":
             # Shadow lambda parameters so they don't incorrectly resolve as outer-scope vars.
             # Use setdefault so outer scope wins for re-used names (conservative).
-            params_node = _find_child(node, "formal_parameters") or _find_child(
-                node, "inferred_parameters"
+            params_node = (
+                _find_child(node, "formal_parameters")
+                or _find_child(node, "inferred_parameters")
             )
             if params_node:
                 for p in params_node.children:
@@ -558,9 +550,7 @@ def _extract_methods(
         "annotations": cls.annotations,
         "extends": cls.extends,
         "implements": cls.implements,
-        "fields": [
-            {"name": f.name, "type": f.type_name, "modifiers": f.modifiers} for f in class_fields
-        ],
+        "fields": [{"name": f.name, "type": f.type_name, "modifiers": f.modifiers} for f in class_fields],
     }
 
     body = _get_body_node(class_node)
@@ -569,10 +559,7 @@ def _extract_methods(
 
     for node in body.children:
         is_initializer = node.type == "static_initializer"
-        if (
-            node.type not in {"method_declaration", "constructor_declaration"}
-            and not is_initializer
-        ):
+        if node.type not in {"method_declaration", "constructor_declaration"} and not is_initializer:
             continue
 
         if is_initializer:
@@ -586,8 +573,7 @@ def _extract_methods(
             name_node = _find_child(node, "identifier")
             method_name = _text(name_node, source) if name_node else cls.name
             return_type = _first_type_text(
-                node,
-                source,
+                node, source,
                 default=cls.name if node.type == "constructor_declaration" else "void",
             )
             parameter_types, parameter_names = _extract_parameters(node, source)
@@ -757,10 +743,10 @@ def _extract_file(file_path: Path, parser=None) -> Graph:
 
 
 def _normalize_type(
-    raw_type: str | None,
-    caller_class: ClassEntry,
-    methods_by_full_class: dict[str, list[MethodEntry]],
-    all_class_full_names: set[str],
+        raw_type: str | None,
+        caller_class: ClassEntry,
+        methods_by_full_class: dict[str, list[MethodEntry]],
+        all_class_full_names: set[str],
 ) -> tuple[str | None, str | None, list[str]]:
     if raw_type is None:
         return None, None, []
@@ -852,20 +838,13 @@ def _resolve_calls(graph: Graph) -> None:
 
     for m in graph.methods:
         methods_by_full_class_and_name.setdefault((m.class_full_name, m.method_name), []).append(m)
-        methods_by_short_class_and_name.setdefault(
-            (m.class_full_name.split(".")[-1], m.method_name), []
-        ).append(m)
+        methods_by_short_class_and_name.setdefault((m.class_full_name.split(".")[-1], m.method_name), []).append(m)
         methods_by_name_arity.setdefault((m.method_name, len(m.parameter_types)), []).append(m)
         methods_by_name.setdefault(m.method_name, []).append(m)
         methods_by_full_class.setdefault(m.class_full_name, []).append(m)
 
-    for bucket in (
-        methods_by_full_class_and_name,
-        methods_by_short_class_and_name,
-        methods_by_name_arity,
-        methods_by_name,
-        methods_by_full_class,
-    ):
+    for bucket in (methods_by_full_class_and_name, methods_by_short_class_and_name,
+                   methods_by_name_arity, methods_by_name, methods_by_full_class):
         for key in bucket:
             bucket[key] = sorted(bucket[key], key=lambda x: x.id)
 
@@ -947,9 +926,7 @@ def _resolve_calls(graph: Graph) -> None:
                 reason = "receiver type matches multiple wildcard imports"
                 candidates = []
             elif normalized:
-                full_matches = methods_by_full_class_and_name.get(
-                    (normalized, call.callee_name), []
-                )
+                full_matches = methods_by_full_class_and_name.get((normalized, call.callee_name), [])
                 if full_matches:
                     arity_matches = _arity_filter(full_matches)
                     candidates = arity_matches if arity_matches else full_matches

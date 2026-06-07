@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: jidra
+Version: 0.1.0
+Summary: JIDRA (Java Intelligent Diagnostic & Reasoning Agent) minimal CLI baseline
+License: MIT
+Requires-Python: >=3.10
+License-File: LICENSE
+Requires-Dist: tree-sitter>=0.22.0
+Requires-Dist: tree-sitter-java>=0.21.0
+Requires-Dist: litellm>=1.82.0
+Requires-Dist: pyyaml>=6.0.0
+Requires-Dist: mcp>=1.27.0
+Provides-Extra: mcp
+Requires-Dist: mcp; extra == "mcp"
+Provides-Extra: test
+Requires-Dist: pytest>=8.0.0; extra == "test"
+Requires-Dist: ruff>=0.6.0; extra == "test"
+Dynamic: license-file

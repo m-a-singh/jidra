@@ -1,135 +1,36 @@
 from __future__ import annotations
 
 from collections import deque
-from pathlib import Path
 
 from .selector import _resolve_method_selector
 
 
-def _load_cli_config(config_path: str | None = None) -> dict:
-    """Local lightweight config loader (mirrors cli.py behavior).
-
-    We keep this module independent from cli.py to avoid circular imports.
-    """
-
-    path = (
-        Path(config_path).resolve()
-        if config_path
-        else Path(__file__).resolve().parent / "config.yaml"
-    )
-    if not path.exists():
-        return {}
-    try:
-        import yaml
-
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-
-def _parse_csv_env(name: str) -> list[str]:
-    import os
-
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return []
-    return [p.strip() for p in raw.split(",") if p.strip()]
-
-
-def _load_observability_patterns(config_path: str | None = None) -> tuple[str, ...]:
-    """Load observability patterns.
-
-    Config:
-      trace:
-        observability:
-          mode: extend|replace
-          patterns: ["log.", "statsdclient."]
-
-    Env (always extends):
-      JIDRA_OBSERVABILITY_PATTERNS="log.,metrics."
-    """
-
-    cfg = _load_cli_config(config_path)
-    trace_cfg = cfg.get("trace", {}) if isinstance(cfg, dict) else {}
-    obs_cfg = trace_cfg.get("observability", {}) if isinstance(trace_cfg, dict) else {}
-
-    mode = "extend"
-    patterns = None
-    if isinstance(obs_cfg, dict):
-        mode = str(obs_cfg.get("mode") or "extend").strip().lower()
-        patterns = obs_cfg.get("patterns")
-
-    if mode == "replace":
-        out: list[str] = []
-    else:
-        out = [p.lower() for p in DEFAULT_OBS_PATTERNS]
-
-    if isinstance(patterns, list):
-        out.extend([str(p).lower() for p in patterns if str(p).strip()])
-
-    out.extend([p.lower() for p in _parse_csv_env("JIDRA_OBSERVABILITY_PATTERNS")])
-
-    # de-dupe preserve order
-    deduped: list[str] = []
-    seen = set()
-    for p in out:
-        if p in seen:
-            continue
-        seen.add(p)
-        deduped.append(p)
-
-    return tuple(deduped)
-
-
-# Generic observability/telemetry heuristics. Keep defaults employer-agnostic.
-# Can be extended/replaced via config.yaml (see config: trace.observability).
-DEFAULT_OBS_PATTERNS = (
+OBS_PATTERNS = (
     "log.",
     "logger.",
     "markers.",
+    "dogstatsdclient.",
     "statsdclient.",
     "counter.",
     "metrics.",
     "recordexecutiontime",
+    "logrankedresult",
+    "logsetnames",
 )
 UTILITY_NAMES = {
-    "orelse",
-    "map",
-    "stream",
-    "collect",
-    "get",
-    "ispresent",
-    "filter",
-    "flatmap",
-    "emptylist",
-    "emptyset",
-    "emptymap",
-    "currenttimemillis",
-    "getclass",
-    "getsimplename",
-    "and",
+    "orelse", "map", "stream", "collect", "get", "ispresent", "filter", "flatmap",
+    "emptylist", "emptyset", "emptymap", "currenttimemillis", "getclass", "getsimplename", "and",
 }
 UTILITY_TYPES = (
-    "optional",
-    "collections",
-    "list",
-    "map",
-    "set",
-    "stringutils",
-    "collectionutils",
-    "stream",
+    "optional", "collections", "list", "map", "set", "stringutils", "collectionutils", "stream"
 )
 
 
-def _is_observability(call, *, config_path: str | None = None) -> bool:
-    patterns = _load_observability_patterns(config_path)
+def _is_observability(call) -> bool:
     text = f"{call.receiver or ''}.{call.callee_name}".lower().strip(".")
-    if any(p in text for p in patterns):
+    if any(p in text for p in OBS_PATTERNS):
         return True
-    return ("log" in (call.callee_name or "").lower()) or (
-        "metric" in (call.callee_name or "").lower()
-    )
+    return ("log" in call.callee_name.lower()) or ("metric" in call.callee_name.lower())
 
 
 def _is_utility(call) -> bool:
@@ -144,23 +45,11 @@ def _is_utility(call) -> bool:
 
 def _looks_business(call) -> bool:
     t = f"{call.receiver_type_normalized or ''} {call.receiver or ''} {call.callee_name}".lower()
-    return any(
-        k in t
-        for k in (
-            "controller",
-            "service",
-            "component",
-            "repository",
-            "processor",
-            "client",
-            "container",
-            "ranking",
-        )
-    )
+    return any(k in t for k in ("controller", "service", "component", "repository", "processor", "client", "container", "ranking"))
 
 
-def _classify(call, *, config_path: str | None = None) -> str:
-    if _is_observability(call, config_path=config_path):
+def _classify(call) -> str:
+    if _is_observability(call):
         return "observability"
     if _is_utility(call):
         return "utility"
@@ -189,36 +78,20 @@ def _priority(call) -> int:
     k = _kind(call)
     text = f"{call.receiver_type_normalized or ''} {call.receiver or ''}".lower()
     if k == "internal":
-        if any(
-            t in text for t in ("service", "repository", "controller", "component", "processor")
-        ):
+        if any(t in text for t in ("service", "repository", "controller", "component", "processor")):
             return 0
         return 1
     if k == "unresolved":
-        if any(
-            t in text for t in ("service", "repository", "controller", "component", "processor")
-        ):
+        if any(t in text for t in ("service", "repository", "controller", "component", "processor")):
             return 2
         return 3
     return 4
 
 
-def build_flow(
-    graph,
-    selector_or_route: str,
-    *,
-    max_depth: int = 5,
-    include_observability: bool = False,
-    mode: str = "compact",
-    config_path: str | None = None,
-) -> dict:
+def build_flow(graph, selector_or_route: str, *, max_depth: int = 5, include_observability: bool = False, mode: str = "compact") -> dict:
     roots = _resolve_method_selector(graph, selector_or_route)
     if not roots and selector_or_route.startswith("/"):
-        roots = [
-            m
-            for m in graph.methods
-            if m.is_endpoint and (m.full_route == selector_or_route or m.route == selector_or_route)
-        ]
+        roots = [m for m in graph.methods if m.is_endpoint and (m.full_route == selector_or_route or m.route == selector_or_route)]
     if not roots:
         return {"error": f"no_flow_root:{selector_or_route}"}
 
@@ -230,16 +103,7 @@ def build_flow(
 
     q = deque([(root.id, 0)])
     seen_nodes = {root.id}
-    flow = [
-        {
-            "depth": 0,
-            "id": root.id,
-            "signature": root.signature,
-            "kind": "internal",
-            "resolution": "root",
-            "source_lines": [],
-        }
-    ]
+    flow = [{"depth": 0, "id": root.id, "signature": root.signature, "kind": "internal", "resolution": "root", "source_lines": []}]
     external_calls = []
     unresolved_calls = []
     observability_calls = []
@@ -251,31 +115,15 @@ def build_flow(
         mid, depth = q.popleft()
         if depth >= max_depth:
             continue
-        calls = sorted(
-            calls_by_caller.get(mid, []), key=lambda c: (_priority(c), c.line, c.column, c.id)
-        )
+        calls = sorted(calls_by_caller.get(mid, []), key=lambda c: (_priority(c), c.line, c.column, c.id))
         for call in calls:
-            category = _classify(call, config_path=config_path)
+            category = _classify(call)
             if category == "observability":
-                observability_calls.append(
-                    {
-                        "from_id": mid,
-                        "call": call.callee_name,
-                        "receiver": call.receiver,
-                        "source_line": call.line,
-                    }
-                )
+                observability_calls.append({"from_id": mid, "call": call.callee_name, "receiver": call.receiver, "source_line": call.line})
                 if not include_observability:
                     continue
             if category in {"utility", "collection_operation"}:
-                utility_calls.append(
-                    {
-                        "from_id": mid,
-                        "call": call.callee_name,
-                        "receiver": call.receiver,
-                        "source_line": call.line,
-                    }
-                )
+                utility_calls.append({"from_id": mid, "call": call.callee_name, "receiver": call.receiver, "source_line": call.line})
                 if mode != "debug":
                     continue
             if call.resolved_candidates:
@@ -292,25 +140,13 @@ def build_flow(
                     confidence = 0.75
                 include_in_main = (
                     (mode == "compact" and category in {"business_internal", "probable_internal"})
-                    or (
-                        mode == "full"
-                        and category
-                        in {"business_internal", "probable_internal", "unresolved_business"}
-                    )
+                    or (mode == "full" and category in {"business_internal", "probable_internal", "unresolved_business"})
                     or (mode == "debug")
                     or (include_observability and category == "observability")
                 )
                 if not include_in_main:
                     if category == "external_library":
-                        external_calls.append(
-                            {
-                                "from_id": mid,
-                                "call": call.callee_name,
-                                "receiver": call.receiver,
-                                "resolution": call.resolution_status,
-                                "source_line": call.line,
-                            }
-                        )
+                        external_calls.append({"from_id": mid, "call": call.callee_name, "receiver": call.receiver, "resolution": call.resolution_status, "source_line": call.line})
                     continue
                 edge_key = (mid, target_id, call.callee_name)
                 if edge_key in dedupe_index:
@@ -410,23 +246,9 @@ def render_flow_text(flow_result: dict) -> str:
     return "\n".join(lines)
 
 
-def trace_method(
-    graph, selector: str, max_depth: int = 5, *, config_path: str | None = None
-) -> dict:
-    return build_flow(
-        graph,
-        selector,
-        max_depth=max_depth,
-        include_observability=False,
-        config_path=config_path,
-    )
+def trace_method(graph, selector: str, max_depth: int = 5) -> dict:
+    return build_flow(graph, selector, max_depth=max_depth, include_observability=False)
 
 
-def trace_route(graph, route: str, max_depth: int = 5, *, config_path: str | None = None) -> dict:
-    return build_flow(
-        graph,
-        route,
-        max_depth=max_depth,
-        include_observability=False,
-        config_path=config_path,
-    )
+def trace_route(graph, route: str, max_depth: int = 5) -> dict:
+    return build_flow(graph, route, max_depth=max_depth, include_observability=False)

@@ -12,8 +12,8 @@ llm:
       max_tokens: 1200
 
     enterprise:
-      api_base: "https://your-litellm.example.com"
-      api_key_env: "LITELLM_API_KEY"
+      api_base: "https://your-enterprise-litellm.example.com"
+      api_key_env: "ENTERPRISE_LITELLM_API_KEY"
       default_model: "mistral:7b-instruct-v0.2-q4_0"
       timeout_seconds: 120
       temperature: 0.2
@@ -36,85 +36,7 @@ flow:
       - "io.micrometer."
       - "net.logstash."
       - "org.apache.commons."
+      - "com.example.search.components.metrics"
     method_name_patterns: []
     class_name_patterns:
       - "ServiceMetrics"
-
-# Filters used by --business-only to hide infrastructure/utility calls.
-# These are matched case-insensitively.
-# You can also extend these via env vars:
-#   - JIDRA_NON_BUSINESS_SIGNATURE_PARTS=".metrics.,dogstatsdclient#"
-#   - JIDRA_NON_BUSINESS_CALL_NAMES="increment,decrement"
-trace:
-  observability:
-    # mode:
-    #  - extend (default): start with JIDRA's generic defaults, then add config/env
-    #  - replace: use ONLY what's defined here (env can still extend for one-off runs)
-    mode: extend
-    patterns:
-      - "log."
-      - "logger."
-      - "markers."
-      - "statsdclient."
-      - "counter."
-      - "metrics."
-      - "recordexecutiontime"
-
-error_doc:
-  noise:
-    # mode:
-    #  - extend (default): start with JIDRA's generic defaults, then add config/env
-    #  - replace: use ONLY what's defined here (env can still extend for one-off runs)
-    mode: extend
-
-    # If receiver string equals/starts-with these tokens, treat as noise.
-    receiver_prefixes:
-      - "builder"
-      - "log"
-      - "thread"
-
-    # If call name matches any of these, treat as noise.
-    call_names:
-      - "warn"
-      - "error"
-      - "info"
-      - "debug"
-      - "trace"
-      - "increment"
-      - "sleep"
-      - "currentThread"
-      - "interrupt"
-
-    # Exception receiver variable name (often "e"), and common accessor calls.
-    exception_receiver: "e"
-    exception_call_names:
-      - "getMessage"
-      - "getCause"
-      - "getStackTrace"
-
-non_business:
-  # mode:
-  #  - extend (default): start with JIDRA's generic defaults, then add config/env
-  #  - replace: use ONLY what's defined here (env can still extend for one-off runs)
-  mode: extend
-
-  # Substrings to look for within a call's signature/target_signature.
-  # Examples:
-  #   - ".metrics." (package segment)
-  #   - "dogstatsdclient#" (receiver/method prefix style)
-  signature_parts:
-    - ".metrics."
-    - ".datadog."
-    - ".prometheus."
-    - ".logging."
-    - ".log."
-    - ".utils."
-    - ".constants."
-
-  # Call names (method names) to treat as non-business.
-  call_names:
-    - "increment"
-    - "decrement"
-    - "recordExecutionTime"
-    - "getMarker"
-    - "build"
