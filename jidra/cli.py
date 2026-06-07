@@ -1025,8 +1025,7 @@ def _validate(
         if actuator_url:
             beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
         elif codebase:
-            with run_docker_and_fetch_beans(codebase, port=port, timeout=timeout, skip_build=skip_build, service_name=service_name, build_dir=build_dir) as beans_response:
-                pass
+            beans_response = run_docker_and_fetch_beans(codebase, port=port, timeout=timeout, skip_build=skip_build, service_name=service_name, build_dir=build_dir)
         else:
             raise SystemExit("Either --actuator-url or --codebase is required")
     except ActuatorError as e:

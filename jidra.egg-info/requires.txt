@@ -6,7 +6,3 @@ mcp>=1.27.0
 
 [mcp]
 mcp
-
-[test]
-pytest>=8.0.0
-ruff>=0.6.0
