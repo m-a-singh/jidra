@@ -21,6 +21,10 @@ dependencies = [
 jidra = "jidra.cli:main"
 
 [project.optional-dependencies]
+test = [
+  "pytest>=8.0.0",
+  "ruff>=0.6.0"
+]
 mcp = ["mcp"]
 
 [tool.setuptools.packages.find]
