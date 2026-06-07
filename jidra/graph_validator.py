@@ -6,9 +6,8 @@ Removes phantom edges to confirmed non-bean classes.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from pathlib import Path
 
-from .models import CallSite, Graph, MethodEntry, ResolvedCallEdge
+from .models import Graph
 
 
 @dataclass

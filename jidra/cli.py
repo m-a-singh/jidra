@@ -318,8 +318,8 @@ def _print_diagnose_report(result: dict) -> None:
 
 
 def is_business_entry(entry: dict) -> bool:
-    call_name = str(entry.get("call") or "")
-    if call_name in NON_BUSINESS_CALL_NAMES:
+    call_name = str(entry.get("call") or "").lower()
+    if call_name in {name.lower() for name in NON_BUSINESS_CALL_NAMES}:
         return False
 
     signature = str(
@@ -1038,7 +1038,7 @@ def _validate(
     if output:
         output_path = Path(output).resolve()
     else:
-        output_path = graph_path.parent / f"graph_validated.jsonl"
+        output_path = graph_path.parent / "graph_validated.jsonl"
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1175,9 +1175,9 @@ def _process(
     print(f"  • {validated_path.name}")
     print(f"      {len(filtered_graph.resolved_call_edges)} edges ({100 - report_dict['edges_removed_pct']:.1f}% of original)")
     print(f"  • {report_path.name}")
-    print(f"      Validation metrics")
+    print("      Validation metrics")
     print(f"  • {html_path.name}")
-    print(f"      Interactive graph with 3 tabs (Interactive | Graphviz | JSON)")
+    print("      Interactive graph with 3 tabs (Interactive | Graphviz | JSON)")
     print(f"\nView graph: file://{html_path}")
     print("=" * 80 + "\n")
 

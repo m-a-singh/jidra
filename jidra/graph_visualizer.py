@@ -6,7 +6,6 @@ Generates interactive HTML with multiple export formats.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from .models import Graph
 
@@ -37,7 +36,7 @@ def build_graph_data(
     # Build method/class lookups
     methods_by_id = {m.id: m for m in graph.methods}
     classes_by_id = {c.id: c for c in graph.classes}
-    classes_by_fullname = {c.full_name: c for c in graph.classes}
+
 
     # Determine which methods to include
     filtered_method_ids = set()
