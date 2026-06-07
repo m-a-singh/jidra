@@ -40,9 +40,8 @@ def _enrich_one_method_in_process(
     Note: Must be at module level for pickling.
     """
     try:
-
         # Load graph from temp JSON
-        with open(graph_json_path, 'r') as f:
+        with open(graph_json_path, "r") as f:
             records = json.load(f)
 
         # Reconstruct graph and find the method
@@ -92,7 +91,18 @@ def _enrich_one_method_in_process(
             elif record.get("type") == "class":
                 data = record.get("payload", record.get("data", {}))
                 # Only include classes if they have all required fields
-                if all(k in data for k in ["id", "package_name", "name", "full_name", "file_path", "start_line", "end_line"]):
+                if all(
+                    k in data
+                    for k in [
+                        "id",
+                        "package_name",
+                        "name",
+                        "full_name",
+                        "file_path",
+                        "start_line",
+                        "end_line",
+                    ]
+                ):
                     classes.append(ClassEntry(**data))
 
         if not method_entry:
@@ -100,11 +110,13 @@ def _enrich_one_method_in_process(
 
         # Emit extracting event
         if ui_queue:
-            ui_queue.put({
-                "name": method_entry.method_name,
-                "state": "extracting",
-                "phase": "extract",
-            })
+            ui_queue.put(
+                {
+                    "name": method_entry.method_name,
+                    "state": "extracting",
+                    "phase": "extract",
+                }
+            )
 
         # Create LLM client for this worker
         try:
@@ -143,18 +155,22 @@ def _enrich_one_method_in_process(
         if result.get("success"):
             enrichment = result.get("enrichment", {})
             if ui_queue:
-                ui_queue.put({
-                    "name": method_entry.method_name,
-                    "state": "enriched",
-                    "conf": enrichment.get("llm_summary_confidence"),
-                })
+                ui_queue.put(
+                    {
+                        "name": method_entry.method_name,
+                        "state": "enriched",
+                        "conf": enrichment.get("llm_summary_confidence"),
+                    }
+                )
             return {
                 "success": True,
                 "method": {
                     "llm_summary": enrichment.get("llm_summary"),
                     "llm_business_intent": enrichment.get("llm_business_intent"),
                     "llm_risk_notes": enrichment.get("llm_risk_notes"),
-                    "llm_confidence": enrichment.get("llm_confidence", enrichment.get("llm_summary_confidence", 0.0)),
+                    "llm_confidence": enrichment.get(
+                        "llm_confidence", enrichment.get("llm_summary_confidence", 0.0)
+                    ),
                     "llm_summary_confidence": enrichment.get("llm_summary_confidence"),
                     "llm_external_calls": [],
                     "analysis_status": enrichment.get("analysis_status"),
@@ -166,15 +182,18 @@ def _enrich_one_method_in_process(
             feedback = result.get("feedback") or err_msg
             state = "rejected" if err_msg == "judge_rejected" else "failed"
             if ui_queue:
-                ui_queue.put({
-                    "name": method_entry.method_name,
-                    "state": state,
-                    "error": str(err_msg),
-                    "reason": str(feedback),
-                })
+                ui_queue.put(
+                    {
+                        "name": method_entry.method_name,
+                        "state": state,
+                        "error": str(err_msg),
+                        "reason": str(feedback),
+                    }
+                )
             return {"success": False, "reason": err_msg, "feedback": result.get("feedback")}
     except Exception as e:
         import traceback
+
         logger.error(f"Process worker error for {method_id}: {e}\n{traceback.format_exc()}")
         return {"success": False, "reason": f"exception:{str(e)}"}
 
@@ -214,7 +233,11 @@ class EnrichmentOrchestrator:
         self.progress_callback = progress_callback
 
         self.agent = MethodEnrichmentAgent(llm_client, extraction_model)
-        self.judge = EnrichmentJudge(llm_client, judge_model, self.judge_fallback_model) if use_judge else None
+        self.judge = (
+            EnrichmentJudge(llm_client, judge_model, self.judge_fallback_model)
+            if use_judge
+            else None
+        )
 
         self.stats = {
             "total_methods": len(graph.methods),
@@ -266,7 +289,9 @@ class EnrichmentOrchestrator:
         # Attempt extraction with retries
         extraction = None
         for attempt in range(self.max_retries):
-            logger.info(f"Extracting {method_entry.signature} (attempt {attempt + 1}/{self.max_retries})")
+            logger.info(
+                f"Extracting {method_entry.signature} (attempt {attempt + 1}/{self.max_retries})"
+            )
             self._emit(
                 "extraction_attempt",
                 method_id=method_id,
@@ -274,7 +299,9 @@ class EnrichmentOrchestrator:
                 attempt=attempt + 1,
                 max_retries=self.max_retries,
             )
-            context = build_method_context(self.graph, method_entry.id, max_chars=self.context_max_chars)
+            context = build_method_context(
+                self.graph, method_entry.id, max_chars=self.context_max_chars
+            )
             result = await self.agent.extract(method_entry, context=context)
 
             if not result["success"]:
@@ -415,11 +442,14 @@ class EnrichmentOrchestrator:
 
             # Find matching methods in graph
             candidates = [
-                m for m in self.graph.methods
+                m
+                for m in self.graph.methods
                 if (
-                    m.class_full_name.endswith(receiver_type) or
-                    m.class_full_name.split(".")[-1] == receiver_type
-                ) and m.method_name == method_name and m.id not in self.processed_ids
+                    m.class_full_name.endswith(receiver_type)
+                    or m.class_full_name.split(".")[-1] == receiver_type
+                )
+                and m.method_name == method_name
+                and m.id not in self.processed_ids
             ]
 
             for candidate in candidates:
@@ -488,11 +518,11 @@ class EnrichmentOrchestrator:
 
         # Finalize stats
         if self.stats["enriched"] + self.stats["failed"] > 0:
-            self.stats["avg_extraction_confidence"] = (
-                self.extraction_confidence_sum / (self.stats["enriched"] + self.stats["failed"])
+            self.stats["avg_extraction_confidence"] = self.extraction_confidence_sum / (
+                self.stats["enriched"] + self.stats["failed"]
             )
-            self.stats["avg_judge_confidence"] = (
-                self.judge_confidence_sum / (self.stats["enriched"] + self.stats["failed"])
+            self.stats["avg_judge_confidence"] = self.judge_confidence_sum / (
+                self.stats["enriched"] + self.stats["failed"]
             )
 
         result = {
@@ -548,10 +578,12 @@ class EnrichmentOrchestrator:
             logger.warning(f"No methods found for class containing '{class_name}'")
             return {"success": False, "reason": "no_methods_found"}
 
-        logger.info(f"Class mode: enriching {len(methods)} methods from class containing '{class_name}'")
+        logger.info(
+            f"Class mode: enriching {len(methods)} methods from class containing '{class_name}'"
+        )
 
         # Serialize graph to temp file for worker processes
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
             tmp_path = tmp.name
             json.dump(graph_records(self.graph), tmp)
 
@@ -585,7 +617,9 @@ class EnrichmentOrchestrator:
                 relay_thread.start()
 
             # Spawn bounded process pool
-            with ProcessPoolExecutor(max_workers=max(1, min(self.max_workers, len(methods)))) as executor:
+            with ProcessPoolExecutor(
+                max_workers=max(1, min(self.max_workers, len(methods)))
+            ) as executor:
                 futures = {
                     executor.submit(
                         _enrich_one_method_in_process,
@@ -599,7 +633,8 @@ class EnrichmentOrchestrator:
                         self.extraction_threshold,
                         self.use_judge,
                         ui_queue,
-                    ): m.id for m in methods
+                    ): m.id
+                    for m in methods
                 }
 
                 for future in as_completed(futures):
@@ -619,7 +654,9 @@ class EnrichmentOrchestrator:
                             logger.info(f"✓ Process enriched {method_id}")
                         else:
                             failed_count += 1
-                            logger.warning(f"✗ Process failed for {method_id}: {result.get('reason')}")
+                            logger.warning(
+                                f"✗ Process failed for {method_id}: {result.get('reason')}"
+                            )
                     except Exception as e:
                         failed_count += 1
                         logger.error(f"Worker process error for {method_id}: {e}")
@@ -634,7 +671,12 @@ class EnrichmentOrchestrator:
             # Export enriched graph
             self.export_enriched_graph(output_path)
             logger.info(f"Class mode complete: enriched {enriched_count}/{len(methods)} methods")
-            return {"success": True, "enriched": enriched_count, "failed": failed_count, "total": len(methods)}
+            return {
+                "success": True,
+                "enriched": enriched_count,
+                "failed": failed_count,
+                "total": len(methods),
+            }
         finally:
             # Clean up temp file
             Path(tmp_path).unlink(missing_ok=True)
@@ -655,7 +697,9 @@ class EnrichmentOrchestrator:
         Starts at a class, finds external calls, spawns threads for each external class.
         """
 
-        logger.info(f"Flow mode: starting from class containing '{class_name}', max_depth={max_depth}, max_fanout={max_fanout}")
+        logger.info(
+            f"Flow mode: starting from class containing '{class_name}', max_depth={max_depth}, max_fanout={max_fanout}"
+        )
 
         visited_classes = set()
         visited_methods = set()
@@ -671,12 +715,16 @@ class EnrichmentOrchestrator:
                 return
 
             # Enrich all methods in this class (serially)
-            logger.info(f"Flow depth {depth}: enriching {len(methods)} methods in {target_class_name}")
+            logger.info(
+                f"Flow depth {depth}: enriching {len(methods)} methods in {target_class_name}"
+            )
             for method_id in methods:
                 if method_id not in visited_methods:
                     visited_methods.add(method_id)
                     try:
-                        method_entry = next((m for m in self.graph.methods if m.id == method_id), None)
+                        method_entry = next(
+                            (m for m in self.graph.methods if m.id == method_id), None
+                        )
                         if method_entry:
                             asyncio.run(self.enrich_method(method_entry))
                     except Exception as e:
@@ -690,7 +738,9 @@ class EnrichmentOrchestrator:
 
             # Fan out to external classes (limited by max_fanout)
             external_to_process = list(external_classes)[:max_fanout]
-            logger.info(f"Flow depth {depth}: found {len(external_classes)} external classes, processing {len(external_to_process)}")
+            logger.info(
+                f"Flow depth {depth}: found {len(external_classes)} external classes, processing {len(external_to_process)}"
+            )
 
             with ThreadPoolExecutor(max_workers=max_fanout) as executor:
                 futures = [

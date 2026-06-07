@@ -48,7 +48,9 @@ def _method_not_found_error(selector: str) -> str:
     )
 
 
-def _method_ambiguous_error(selector: str, candidates: list[MethodEntry], use_flag: str = "--method") -> str:
+def _method_ambiguous_error(
+    selector: str, candidates: list[MethodEntry], use_flag: str = "--method"
+) -> str:
     lines = [
         f"Selector matched {len(candidates)} methods: {selector}",
         "Showing first 25 candidates:",

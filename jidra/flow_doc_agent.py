@@ -128,9 +128,7 @@ class FlowDocAgent:
                 continue
         return {}
 
-    def _config_exclude_match(
-        self, signature: str, file_path: str = ""
-    ) -> tuple[bool, str]:
+    def _config_exclude_match(self, signature: str, file_path: str = "") -> tuple[bool, str]:
         rules = self.flow_exclude or {}
         if signature in (rules.get("signatures") or []):
             return True, "signature"
@@ -150,9 +148,7 @@ class FlowDocAgent:
             except re.error:
                 continue
         method_name = (
-            signature.split("#", 1)[-1].split("(", 1)[0]
-            if "#" in signature
-            else signature
+            signature.split("#", 1)[-1].split("(", 1)[0] if "#" in signature else signature
         )
         for pat in rules.get("method_name_patterns") or []:
             try:
@@ -217,9 +213,7 @@ class FlowDocAgent:
             m = method_map.get(current)
             if not m:
                 continue
-            cfg_excluded, cfg_reason = self._config_exclude_match(
-                m.signature, m.file_path or ""
-            )
+            cfg_excluded, cfg_reason = self._config_exclude_match(m.signature, m.file_path or "")
             if cfg_excluded and current != entry_id:
                 key = f"method:{cfg_reason}"
                 excluded_summary[key] = excluded_summary.get(key, 0) + 1
@@ -267,9 +261,7 @@ class FlowDocAgent:
                     {
                         "from_method_id": current,
                         "receiver": c.receiver or "",
-                        "receiver_type": c.receiver_type
-                        or c.receiver_type_normalized
-                        or "",
+                        "receiver_type": c.receiver_type or c.receiver_type_normalized or "",
                         "call": c.callee_name,
                         "line": c.line,
                         "reason": c.resolution_reason or c.resolution_status,
@@ -277,9 +269,7 @@ class FlowDocAgent:
                 )
 
         nodes.sort(key=lambda n: (n["depth"], n["group"], n["signature"]))
-        unique_edges = sorted(
-            set(edges), key=lambda e: (depth_by_id.get(e[0], 999), e[0], e[1])
-        )
+        unique_edges = sorted(set(edges), key=lambda e: (depth_by_id.get(e[0], 999), e[0], e[1]))
         id_map: dict[str, str] = {}
         for i, n in enumerate(nodes, start=1):
             id_map[n["method_id"]] = f"M{i}"
@@ -307,19 +297,13 @@ class FlowDocAgent:
         entry = self._resolve_entry(method)
         if entry.get("error"):
             return {"error": entry["error"]}
-        root_flow = self.engine.get_agent_flow(
-            method, depth=self.flow_depth, top_n=self.top_n
-        )
+        root_flow = self.engine.get_agent_flow(method, depth=self.flow_depth, top_n=self.top_n)
         if root_flow.get("error"):
             return {"error": root_flow["error"]}
-        queue = self._build_expansion_queue(
-            root_flow, str(entry.get("method_id") or "")
-        )
+        queue = self._build_expansion_queue(root_flow, str(entry.get("method_id") or ""))
         return {"entry": entry, "root_flow": root_flow, "queue": queue}
 
-    def _ui_update(
-        self, name: str, state: str, phase: str = "", error: str | None = None
-    ) -> None:
+    def _ui_update(self, name: str, state: str, phase: str = "", error: str | None = None) -> None:
         if self.progress_ui is None:
             return
         self.progress_ui.update(name=name, state=state, phase=phase, error=error)
@@ -330,9 +314,7 @@ class FlowDocAgent:
             return {"error": src["error"]}
         return src
 
-    def _build_expansion_queue(
-        self, root_flow: dict, root_id: str
-    ) -> list[_ExpandCandidate]:
+    def _build_expansion_queue(self, root_flow: dict, root_id: str) -> list[_ExpandCandidate]:
         top_nodes = list(root_flow.get("top_nodes", []))
         items: list[_ExpandCandidate] = []
         seen: set[str] = set()
@@ -362,9 +344,7 @@ class FlowDocAgent:
         merged: list[dict] = []
         seen = set()
         sources = [root_flow.get("important_unresolved_calls", [])]
-        sources.extend(
-            item.get("important_unresolved_calls", []) for item in expanded_methods
-        )
+        sources.extend(item.get("important_unresolved_calls", []) for item in expanded_methods)
         for src in sources:
             for item in src:
                 key = (
@@ -415,14 +395,10 @@ class FlowDocAgent:
         ):
             return True, "receiver_noise"
 
-        simple_type = (
-            receiver_type.split("<", 1)[0].split(".")[-1] if receiver_type else ""
-        )
+        simple_type = receiver_type.split("<", 1)[0].split(".")[-1] if receiver_type else ""
         if simple_type in JDK_UTILITY_TYPES:
             return True, f"utility_type:{simple_type}"
-        if any(
-            receiver_type.lower().startswith(prefix) for prefix in NOISY_TYPE_PREFIXES
-        ):
+        if any(receiver_type.lower().startswith(prefix) for prefix in NOISY_TYPE_PREFIXES):
             return True, f"type_prefix:{receiver_type}"
 
         # builder-chain setters: hide unless likely project class and we have possible targets
@@ -434,9 +410,7 @@ class FlowDocAgent:
 
         return False, ""
 
-    def _filter_important_unresolved(
-        self, items: list[dict]
-    ) -> tuple[list[dict], int, dict]:
+    def _filter_important_unresolved(self, items: list[dict]) -> tuple[list[dict], int, dict]:
         out = []
         suppressed = 0
         by_reason: dict[str, int] = {}
@@ -446,17 +420,13 @@ class FlowDocAgent:
                 ex, reason = self._config_exclude_match(probe, "")
                 if ex:
                     suppressed += 1
-                    by_reason[f"config:{reason}"] = (
-                        by_reason.get(f"config:{reason}", 0) + 1
-                    )
+                    by_reason[f"config:{reason}"] = by_reason.get(f"config:{reason}", 0) + 1
                     continue
             else:
                 ex, reason = self._is_noise_important_unresolved(item)
                 if ex:
                     suppressed += 1
-                    by_reason[f"fallback:{reason}"] = (
-                        by_reason.get(f"fallback:{reason}", 0) + 1
-                    )
+                    by_reason[f"fallback:{reason}"] = by_reason.get(f"fallback:{reason}", 0) + 1
                     continue
             out.append(item)
             if len(out) >= 30:
@@ -611,12 +581,8 @@ class FlowDocAgent:
                     "referenced_fields": list(context.get("referenced_fields", [])),
                     "relevant_imports": list(context.get("relevant_imports", [])),
                     "important_unresolved_calls": subflow_important,
-                    "stopped_path_summary": dict(
-                        subflow.get("stopped_path_summary", {})
-                    ),
-                    "uncertain_edge_summary": dict(
-                        subflow.get("uncertain_edge_summary", {})
-                    ),
+                    "stopped_path_summary": dict(subflow.get("stopped_path_summary", {})),
+                    "uncertain_edge_summary": dict(subflow.get("uncertain_edge_summary", {})),
                     "subflow_top_nodes": list(subflow.get("top_nodes", [])),
                 }
             )
@@ -642,9 +608,7 @@ class FlowDocAgent:
             "excluded_noise_summary": {
                 "important_unresolved_suppressed": suppressed_count,
                 "suppressed_by_reason": suppressed_by_reason,
-                "mind_map_excluded_summary": (mind_map or {}).get(
-                    "excluded_summary", {}
-                ),
+                "mind_map_excluded_summary": (mind_map or {}).get("excluded_summary", {}),
             },
             "suggested_next_methods": suggested_next,
             "limits": [
@@ -685,9 +649,7 @@ class FlowDocAgent:
             lines.append("flowchart TD")
             for node in mind_map.get("nodes", []):
                 mid = mind_map.get("id_map", {}).get(node.get("method_id"), "")
-                lines.append(
-                    f'  {mid}["{mid} d{node.get("depth")} {node.get("tier")}"]'
-                )
+                lines.append(f'  {mid}["{mid} d{node.get("depth")} {node.get("tier")}"]')
             for src, dst in mind_map.get("edges", []):
                 sid = mind_map.get("id_map", {}).get(src, "")
                 did = mind_map.get("id_map", {}).get(dst, "")
@@ -720,9 +682,7 @@ class FlowDocAgent:
                 )
             lines.append("")
             lines.append("## Unresolved Calls")
-            lines.append(
-                "| from method | receiver | receiver_type | call | line | reason |"
-            )
+            lines.append("| from method | receiver | receiver_type | call | line | reason |")
             lines.append("|---|---|---|---|---:|---|")
             for c in mind_map.get("unresolved_calls", []):
                 lines.append(
@@ -747,15 +707,11 @@ class FlowDocAgent:
             if not expanded:
                 lines.append("_No expanded methods selected._")
                 lines.append("")
-        for item in (
-            expanded if ((not self.mind_map_mode) or self.include_details) else []
-        ):
+        for item in expanded if ((not self.mind_map_mode) or self.include_details) else []:
             lines.append(f"### {item.get('signature', '')}")
             lines.append(f"- method_id: {item.get('method_id', '')}")
             lines.append(f"- file: `{item.get('file_path', '')}`")
-            lines.append(
-                f"- lines: `{_line_range(item.get('line_start'), item.get('line_end'))}`"
-            )
+            lines.append(f"- lines: `{_line_range(item.get('line_start'), item.get('line_end'))}`")
             lines.append(f"- tier: {item.get('tier', '')}")
             lines.append(f"- rank: {item.get('rank_score', 0)}")
             lines.append(f"- why selected: {'; '.join(item.get('rank_reason', []))}")
@@ -789,17 +745,12 @@ class FlowDocAgent:
                 lines.append("| - | - | - | - |")
             lines.append("")
             lines.append("#### Important Unresolved Calls")
-            lines.append(
-                "| receiver | receiver_type | call | line | possible targets |"
-            )
+            lines.append("| receiver | receiver_type | call | line | possible targets |")
             lines.append("|---|---|---|---:|---|")
             imp = item.get("important_unresolved_calls", [])
             for c in imp:
                 targets = (
-                    ", ".join(
-                        t.get("signature", "")
-                        for t in c.get("possible_targets", [])[:3]
-                    )
+                    ", ".join(t.get("signature", "") for t in c.get("possible_targets", [])[:3])
                     or "-"
                 )
                 lines.append(
@@ -810,12 +761,8 @@ class FlowDocAgent:
                 lines.append("| - | - | - | - | - |")
             lines.append("")
             lines.append("#### Subflow Uncertainty")
-            lines.append(
-                f"- uncertain edge summary: `{item.get('uncertain_edge_summary', {})}`"
-            )
-            lines.append(
-                f"- stopped path summary: `{item.get('stopped_path_summary', {})}`"
-            )
+            lines.append(f"- uncertain edge summary: `{item.get('uncertain_edge_summary', {})}`")
+            lines.append(f"- stopped path summary: `{item.get('stopped_path_summary', {})}`")
             lines.append("")
 
         lines.append("## Important Unresolved Calls")
@@ -828,16 +775,11 @@ class FlowDocAgent:
             lines.append(f"- suppressed_by_reason: `{by_reason}`")
         if mm_summary:
             lines.append(f"- mind_map_excluded_summary: `{mm_summary}`")
-        lines.append(
-            "| from method | receiver | receiver_type | call | line | possible_targets |"
-        )
+        lines.append("| from method | receiver | receiver_type | call | line | possible_targets |")
         lines.append("|---|---|---|---|---:|---|")
         for c in unresolved:
             targets = (
-                ", ".join(
-                    t.get("signature", "") for t in c.get("possible_targets", [])[:3]
-                )
-                or "-"
+                ", ".join(t.get("signature", "") for t in c.get("possible_targets", [])[:3]) or "-"
             )
             lines.append(
                 f"| `{c.get('from_method_id', '')}` | `{c.get('receiver', '')}` | `{c.get('receiver_type') or ''}` | "

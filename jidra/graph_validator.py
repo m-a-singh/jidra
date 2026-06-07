@@ -91,30 +91,28 @@ def validate_graph(
     )
 
     if verbose:
-        print(f"  • Analyzing {len(graph.classes)} classes against {len(confirmed_beans)} confirmed beans", flush=True)
+        print(
+            f"  • Analyzing {len(graph.classes)} classes against {len(confirmed_beans)} confirmed beans",
+            flush=True,
+        )
 
     # Build maps
-    confirmed_class_ids = {
-        cls.id for cls in graph.classes
-        if cls.full_name in confirmed_beans
-    }
+    confirmed_class_ids = {cls.id for cls in graph.classes if cls.full_name in confirmed_beans}
     confirmed_method_ids = {
-        method.id for method in graph.methods
-        if method.class_id in confirmed_class_ids
+        method.id for method in graph.methods if method.class_id in confirmed_class_ids
     }
 
-    unconfirmed_class_ids = {
-        cls.id for cls in graph.classes
-        if cls.id not in confirmed_class_ids
-    }
+    unconfirmed_class_ids = {cls.id for cls in graph.classes if cls.id not in confirmed_class_ids}
 
-    report.unconfirmed_classes = sorted([
-        cls.full_name for cls in graph.classes
-        if cls.id in unconfirmed_class_ids
-    ])
+    report.unconfirmed_classes = sorted(
+        [cls.full_name for cls in graph.classes if cls.id in unconfirmed_class_ids]
+    )
 
     if verbose:
-        print(f"  • Found {len(confirmed_class_ids)} confirmed classes, {len(unconfirmed_class_ids)} unconfirmed", flush=True)
+        print(
+            f"  • Found {len(confirmed_class_ids)} confirmed classes, {len(unconfirmed_class_ids)} unconfirmed",
+            flush=True,
+        )
 
     # Counts before filtering
     report.edges_before = len(graph.resolved_call_edges)
@@ -122,13 +120,13 @@ def validate_graph(
     if no_filter:
         # Annotate-only mode: keep all edges, just report what *would* be removed
         edges_to_remove = [
-            edge for edge in graph.resolved_call_edges
+            edge
+            for edge in graph.resolved_call_edges
             if edge.callee_method_id not in confirmed_method_ids
         ]
         report.edges_removed = len(edges_to_remove)
         report.removed_edges = [
-            (edge.caller_method_id, edge.callee_method_id)
-            for edge in edges_to_remove
+            (edge.caller_method_id, edge.callee_method_id) for edge in edges_to_remove
         ]
         # Return original graph, but with report of what would be removed
         report.edges_after = report.edges_before
@@ -136,8 +134,7 @@ def validate_graph(
 
     # Filter edges: keep only those pointing to confirmed methods
     filtered_edges = [
-        edge for edge in graph.resolved_call_edges
-        if edge.callee_method_id in confirmed_method_ids
+        edge for edge in graph.resolved_call_edges if edge.callee_method_id in confirmed_method_ids
     ]
     report.edges_removed = len(graph.resolved_call_edges) - len(filtered_edges)
     report.removed_edges = [
@@ -181,7 +178,9 @@ def validate_graph(
     if verbose:
         pct = round(100 * report.edges_removed / max(1, report.edges_before), 1)
         print(f"  • Removed {report.edges_removed} phantom edges ({pct}%)", flush=True)
-        print(f"  • Filtered {len(graph.callsites) - len(filtered_callsites)} callsites", flush=True)
+        print(
+            f"  • Filtered {len(graph.callsites) - len(filtered_callsites)} callsites", flush=True
+        )
         if upgraded > 0:
             print(f"  • Upgraded {upgraded} callsites to actuator_resolved", flush=True)
 
