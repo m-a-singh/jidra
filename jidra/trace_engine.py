@@ -18,11 +18,31 @@ OBS_PATTERNS = (
     "logsetnames",
 )
 UTILITY_NAMES = {
-    "orelse", "map", "stream", "collect", "get", "ispresent", "filter", "flatmap",
-    "emptylist", "emptyset", "emptymap", "currenttimemillis", "getclass", "getsimplename", "and",
+    "orelse",
+    "map",
+    "stream",
+    "collect",
+    "get",
+    "ispresent",
+    "filter",
+    "flatmap",
+    "emptylist",
+    "emptyset",
+    "emptymap",
+    "currenttimemillis",
+    "getclass",
+    "getsimplename",
+    "and",
 }
 UTILITY_TYPES = (
-    "optional", "collections", "list", "map", "set", "stringutils", "collectionutils", "stream"
+    "optional",
+    "collections",
+    "list",
+    "map",
+    "set",
+    "stringutils",
+    "collectionutils",
+    "stream",
 )
 
 
@@ -45,7 +65,19 @@ def _is_utility(call) -> bool:
 
 def _looks_business(call) -> bool:
     t = f"{call.receiver_type_normalized or ''} {call.receiver or ''} {call.callee_name}".lower()
-    return any(k in t for k in ("controller", "service", "component", "repository", "processor", "client", "container", "ranking"))
+    return any(
+        k in t
+        for k in (
+            "controller",
+            "service",
+            "component",
+            "repository",
+            "processor",
+            "client",
+            "container",
+            "ranking",
+        )
+    )
 
 
 def _classify(call) -> str:
@@ -78,20 +110,35 @@ def _priority(call) -> int:
     k = _kind(call)
     text = f"{call.receiver_type_normalized or ''} {call.receiver or ''}".lower()
     if k == "internal":
-        if any(t in text for t in ("service", "repository", "controller", "component", "processor")):
+        if any(
+            t in text for t in ("service", "repository", "controller", "component", "processor")
+        ):
             return 0
         return 1
     if k == "unresolved":
-        if any(t in text for t in ("service", "repository", "controller", "component", "processor")):
+        if any(
+            t in text for t in ("service", "repository", "controller", "component", "processor")
+        ):
             return 2
         return 3
     return 4
 
 
-def build_flow(graph, selector_or_route: str, *, max_depth: int = 5, include_observability: bool = False, mode: str = "compact") -> dict:
+def build_flow(
+    graph,
+    selector_or_route: str,
+    *,
+    max_depth: int = 5,
+    include_observability: bool = False,
+    mode: str = "compact",
+) -> dict:
     roots = _resolve_method_selector(graph, selector_or_route)
     if not roots and selector_or_route.startswith("/"):
-        roots = [m for m in graph.methods if m.is_endpoint and (m.full_route == selector_or_route or m.route == selector_or_route)]
+        roots = [
+            m
+            for m in graph.methods
+            if m.is_endpoint and (m.full_route == selector_or_route or m.route == selector_or_route)
+        ]
     if not roots:
         return {"error": f"no_flow_root:{selector_or_route}"}
 
@@ -103,7 +150,16 @@ def build_flow(graph, selector_or_route: str, *, max_depth: int = 5, include_obs
 
     q = deque([(root.id, 0)])
     seen_nodes = {root.id}
-    flow = [{"depth": 0, "id": root.id, "signature": root.signature, "kind": "internal", "resolution": "root", "source_lines": []}]
+    flow = [
+        {
+            "depth": 0,
+            "id": root.id,
+            "signature": root.signature,
+            "kind": "internal",
+            "resolution": "root",
+            "source_lines": [],
+        }
+    ]
     external_calls = []
     unresolved_calls = []
     observability_calls = []
@@ -115,15 +171,31 @@ def build_flow(graph, selector_or_route: str, *, max_depth: int = 5, include_obs
         mid, depth = q.popleft()
         if depth >= max_depth:
             continue
-        calls = sorted(calls_by_caller.get(mid, []), key=lambda c: (_priority(c), c.line, c.column, c.id))
+        calls = sorted(
+            calls_by_caller.get(mid, []), key=lambda c: (_priority(c), c.line, c.column, c.id)
+        )
         for call in calls:
             category = _classify(call)
             if category == "observability":
-                observability_calls.append({"from_id": mid, "call": call.callee_name, "receiver": call.receiver, "source_line": call.line})
+                observability_calls.append(
+                    {
+                        "from_id": mid,
+                        "call": call.callee_name,
+                        "receiver": call.receiver,
+                        "source_line": call.line,
+                    }
+                )
                 if not include_observability:
                     continue
             if category in {"utility", "collection_operation"}:
-                utility_calls.append({"from_id": mid, "call": call.callee_name, "receiver": call.receiver, "source_line": call.line})
+                utility_calls.append(
+                    {
+                        "from_id": mid,
+                        "call": call.callee_name,
+                        "receiver": call.receiver,
+                        "source_line": call.line,
+                    }
+                )
                 if mode != "debug":
                     continue
             if call.resolved_candidates:
@@ -140,13 +212,25 @@ def build_flow(graph, selector_or_route: str, *, max_depth: int = 5, include_obs
                     confidence = 0.75
                 include_in_main = (
                     (mode == "compact" and category in {"business_internal", "probable_internal"})
-                    or (mode == "full" and category in {"business_internal", "probable_internal", "unresolved_business"})
+                    or (
+                        mode == "full"
+                        and category
+                        in {"business_internal", "probable_internal", "unresolved_business"}
+                    )
                     or (mode == "debug")
                     or (include_observability and category == "observability")
                 )
                 if not include_in_main:
                     if category == "external_library":
-                        external_calls.append({"from_id": mid, "call": call.callee_name, "receiver": call.receiver, "resolution": call.resolution_status, "source_line": call.line})
+                        external_calls.append(
+                            {
+                                "from_id": mid,
+                                "call": call.callee_name,
+                                "receiver": call.receiver,
+                                "resolution": call.resolution_status,
+                                "source_line": call.line,
+                            }
+                        )
                     continue
                 edge_key = (mid, target_id, call.callee_name)
                 if edge_key in dedupe_index:

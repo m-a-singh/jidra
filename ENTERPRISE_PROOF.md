@@ -126,7 +126,7 @@
 - history() - Recent search history
 - (+ 6 more)
 
-**Searchthingsboard** (3 methods in graph)
+**thingsboard** (3 methods in graph)
 - experienceSearch() - Experience-focused search
 - experienceSuggest() - Experience suggestions
 - history() - Experience history
@@ -205,7 +205,7 @@ jidra graph-view --graph graph_validated.jsonl --package com.example.search.comp
 
 **Total: 9 methods (100% coverage)**
 
-### Searchthingsboard in Graph
+### thingsboard in Graph
 ✓ experienceSearch()  
 ✓ experienceSuggest()  
 ✓ history()  

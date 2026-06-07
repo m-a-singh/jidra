@@ -43,11 +43,11 @@ class EnrichmentJudge:
 **Extraction Result:**
 ```json
 {{
-  "summary": "{extraction.get('summary', '')}",
-  "external_calls": {json.dumps(extraction.get('external_calls', []))},
-  "implicit_behavior": {json.dumps(extraction.get('implicit_behavior', []))},
-  "confidence": {extraction.get('confidence', 0.0)},
-  "reasoning": "{extraction.get('reasoning', '')}"
+  "summary": "{extraction.get("summary", "")}",
+  "external_calls": {json.dumps(extraction.get("external_calls", []))},
+  "implicit_behavior": {json.dumps(extraction.get("implicit_behavior", []))},
+  "confidence": {extraction.get("confidence", 0.0)},
+  "reasoning": "{extraction.get("reasoning", "")}"
 }}
 ```
 
@@ -121,8 +121,8 @@ Focus on: accuracy, completeness, and usefulness. Reject if:
         text = response_text.strip()
 
         # Normalize markdown fences: strip both ` ``` ` and ` ```json `, case-insensitive
-        text = re.sub(r'^```[a-zA-Z]*\s*\n?', '', text)
-        text = re.sub(r'\n?```\s*$', '', text)
+        text = re.sub(r"^```[a-zA-Z]*\s*\n?", "", text)
+        text = re.sub(r"\n?```\s*$", "", text)
         text = text.strip()
 
         # Try direct parse first
@@ -130,7 +130,7 @@ Focus on: accuracy, completeness, and usefulness. Reject if:
             result = json.loads(text)
         except json.JSONDecodeError:
             # Fallback: extract first {...} block to handle trailing prose
-            match = re.search(r'\{.*\}', text, re.DOTALL)
+            match = re.search(r"\{.*\}", text, re.DOTALL)
             if not match:
                 raise ValueError(f"No JSON object found in response: {text[:300]}")
             result = json.loads(match.group(0))
@@ -138,6 +138,8 @@ Focus on: accuracy, completeness, and usefulness. Reject if:
         # Validate structure
         required_keys = {"acceptable", "confidence", "feedback"}
         if not required_keys.issubset(result.keys()):
-            raise ValueError(f"Missing required keys {required_keys - result.keys()}. Got: {result.keys()}")
+            raise ValueError(
+                f"Missing required keys {required_keys - result.keys()}. Got: {result.keys()}"
+            )
 
         return result

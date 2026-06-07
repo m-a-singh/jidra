@@ -17,6 +17,7 @@ from typing import Generator
 
 class ActuatorError(Exception):
     """Raised when actuator operations fail."""
+
     pass
 
 
@@ -42,7 +43,9 @@ def fetch_beans_from_url(actuator_base_url: str, timeout: int = 30) -> dict:
         raise ActuatorError(f"Failed to fetch {url}: {e}") from e
 
 
-def _wait_for_health(actuator_base_url: str, timeout: int = 120, poll_interval: float = 1.0) -> None:
+def _wait_for_health(
+    actuator_base_url: str, timeout: int = 120, poll_interval: float = 1.0
+) -> None:
     """
     Poll /actuator/beans until accessible (indicates app is ready).
 
@@ -54,8 +57,7 @@ def _wait_for_health(actuator_base_url: str, timeout: int = 120, poll_interval: 
     while time.time() < end_time:
         try:
             with urllib.request.urlopen(
-                f"{actuator_base_url.rstrip('/')}/actuator/beans",
-                timeout=5
+                f"{actuator_base_url.rstrip('/')}/actuator/beans", timeout=5
             ) as response:
                 # If we can read /actuator/beans, the app is ready
                 if response.status == 200:
@@ -90,6 +92,7 @@ def _find_service_in_compose(compose_file: Path, service_name: str = "search") -
     """
     try:
         import yaml
+
         with open(compose_file) as f:
             compose = yaml.safe_load(f)
 
@@ -185,7 +188,11 @@ def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
     submodule_candidates = []
 
     # Check root
-    if (root / "gradlew").exists() or (root / "build.gradle").exists() or (root / "build.gradle.kts").exists():
+    if (
+        (root / "gradlew").exists()
+        or (root / "build.gradle").exists()
+        or (root / "build.gradle.kts").exists()
+    ):
         root_candidates.append(("gradle", root))
     if (root / "mvnw").exists() or (root / "pom.xml").exists():
         root_candidates.append(("maven", root))
@@ -194,7 +201,11 @@ def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
     for subdir in sorted(root.glob("*/")):
         if subdir.name.startswith("."):
             continue
-        if (subdir / "gradlew").exists() or (subdir / "build.gradle").exists() or (subdir / "build.gradle.kts").exists():
+        if (
+            (subdir / "gradlew").exists()
+            or (subdir / "build.gradle").exists()
+            or (subdir / "build.gradle.kts").exists()
+        ):
             submodule_candidates.append(("gradle", subdir))
         elif (subdir / "mvnw").exists() or (subdir / "pom.xml").exists():
             submodule_candidates.append(("maven", subdir))
@@ -202,7 +213,11 @@ def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
     # Prioritize submodules with their own wrapper over root
     if submodule_candidates:
         # Filter to only submodules with their own wrapper script
-        with_wrapper = [c for c in submodule_candidates if (c[1] / ("gradlew" if c[0] == "gradle" else "mvnw")).exists()]
+        with_wrapper = [
+            c
+            for c in submodule_candidates
+            if (c[1] / ("gradlew" if c[0] == "gradle" else "mvnw")).exists()
+        ]
         if with_wrapper:
             return with_wrapper + submodule_candidates
 
@@ -299,21 +314,37 @@ def _build_java_app(codebase_root: str, build_dir: str | None = None) -> None:
         print("✓ Build successful", flush=True)
 
         # Verify artifacts exist - check both build_path and root
-        gradle_jars = list((build_path / "build" / "libs").glob("*.jar")) if (build_path / "build" / "libs").exists() else []
-        maven_jars = list((build_path / "target").glob("*.jar")) if (build_path / "target").exists() else []
+        gradle_jars = (
+            list((build_path / "build" / "libs").glob("*.jar"))
+            if (build_path / "build" / "libs").exists()
+            else []
+        )
+        maven_jars = (
+            list((build_path / "target").glob("*.jar")) if (build_path / "target").exists() else []
+        )
         # For multi-module, also check root
-        root_jars = list((root / "build" / "libs").glob("*.jar")) if (root / "build" / "libs").exists() else []
+        root_jars = (
+            list((root / "build" / "libs").glob("*.jar"))
+            if (root / "build" / "libs").exists()
+            else []
+        )
 
         all_jars = gradle_jars + maven_jars + root_jars
         if not all_jars:
             # List what's in the build directories for debugging
             build_dirs = []
             if (build_path / "build" / "libs").exists():
-                build_dirs.append(f"  {build_path / 'build' / 'libs'}: {list((build_path / 'build' / 'libs').glob('*'))}")
+                build_dirs.append(
+                    f"  {build_path / 'build' / 'libs'}: {list((build_path / 'build' / 'libs').glob('*'))}"
+                )
             if (build_path / "target").exists():
-                build_dirs.append(f"  {build_path / 'target'}: {list((build_path / 'target').glob('*'))}")
+                build_dirs.append(
+                    f"  {build_path / 'target'}: {list((build_path / 'target').glob('*'))}"
+                )
             if build_path != root and (root / "build" / "libs").exists():
-                build_dirs.append(f"  {root / 'build' / 'libs'}: {list((root / 'build' / 'libs').glob('*'))}")
+                build_dirs.append(
+                    f"  {root / 'build' / 'libs'}: {list((root / 'build' / 'libs').glob('*'))}"
+                )
 
             raise ActuatorError(
                 f"Build succeeded but no JAR artifacts found!\n"
@@ -321,7 +352,9 @@ def _build_java_app(codebase_root: str, build_dir: str | None = None) -> None:
                 f"Check your Dockerfile for the expected JAR path."
             )
 
-        print(f"✓ Found {len(all_jars)} JAR file(s): {', '.join(str(j.name) for j in all_jars[:3])}")
+        print(
+            f"✓ Found {len(all_jars)} JAR file(s): {', '.join(str(j.name) for j in all_jars[:3])}"
+        )
 
     except subprocess.TimeoutExpired:
         raise ActuatorError("Build timeout after 15 minutes") from None
@@ -388,7 +421,10 @@ def run_docker_and_fetch_beans(
             service = _find_service_in_compose(compose_file, service_name)
             if not service:
                 # Service not found in compose - fall back to Dockerfile
-                print(f"Service '{service_name}' not found in docker-compose.yml, falling back to Dockerfile...", flush=True)
+                print(
+                    f"Service '{service_name}' not found in docker-compose.yml, falling back to Dockerfile...",
+                    flush=True,
+                )
                 use_compose = False
             else:
                 # Clean up any orphaned containers ONLY when service is confirmed
@@ -409,7 +445,9 @@ def run_docker_and_fetch_beans(
                         timeout=300,
                     )
                 except subprocess.CalledProcessError as e:
-                    print(f"docker-compose up failed: {e.stderr if e.stderr else str(e)}", flush=True)
+                    print(
+                        f"docker-compose up failed: {e.stderr if e.stderr else str(e)}", flush=True
+                    )
                     raise ActuatorError(f"Failed to start docker-compose: {e}") from e
                 print("✓ All services started", flush=True)
 
@@ -430,12 +468,7 @@ def run_docker_and_fetch_beans(
             # Run container
             print(f"Starting container on port {port}...", flush=True)
             subprocess.run(
-                [
-                    "docker", "run", "-d",
-                    "-p", f"{port}:8080",
-                    "--name", image_tag,
-                    image_tag
-                ],
+                ["docker", "run", "-d", "-p", f"{port}:8080", "--name", image_tag, image_tag],
                 check=True,
                 timeout=60,
             )
