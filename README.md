@@ -34,7 +34,7 @@ Result:               ✅ 95.9% reduction + equal output quality
 
 ```bash
 # Clone repository
-git clone https://github.com/your-username/jidra.git
+git clone https://github.com/akhilsinghcodes/jidra.git
 cd jidra
 
 # Install dependencies
