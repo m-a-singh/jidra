@@ -17,7 +17,6 @@ from typing import Generator
 
 class ActuatorError(Exception):
     """Raised when actuator operations fail."""
-
     pass
 
 
@@ -43,9 +42,7 @@ def fetch_beans_from_url(actuator_base_url: str, timeout: int = 30) -> dict:
         raise ActuatorError(f"Failed to fetch {url}: {e}") from e
 
 
-def _wait_for_health(
-    actuator_base_url: str, timeout: int = 120, poll_interval: float = 1.0
-) -> None:
+def _wait_for_health(actuator_base_url: str, timeout: int = 120, poll_interval: float = 1.0) -> None:
     """
     Poll /actuator/beans until accessible (indicates app is ready).
 
@@ -57,13 +54,69 @@ def _wait_for_health(
     while time.time() < end_time:
         try:
             with urllib.request.urlopen(
-                f"{actuator_base_url.rstrip('/')}/actuator/beans", timeout=5
+                f"{actuator_base_url.rstrip('/')}/actuator/beans",
+                timeout=5
             ) as response:
                 # If we can read /actuator/beans, the app is ready
                 if response.status == 200:
                     return
         except Exception:
             pass
+        time.sleep(poll_interval)
+        elapsed += poll_interval
+        if int(elapsed) % 10 == 0 and elapsed > 0:
+            print(f"  ⏳ Still waiting... ({int(elapsed)}s / {timeout}s)", flush=True)
+    raise ActuatorError(f"Actuator endpoint did not become ready within {timeout}s")
+
+
+def _get_service_container_name(compose_file: Path) -> str | None:
+    """Return the running container name for the service-profile service."""
+    try:
+        import yaml
+        with open(compose_file) as f:
+            compose = yaml.safe_load(f)
+        for name, service in (compose.get("services") or {}).items():
+            if "service" in (service.get("profiles") or []):
+                result = subprocess.run(
+                    ["docker-compose", "ps", "-q", name],
+                    cwd=compose_file.parent,
+                    capture_output=True,
+                    text=True,
+                )
+                container_id = result.stdout.strip()
+                if container_id:
+                    name_result = subprocess.run(
+                        ["docker", "inspect", "--format", "{{.Name}}", container_id],
+                        capture_output=True, text=True,
+                    )
+                    return name_result.stdout.strip().lstrip("/")
+        return None
+    except Exception:
+        return None
+
+
+def _fetch_beans_via_exec(container_name: str, port: int) -> dict:
+    """Fetch /actuator/beans from inside a container via docker exec."""
+    result = subprocess.run(
+        ["docker", "exec", container_name, "curl", "-s", f"http://localhost:{port}/actuator/beans"],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        raise ActuatorError(f"docker exec curl failed: {result.stderr}")
+    return json.loads(result.stdout)
+
+
+def _wait_for_health_via_exec(container_name: str, port: int, timeout: int = 120, poll_interval: float = 2.0) -> None:
+    """Poll /actuator/beans inside the container until it responds."""
+    end_time = time.time() + timeout
+    elapsed = 0
+    while time.time() < end_time:
+        result = subprocess.run(
+            ["docker", "exec", container_name, "curl", "-sf", f"http://localhost:{port}/actuator/beans"],
+            capture_output=True, timeout=10,
+        )
+        if result.returncode == 0:
+            return
         time.sleep(poll_interval)
         elapsed += poll_interval
         if int(elapsed) % 10 == 0 and elapsed > 0:
@@ -79,92 +132,32 @@ def _find_docker_compose(codebase_root: str) -> Path | None:
     return None
 
 
-def _find_service_in_compose(compose_file: Path, service_name: str = "search") -> dict | None:
-    """
-    Parse docker-compose.yml and extract service config.
-
-    Args:
-        compose_file: Path to docker-compose.yml
-        service_name: Name of service to find (default: search)
-
-    Returns:
-        Service config dict or None if not found.
-    """
+def _extract_port_from_compose(compose_file: Path) -> int | None:
+    """Return the host port of the service tagged with profiles: [service]."""
     try:
         import yaml
-
         with open(compose_file) as f:
             compose = yaml.safe_load(f)
-
-        services = compose.get("services", {})
-        return services.get(service_name)
-    except Exception as e:
-        raise ActuatorError(f"Failed to parse docker-compose.yml: {e}") from e
-
-
-def _extract_port_from_compose(compose_file: Path, service_name: str = "search") -> int | None:
-    """
-    Extract the host port from docker-compose service.
-
-    Looks for ports like "80:80" or "8080:8080" and returns the host port (first number).
-
-    Args:
-        compose_file: Path to docker-compose.yml
-        service_name: Name of service to find (default: search)
-
-    Returns:
-        Host port number or None if not found.
-    """
-    try:
-        service = _find_service_in_compose(compose_file, service_name)
-        if not service:
-            return None
-
-        ports = service.get("ports", [])
-        if not ports:
-            return None
-
-        # ports can be list of strings like ["80:80", "8001:8001"]
-        for port_mapping in ports:
-            if isinstance(port_mapping, str):
-                # Format: "80:80" or "127.0.0.1:80:80"
-                parts = port_mapping.split(":")
-                host_port = parts[0]  # Get first part (host port)
-                try:
-                    return int(host_port)
-                except ValueError:
-                    continue
-            elif isinstance(port_mapping, int):
-                return port_mapping
-
+        for service in (compose.get("services") or {}).values():
+            profiles = service.get("profiles") or []
+            if "service" not in profiles:
+                continue
+            for port_mapping in (service.get("ports") or []):
+                if isinstance(port_mapping, int):
+                    return port_mapping
+                if isinstance(port_mapping, str):
+                    parts = port_mapping.split(":")
+                    try:
+                        return int(parts[0])
+                    except ValueError:
+                        continue
         return None
     except Exception:
         return None
 
 
 def _find_dockerfile(codebase_root: str) -> Path:
-    """Find Dockerfile in codebase root or via docker-compose.yml. Raises ActuatorError if not found."""
-    # Try docker-compose first
-    compose_file = _find_docker_compose(codebase_root)
-    if compose_file:
-        try:
-            service = _find_service_in_compose(compose_file)
-            if service and "build" in service:
-                build_config = service["build"]
-                if isinstance(build_config, dict):
-                    dockerfile_path = build_config.get("dockerfile", "Dockerfile")
-                    context = build_config.get("context", ".")
-                else:
-                    dockerfile_path = "Dockerfile"
-                    context = build_config if isinstance(build_config, str) else "."
-
-                dockerfile = Path(codebase_root) / context / dockerfile_path
-                if dockerfile.exists():
-                    return dockerfile
-        except Exception:
-            pass
-
-    # Fall back to root Dockerfile
+    """Find Dockerfile in codebase root. Raises ActuatorError if not found."""
     dockerfile = Path(codebase_root) / "Dockerfile"
     if dockerfile.exists():
         return dockerfile
@@ -188,11 +181,7 @@ def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
     submodule_candidates = []
 
     # Check root
-    if (
-        (root / "gradlew").exists()
-        or (root / "build.gradle").exists()
-        or (root / "build.gradle.kts").exists()
-    ):
+    if (root / "gradlew").exists() or (root / "build.gradle").exists() or (root / "build.gradle.kts").exists():
         root_candidates.append(("gradle", root))
     if (root / "mvnw").exists() or (root / "pom.xml").exists():
         root_candidates.append(("maven", root))
@@ -201,11 +190,7 @@ def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
     for subdir in sorted(root.glob("*/")):
         if subdir.name.startswith("."):
             continue
-        if (
-            (subdir / "gradlew").exists()
-            or (subdir / "build.gradle").exists()
-            or (subdir / "build.gradle.kts").exists()
-        ):
+        if (subdir / "gradlew").exists() or (subdir / "build.gradle").exists() or (subdir / "build.gradle.kts").exists():
             submodule_candidates.append(("gradle", subdir))
         elif (subdir / "mvnw").exists() or (subdir / "pom.xml").exists():
             submodule_candidates.append(("maven", subdir))
@@ -213,11 +198,7 @@ def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
     # Prioritize submodules with their own wrapper over root
     if submodule_candidates:
         # Filter to only submodules with their own wrapper script
-        with_wrapper = [
-            c
-            for c in submodule_candidates
-            if (c[1] / ("gradlew" if c[0] == "gradle" else "mvnw")).exists()
-        ]
+        with_wrapper = [c for c in submodule_candidates if (c[1] / ("gradlew" if c[0] == "gradle" else "mvnw")).exists()]
         if with_wrapper:
             return with_wrapper + submodule_candidates
 
@@ -311,40 +292,24 @@ def _build_java_app(codebase_root: str, build_dir: str | None = None) -> None:
 
         if result_code != 0:
             raise ActuatorError(f"Build failed with {build_tool} (exit code {result_code})")
-        print("✓ Build successful", flush=True)
+        print(f"✓ Build successful", flush=True)
 
         # Verify artifacts exist - check both build_path and root
-        gradle_jars = (
-            list((build_path / "build" / "libs").glob("*.jar"))
-            if (build_path / "build" / "libs").exists()
-            else []
-        )
-        maven_jars = (
-            list((build_path / "target").glob("*.jar")) if (build_path / "target").exists() else []
-        )
+        gradle_jars = list((build_path / "build" / "libs").glob("*.jar")) if (build_path / "build" / "libs").exists() else []
+        maven_jars = list((build_path / "target").glob("*.jar")) if (build_path / "target").exists() else []
         # For multi-module, also check root
-        root_jars = (
-            list((root / "build" / "libs").glob("*.jar"))
-            if (root / "build" / "libs").exists()
-            else []
-        )
+        root_jars = list((root / "build" / "libs").glob("*.jar")) if (root / "build" / "libs").exists() else []
 
         all_jars = gradle_jars + maven_jars + root_jars
         if not all_jars:
             # List what's in the build directories for debugging
             build_dirs = []
             if (build_path / "build" / "libs").exists():
-                build_dirs.append(
-                    f"  {build_path / 'build' / 'libs'}: {list((build_path / 'build' / 'libs').glob('*'))}"
-                )
+                build_dirs.append(f"  {build_path / 'build' / 'libs'}: {list((build_path / 'build' / 'libs').glob('*'))}")
             if (build_path / "target").exists():
-                build_dirs.append(
-                    f"  {build_path / 'target'}: {list((build_path / 'target').glob('*'))}"
-                )
+                build_dirs.append(f"  {build_path / 'target'}: {list((build_path / 'target').glob('*'))}")
             if build_path != root and (root / "build" / "libs").exists():
-                build_dirs.append(
-                    f"  {root / 'build' / 'libs'}: {list((root / 'build' / 'libs').glob('*'))}"
-                )
+                build_dirs.append(f"  {root / 'build' / 'libs'}: {list((root / 'build' / 'libs').glob('*'))}")
 
             raise ActuatorError(
                 f"Build succeeded but no JAR artifacts found!\n"
@@ -352,12 +317,10 @@ def _build_java_app(codebase_root: str, build_dir: str | None = None) -> None:
                 f"Check your Dockerfile for the expected JAR path."
             )
 
-        print(
-            f"✓ Found {len(all_jars)} JAR file(s): {', '.join(str(j.name) for j in all_jars[:3])}"
-        )
+        print(f"✓ Found {len(all_jars)} JAR file(s): {', '.join(str(j.name) for j in all_jars[:3])}")
 
     except subprocess.TimeoutExpired:
-        raise ActuatorError("Build timeout after 15 minutes") from None
+        raise ActuatorError(f"Build timeout after 15 minutes") from None
 
 
 def _compute_image_tag(codebase_root: str) -> str:
@@ -372,21 +335,19 @@ def run_docker_and_fetch_beans(
     port: int = 8080,
     timeout: int = 120,
     skip_build: bool = False,
-    service_name: str = "search",
     build_dir: str | None = None,
 ) -> Generator[dict, None, None]:
     """
-    Build and run a Docker container using docker-compose or Dockerfile, fetch actuator beans, then cleanup.
+    Build and run all Docker services, fetch actuator beans, then tear down.
 
-    Context manager that yields the /actuator/beans response dict.
-    Automatically stops and removes containers on exit.
+    Uses docker-compose if present (starts/stops all services), otherwise falls back to a
+    single Dockerfile container. Context manager — yields the /actuator/beans response dict.
 
     Args:
         codebase_root: Path to Java repo with docker-compose.yml or Dockerfile.
-        port: Host port to map to container's 8080.
+        port: Host port actuator is listening on (auto-detected from compose if possible).
         timeout: Max seconds to wait for app startup.
         skip_build: If True, skip auto-building Java app (assume already built).
-        service_name: Service name in docker-compose.yml (default: search).
         build_dir: Optional build directory (relative to codebase_root) for multi-module projects.
 
     Yields:
@@ -399,61 +360,39 @@ def run_docker_and_fetch_beans(
     compose_file = _find_docker_compose(codebase_root)
     use_compose = compose_file is not None
 
-    # Auto-detect port from docker-compose if available
     if use_compose:
-        detected_port = _extract_port_from_compose(compose_file, service_name)
+        detected_port = _extract_port_from_compose(compose_file)
         if detected_port:
             port = detected_port
-            print(f"Auto-detected port {port} from docker-compose.yml", flush=True)
+            print(f"Auto-detected port {port} from docker-compose.yml (service profile)", flush=True)
 
     actuator_url = f"http://localhost:{port}"
 
     try:
-        # Auto-build Java app (unless explicitly skipped)
         if skip_build:
-            print("⊘ Skipping Java build (--skip-build)", flush=True)
+            print(f"⊘ Skipping Java build (--skip-build)", flush=True)
         else:
             _build_java_app(codebase_root, build_dir)
 
         if use_compose:
-            print("Using docker-compose.yml for orchestration...", flush=True)
-            # Check if service exists in docker-compose
-            service = _find_service_in_compose(compose_file, service_name)
-            if not service:
-                # Service not found in compose - fall back to Dockerfile
-                print(
-                    f"Service '{service_name}' not found in docker-compose.yml, falling back to Dockerfile...",
-                    flush=True,
-                )
-                use_compose = False
-            else:
-                # Clean up any orphaned containers ONLY when service is confirmed
-                print("Cleaning up orphaned containers...", flush=True)
-                subprocess.run(
-                    ["docker-compose", "down", "--remove-orphans"],
-                    cwd=root,
-                    capture_output=True,
-                    timeout=60,
-                )
-
-                print("Starting all services with docker-compose up...", flush=True)
-                try:
-                    subprocess.run(
-                        ["docker-compose", "up", "-d", "--build"],
-                        cwd=root,
-                        check=True,
-                        timeout=300,
-                    )
-                except subprocess.CalledProcessError as e:
-                    print(
-                        f"docker-compose up failed: {e.stderr if e.stderr else str(e)}", flush=True
-                    )
-                    raise ActuatorError(f"Failed to start docker-compose: {e}") from e
-                print("✓ All services started", flush=True)
+            print(f"Using docker-compose.yml — starting all services...", flush=True)
+            subprocess.run(
+                ["docker-compose", "down", "--remove-orphans"],
+                cwd=root,
+                capture_output=True,
+                timeout=60,
+            )
+            subprocess.run(
+                ["docker-compose", "--profile", "service", "up", "-d", "--build"],
+                cwd=root,
+                check=True,
+                timeout=300,
+            )
+            print(f"✓ All services started", flush=True)
 
         if not use_compose:
-            print("Using Dockerfile for single-container build...", flush=True)
-            _find_dockerfile(codebase_root)
+            print(f"Using Dockerfile for single-container build...", flush=True)
+            dockerfile = _find_dockerfile(codebase_root)
             image_tag = _compute_image_tag(codebase_root)
 
             # Build Docker image
@@ -463,25 +402,40 @@ def run_docker_and_fetch_beans(
                 check=True,
                 timeout=600,
             )
-            print("✓ Docker image built", flush=True)
+            print(f"✓ Docker image built", flush=True)
 
             # Run container
             print(f"Starting container on port {port}...", flush=True)
             subprocess.run(
-                ["docker", "run", "-d", "-p", f"{port}:8080", "--name", image_tag, image_tag],
+                [
+                    "docker", "run", "-d",
+                    "-p", f"{port}:8080",
+                    "--name", image_tag,
+                    image_tag
+                ],
                 check=True,
                 timeout=60,
             )
-            print("✓ Container started", flush=True)
+            print(f"✓ Container started", flush=True)
 
-        # Wait for health
+        # Wait for health and fetch beans — use docker exec if compose (avoids host proxy issues)
         print(f"Waiting for app to be ready (timeout: {timeout}s)...", flush=True)
-        _wait_for_health(actuator_url, timeout=timeout)
-        print("✓ App is healthy", flush=True)
+        if use_compose:
+            container_name = _get_service_container_name(compose_file)
+        else:
+            container_name = None
 
-        # Fetch beans
-        print("Fetching /actuator/beans...", flush=True)
-        beans = fetch_beans_from_url(actuator_url)
+        if container_name:
+            print(f"Using docker exec via container: {container_name}", flush=True)
+            _wait_for_health_via_exec(container_name, port, timeout=timeout)
+            print(f"✓ App is healthy", flush=True)
+            print(f"Fetching /actuator/beans...", flush=True)
+            beans = _fetch_beans_via_exec(container_name, port)
+        else:
+            _wait_for_health(actuator_url, timeout=timeout)
+            print(f"✓ App is healthy", flush=True)
+            print(f"Fetching /actuator/beans...", flush=True)
+            beans = fetch_beans_from_url(actuator_url)
         # Count total beans across all contexts
         total_bean_count = 0
         for context_data in beans.get("contexts", {}).values():
@@ -492,14 +446,19 @@ def run_docker_and_fetch_beans(
     except subprocess.CalledProcessError as e:
         raise ActuatorError(f"Docker operation failed: {e}") from e
     finally:
-        # Cleanup
-        print("Cleaning up Docker resources...", flush=True)
+        print(f"Stopping Docker services...", flush=True)
         if use_compose:
             subprocess.run(
-                ["docker-compose", "down"],
+                ["docker-compose", "stop"],
                 cwd=root,
                 capture_output=True,
-                timeout=30,
+                timeout=60,
+            )
+            subprocess.run(
+                ["docker-compose", "rm", "-f"],
+                cwd=root,
+                capture_output=True,
+                timeout=60,
             )
         else:
             image_tag = _compute_image_tag(codebase_root)
@@ -509,4 +468,4 @@ def run_docker_and_fetch_beans(
                 ["docker", "rmi", image_tag],
             ]:
                 subprocess.run(cmd, capture_output=True, timeout=30)
-        print("✓ Cleanup complete", flush=True)
+        print(f"✓ Cleanup complete", flush=True)
