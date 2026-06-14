@@ -29,6 +29,7 @@ Methods file format (one per line):
     ClassName.methodName
     com.example.ClassName.methodName
 """
+
 from __future__ import annotations
 
 import argparse
@@ -39,23 +40,30 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jidra.cost_calculator import analyze_method_online, format_method_proof
-from jidra.graph_io import load_graph_jsonl
 
 
 def _load_methods_from_file(path: str) -> list[str]:
     text = Path(path).read_text().strip()
     if text.startswith("["):
         return [m.strip() for m in json.loads(text) if m.strip()]
-    return [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
+    return [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
 
 
 def _auto_discover_methods(graph_path: Path, limit: int) -> list[str]:
-    nodes = [json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()]
+    nodes = [
+        json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()
+    ]
     method_nodes = [n for n in nodes if n.get("node_type") == "method"]
     endpoints = [n for n in method_nodes if n.get("is_endpoint")]
-    candidates = sorted(endpoints or method_nodes, key=lambda n: len(n.get("calls", [])), reverse=True)
+    candidates = sorted(
+        endpoints or method_nodes, key=lambda n: len(n.get("calls", [])), reverse=True
+    )
     results = []
-    for node in candidates[:limit * 3]:
+    for node in candidates[: limit * 3]:
         qn = node.get("qualified_name", "")
         if "#" in qn:
             class_name = qn.split("#")[0].split(".")[-1]
@@ -83,17 +91,26 @@ def main() -> None:
         help="Comma-separated method selectors, e.g. 'OrderController.createOrder,PaymentService.charge'",
     )
     method_group.add_argument(
-        "--methods-file", metavar="FILE",
+        "--methods-file",
+        metavar="FILE",
         help="Path to file with method selectors (one per line or JSON array)",
     )
     method_group.add_argument(
-        "--auto-discover", action="store_true",
+        "--auto-discover",
+        action="store_true",
         help="Auto-discover methods from the graph (prefers REST endpoints)",
     )
 
     parser.add_argument("--discover-limit", type=int, default=5)
-    parser.add_argument("--model", default="claude-opus-4-7", help="Claude model to use")
-    parser.add_argument("--queries", type=int, default=500, help="Annual query estimate for savings projection")
+    parser.add_argument(
+        "--model", default="claude-opus-4-7", help="Claude model to use"
+    )
+    parser.add_argument(
+        "--queries",
+        type=int,
+        default=500,
+        help="Annual query estimate for savings projection",
+    )
     parser.add_argument("--output", help="Write JSON results to this file")
     args = parser.parse_args()
 
@@ -121,16 +138,16 @@ def main() -> None:
     if not methods:
         sys.exit("Method list is empty.")
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("JIDRA Token & Cost Validation")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"Graph:    {graph_path}")
     print(f"Codebase: {codebase_path}")
     print(f"Model:    {args.model}")
     print(f"Methods:  {len(methods)}")
     for m in methods:
         print(f"  • {m}")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     results = []
     failed = []
@@ -154,19 +171,24 @@ def main() -> None:
     if results:
         avg_reduction = sum(r.api_token_reduction_pct for r in results) / len(results)
         total_annual = sum(r.api_annual_savings for r in results)
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print("Summary")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print(f"Methods validated:   {len(results)}/{len(methods)}")
         print(f"Avg token reduction: {avg_reduction:.1f}%")
         print(f"Annual savings ({args.queries} queries): ${total_annual:.2f}")
         if failed:
             print(f"Failed: {[f['method'] for f in failed]}")
-        print(f"{'='*70}\n")
+        print(f"{'=' * 70}\n")
 
     if args.output:
         import dataclasses
-        avg_reduction = sum(r.api_token_reduction_pct for r in results) / len(results) if results else 0
+
+        avg_reduction = (
+            sum(r.api_token_reduction_pct for r in results) / len(results)
+            if results
+            else 0
+        )
         total_annual = sum(r.api_annual_savings for r in results) if results else 0
         out = {
             "model": args.model,
