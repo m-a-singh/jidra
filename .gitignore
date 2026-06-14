@@ -8,3 +8,4 @@ jidra/expirements/__pycache__/enrichment_ui.cpython-310.pyc
 .venv
 __pycache__
 expirements/__pycache__
+*.egg-info/
