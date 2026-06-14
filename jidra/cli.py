@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -35,7 +36,7 @@ NON_BUSINESS_SIGNATURE_PARTS = (
     ".log.",
     ".utils.",
     ".constants.",
-    "ServiceMetrics#",
+    "servicemetrics#",
     "metricsclient#",
     "metriccounter",
     "builder#",
@@ -311,7 +312,7 @@ def _print_diagnose_report(result: dict) -> None:
 
 def is_business_entry(entry: dict) -> bool:
     call_name = str(entry.get("call") or "").lower()
-    if call_name in {name.lower() for name in NON_BUSINESS_CALL_NAMES}:
+    if call_name in NON_BUSINESS_CALL_NAMES:
         return False
 
     signature = str(entry.get("target_signature") or entry.get("signature") or "").lower()
@@ -724,6 +725,7 @@ def _parse_args() -> argparse.Namespace:
         "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
     )
     mcp_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
+    mcp_parser.add_argument("--codebase", help="Path to Java codebase (for reindex tool)")
 
     flow_doc_parser = subparsers.add_parser(
         "flow-doc", help="Generate recursive deterministic flow markdown"
@@ -815,11 +817,6 @@ def _parse_args() -> argparse.Namespace:
         help="Skip auto-building Java app (assume already built)",
     )
     validate_parser.add_argument(
-        "--service-name",
-        default="search",
-        help="Service name in docker-compose.yml (default: search)",
-    )
-    validate_parser.add_argument(
         "--build-dir",
         help="Build directory for multi-module projects (relative to codebase root, e.g., search-api)",
     )
@@ -860,10 +857,50 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip Java build (assume already built)",
     )
-    process_parser.add_argument(
-        "--service-name", default="search", help="Service name in docker-compose.yml"
-    )
     process_parser.add_argument("--build-dir", help="Build directory for multi-module projects")
+
+    cost_roi_parser = subparsers.add_parser(
+        "cost-roi", help="Measure token savings and LLM cost reduction from your graph"
+    )
+    cost_roi_parser.add_argument(
+        "--graph",
+        help="Path to graph_validated.jsonl (defaults to jidra/output/graph_validated.jsonl)",
+    )
+    cost_roi_parser.add_argument(
+        "--method",
+        help="Class.method selector for a specific proof (e.g. DeviceController.saveDevice). "
+        "If omitted, shows graph-wide averages.",
+    )
+    cost_roi_parser.add_argument(
+        "--codebase",
+        help="Path to Java repo root. Required for --offline false; "
+        "used to read source files for the naive baseline.",
+    )
+    cost_roi_parser.add_argument(
+        "--model",
+        default="claude-sonnet-4-6",
+        help="LLM model to calculate costs for (default: claude-sonnet-4-6)",
+    )
+    cost_roi_parser.add_argument(
+        "--queries",
+        type=int,
+        default=500,
+        help="Estimated number of times Claude calls a JIDRA tool per year (default: 500, ~10/week)",
+    )
+    cost_roi_parser.add_argument(
+        "--offline",
+        default="true",
+        choices=("true", "false"),
+        help="true (default): measure tokens from graph, no API calls. "
+        "false: make real Claude API calls for exact numbers (requires ANTHROPIC_API_KEY).",
+    )
+    cost_roi_parser.add_argument(
+        "--output", help="Write JSON result to this file instead of printing"
+    )
+
+    subparsers.add_parser(
+        "up", help="One-command setup: build graph, write MCP config, optionally watch for changes"
+    )
 
     return parser.parse_args()
 
@@ -906,14 +943,14 @@ def _load_cli_config(config_path: str | None = None) -> dict:
         return {}
 
 
-def _index(codebase: str, output: str) -> None:
+def _index(codebase: str, output: str, on_progress=None) -> None:
     codebase_path = Path(codebase).resolve()
     output_path = Path(output).resolve()
     main_path, test_path, _ = resolve_graph_paths(output_path)
     main_path.parent.mkdir(parents=True, exist_ok=True)
     test_path.parent.mkdir(parents=True, exist_ok=True)
 
-    graph = build_graph(codebase_path)
+    graph = build_graph(codebase_path, on_progress=on_progress)
     records = graph_records(graph)
     main_records, test_records = split_graph_records_by_source(records)
 
@@ -945,7 +982,6 @@ def _validate(
     report: str | None,
     no_filter: bool,
     skip_build: bool,
-    service_name: str,
     build_dir: str | None,
 ) -> None:
     graph_path = _resolve_graph_path(graph_arg, graph_type)
@@ -955,14 +991,10 @@ def _validate(
         if actuator_url:
             beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
         elif codebase:
-            beans_response = run_docker_and_fetch_beans(
-                codebase,
-                port=port,
-                timeout=timeout,
-                skip_build=skip_build,
-                service_name=service_name,
-                build_dir=build_dir,
-            )
+            with run_docker_and_fetch_beans(
+                codebase, port=port, timeout=timeout, skip_build=skip_build, build_dir=build_dir
+            ) as beans_response:
+                pass
         else:
             raise SystemExit("Either --actuator-url or --codebase is required")
     except ActuatorError as e:
@@ -1006,10 +1038,11 @@ def _validate(
         print(json.dumps(report_dict, indent=2))
 
 
-def _progress(step: int, total: int, msg: str) -> None:
+def _progress(step: int, total: int, msg: str, newline: bool = False) -> None:
     pct = int(100 * step / total)
     bar = "█" * (pct // 5) + "░" * (20 - pct // 5)
-    print(f"  [{bar}] {pct:3d}% • {msg}", flush=True)
+    end = "\n" if newline else "\r"
+    print(f"  [{bar}] {pct:3d}% • {msg}", end=end, flush=True)
 
 
 def _process(
@@ -1019,8 +1052,8 @@ def _process(
     timeout: int,
     output: str | None,
     skip_build: bool,
-    service_name: str,
     build_dir: str | None,
+    repo_root: str | None = None,
 ) -> None:
     print("\n" + "=" * 80)
     print("JIDRA FULL PROCESSING PIPELINE")
@@ -1037,12 +1070,24 @@ def _process(
 
     index_output = output_dir / "graph.jsonl"
     try:
-        _index(str(codebase_path), str(index_output))
+
+        def on_class_parsed(class_count):
+            # Scale class count to progress: 0.5->1.0 range (step 0.5 to 1.0 of 3 total steps)
+            # Rough estimate: scale to fill bar by ~500 classes, then cap at 0.95 before final completion
+            print(
+                f"     AST:  [████░░░░░░░░░░░░░░░░] ~30% • Parsing {class_count} classes...",
+                end="\r",
+                flush=True,
+            )
+
+        _index(str(codebase_path), str(index_output), on_progress=on_class_parsed)
         graph = load_graph_jsonl(index_output)
+        print()  # newline after AST progress
         _progress(
             1,
             3,
             f"✓ Indexed {len(graph.classes)} classes, {len(graph.methods)} methods, {len(graph.resolved_call_edges)} edges",
+            newline=True,
         )
     except Exception as e:
         raise SystemExit(f"Indexing failed: {e}")
@@ -1056,12 +1101,12 @@ def _process(
         if actuator_url:
             beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
         elif codebase:
+            docker_context = Path(repo_root).resolve() if repo_root else codebase_path
             with run_docker_and_fetch_beans(
-                str(codebase_path),
+                str(docker_context),
                 port=port,
                 timeout=timeout,
                 skip_build=skip_build,
-                service_name=service_name,
                 build_dir=build_dir,
             ) as beans_response:
                 pass
@@ -1097,6 +1142,7 @@ def _process(
         2,
         3,
         f"✓ Removed {validation_report.edges_removed} phantom edges ({report_dict['edges_removed_pct']:.1f}%)",
+        newline=True,
     )
 
     # ===== STEP 3: VISUALIZE (Generate interactive HTML) =====
@@ -1109,7 +1155,7 @@ def _process(
 
     html_path = output_dir / "graph_visualization.html"
     html_path.write_text(html, encoding="utf-8")
-    _progress(3, 3, f"✓ Generated visualization: {html_path.name}")
+    _progress(3, 3, f"✓ Generated visualization: {html_path.name}", newline=True)
 
     # ===== SUMMARY =====
     print("\n" + "=" * 80)
@@ -1130,8 +1176,323 @@ def _process(
     print("=" * 80 + "\n")
 
 
+def _prompt(
+    prompt_text: str,
+    default: str = "",
+    allowed_values: list[str] | None = None,
+    optional: bool = False,
+) -> str:
+    while True:
+        if default:
+            response = input(f"{prompt_text} [{default}]: ").strip()
+        else:
+            response = input(f"{prompt_text}: ").strip()
+
+        if not response:
+            if default:
+                return default
+            if optional:
+                return ""
+            print("Please enter a value.")
+            continue
+
+        if allowed_values and response not in allowed_values:
+            print(f"Invalid option. Choose from: {', '.join(allowed_values)}")
+            continue
+        return response
+
+
+def _prompt_int(prompt_text: str, default: int) -> int:
+    while True:
+        response = input(f"{prompt_text} [{default}]: ").strip()
+        if not response:
+            return default
+        try:
+            return int(response)
+        except ValueError:
+            print("Please enter a valid integer.")
+            continue
+
+
+def _prompt_yn(prompt_text: str, default: bool = False) -> bool:
+    default_str = "Y/n" if default else "y/N"
+    while True:
+        response = input(f"{prompt_text} [{default_str}]: ").strip().lower()
+        if not response:
+            return default
+        if response in ("y", "yes"):
+            return True
+        if response in ("n", "no"):
+            return False
+        print("Please enter 'y' or 'n'.")
+        continue
+
+
+def _up() -> None:
+    print(f"\n{'=' * 80}")
+    print("JIDRA ONE-COMMAND SETUP")
+    print(f"{'=' * 80}\n")
+
+    repo_path = _prompt("Repository path")
+    repo = Path(repo_path).resolve()
+    if not repo.exists():
+        raise SystemExit(f"Repository path does not exist: {repo}")
+
+    build_sub_dir = _prompt("Build directory (relative to repo, or . for root)", ".")
+    codebase_path = repo / build_sub_dir if build_sub_dir != "." else repo
+    build_dir = build_sub_dir if build_sub_dir != "." else None
+
+    actuator_url = _prompt(
+        "Spring Boot actuator URL (leave blank to use docker-compose)", "", optional=True
+    )
+    skip_build = _prompt_yn("Skip Java build step (assume already built)?", False)
+
+    write_config = _prompt_yn("Write MCP config to <repo>/.mcp.json?", True)
+    watch = _prompt_yn("Watch for file changes? (keeps jidra up running)", False)
+
+    if watch and not write_config:
+        raise SystemExit(
+            "Error: watch mode requires a configured MCP server to be useful.\n"
+            "Either answer yes to writing the config, or omit watch mode."
+        )
+
+    jidra_dir = repo / ".jidra"
+
+    print("\n[1/2] BUILDING GRAPH")
+    print(f"      Repository: {repo}")
+    print(f"      Codebase path: {codebase_path}\n")
+
+    try:
+        _process(
+            codebase=str(codebase_path),
+            actuator_url=actuator_url or None,
+            port=8080,
+            timeout=180,
+            output=str(jidra_dir),
+            skip_build=skip_build,
+            build_dir=build_dir,
+            repo_root=str(repo),
+        )
+    except SystemExit as e:
+        raise e
+    except Exception as e:
+        raise SystemExit(f"Graph build failed: {e}") from e
+
+    graph_validated_path = jidra_dir / "graph_validated.jsonl"
+    if not graph_validated_path.exists():
+        raise SystemExit(f"Graph validation failed: {graph_validated_path} not created")
+
+    print("\n[2/2] MCP CONFIGURATION")
+
+    settings_path = repo / ".mcp.json"
+    _pkg_dir = Path(__file__).resolve().parent.parent
+    _venv_python = _pkg_dir / "venv" / "bin" / "python"
+    _python = str(_venv_python) if _venv_python.exists() else sys.executable
+
+    mcp_entry = {
+        "type": "stdio",
+        "command": _python,
+        "args": [
+            "-m",
+            "jidra.mcp_server",
+            "--graph",
+            str(graph_validated_path),
+            "--codebase",
+            str(codebase_path),
+        ],
+    }
+
+    if write_config:
+        settings = {}
+        if settings_path.exists():
+            try:
+                settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            except Exception:
+                settings = {}
+        if not isinstance(settings, dict):
+            settings = {}
+        settings.setdefault("mcpServers", {})["jidra"] = mcp_entry
+        settings_path.write_text(
+            json.dumps(settings, indent=2, ensure_ascii=True), encoding="utf-8"
+        )
+        print(f"\n✓ MCP config written to: {settings_path}\n")
+    else:
+        cmd = " ".join(
+            [
+                sys.executable,
+                "-m",
+                "jidra.mcp_server",
+                "--graph",
+                str(graph_validated_path),
+                "--codebase",
+                str(codebase_path),
+            ]
+        )
+        print("\nAdd the following to your MCP config manually:\n")
+        print("  Claude Code (.mcp.json):")
+        print(f"  {json.dumps({'mcpServers': {'jidra': mcp_entry}}, indent=4)}\n")
+        print(f"  Codex / other: command: {cmd}\n")
+
+    if watch:
+        print("[3/3] WATCHING FOR CHANGES\n")
+        print("JIDRA is ready!\n")
+        print(f"   Graph:   {graph_validated_path}")
+        print(f"   Config:  {settings_path}")
+        print(f"\n   Open Claude Code in {repo} and JIDRA tools will be available.")
+        print(f"   Watching {codebase_path}/**/*.java for changes (full re-validate on each)...\n")
+        print("   Press Ctrl+C to stop.\n")
+
+        try:
+            from watchdog.observers import Observer
+            from watchdog.events import FileSystemEventHandler
+
+            rebuild_in_progress = threading.Event()
+
+            class JavaFileHandler(FileSystemEventHandler):
+                def on_modified(self, event):
+                    if rebuild_in_progress.is_set() or event.is_directory:
+                        return
+                    if not event.src_path.endswith(".java"):
+                        return
+
+                    rebuild_in_progress.set()
+                    file_name = Path(event.src_path).name
+                    print(f"\nDetected change: {file_name} — rebuilding graph...", flush=True)
+                    try:
+                        _process(
+                            codebase=str(codebase_path),
+                            actuator_url=actuator_url or None,
+                            port=8080,
+                            timeout=180,
+                            output=str(jidra_dir),
+                            skip_build=skip_build,
+                            build_dir=build_dir,
+                            repo_root=str(repo),
+                        )
+                        print("✓ Graph rebuilt successfully\n", flush=True)
+                    except Exception as e:
+                        print(f"✗ Rebuild failed: {e}\n", flush=True)
+                    finally:
+                        rebuild_in_progress.clear()
+
+            observer = Observer()
+            observer.schedule(JavaFileHandler(), str(codebase_path), recursive=True)
+            observer.start()
+
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                observer.stop()
+                observer.join()
+                print("\nDone.")
+        except ImportError:
+            raise SystemExit("watchdog is required for --watch mode but is not installed")
+        except Exception as e:
+            raise SystemExit(f"Watch mode failed: {e}") from e
+    else:
+        print("JIDRA is ready!\n")
+        print(f"   Graph:   {graph_validated_path}")
+        print(f"   Config:  {settings_path}\n")
+        print(f"   Open Claude Code in {repo} and JIDRA tools will be available.\n")
+        print(f"{'=' * 80}\n")
+
+
+def _cost_roi(
+    graph_arg: str | None,
+    method: str | None,
+    codebase: str | None,
+    model: str,
+    queries: int,
+    offline: bool,
+    output: str | None,
+) -> None:
+    from .cost_calculator import (
+        analyze_graph,
+        analyze_method_offline,
+        analyze_method_online,
+        CostCalculator,
+        format_stats,
+        format_metrics,
+        format_method_proof,
+    )
+
+    graph_path = Path(graph_arg).resolve() if graph_arg else OUTPUT_DIR / "graph_validated.jsonl"
+    if not graph_path.exists():
+        raise SystemExit(
+            f"Graph not found: {graph_path}\n"
+            "Run `jidra process` first to build graph_validated.jsonl"
+        )
+
+    codebase_path = Path(codebase).resolve() if codebase else None
+
+    # --- Method-specific proof ---
+    if method:
+        if not offline and not codebase_path:
+            raise SystemExit(
+                "--codebase is required for --offline false\n"
+                "Provide the path to the Java repo root so JIDRA can read source files."
+            )
+        try:
+            if offline:
+                proof = analyze_method_offline(graph_path, method, model, queries, codebase_path)
+            else:
+                proof = analyze_method_online(graph_path, method, model, queries, codebase_path)
+        except (ValueError, RuntimeError) as e:
+            raise SystemExit(str(e))
+
+        if output:
+            import dataclasses
+
+            _write_or_print_json(dataclasses.asdict(proof), output, "cost_roi_method.json")
+        else:
+            print(format_method_proof(proof))
+        return
+
+    # --- Graph-wide averages (no method specified) ---
+    stats = analyze_graph(graph_path)
+    calc = CostCalculator()
+    try:
+        roi = calc.calculate_roi(model=model, stats=stats, num_queries_per_year=queries)
+    except ValueError as e:
+        raise SystemExit(str(e))
+
+    if output:
+        import dataclasses
+
+        result = {
+            "graph": str(graph_path),
+            "model": model,
+            "num_queries": queries,
+            "graph_stats": dataclasses.asdict(stats),
+            "cost_without_jidra": roi.cost_without_jidra,
+            "cost_with_jidra": roi.cost_with_jidra,
+            "annual_savings": roi.annual_savings,
+        }
+        _write_or_print_json(result, output, "cost_roi.json")
+    else:
+        print(format_stats(stats))
+        print(format_metrics(roi))
+
+
 def main() -> None:
     args = _parse_args()
+
+    if args.command == "up":
+        _up()
+        return
+
+    if args.command == "cost-roi":
+        _cost_roi(
+            args.graph,
+            args.method,
+            args.codebase,
+            args.model,
+            args.queries,
+            args.offline == "true",
+            args.output,
+        )
+        return
 
     if args.command == "index":
         _index(args.codebase, args.output)
@@ -1149,7 +1510,6 @@ def main() -> None:
             args.report,
             args.no_filter,
             args.skip_build,
-            args.service_name,
             args.build_dir,
         )
         return
@@ -1162,7 +1522,6 @@ def main() -> None:
             args.timeout,
             args.output,
             args.skip_build,
-            args.service_name,
             args.build_dir,
         )
         return
@@ -1208,7 +1567,7 @@ def main() -> None:
         try:
             from .mcp_server import run_mcp_server
 
-            run_mcp_server(str(graph_path))
+            run_mcp_server(str(graph_path), codebase_path=args.codebase)
             return
         except RuntimeError as exc:
             raise SystemExit(str(exc))

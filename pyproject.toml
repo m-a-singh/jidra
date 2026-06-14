@@ -13,7 +13,8 @@ dependencies = [
   "tree-sitter-java>=0.21.0",
   "litellm>=1.82.0",
   "pyyaml>=6.0.0",
-  "mcp>=1.27.0"
+  "mcp>=1.27.0",
+  "watchdog>=4.0.0"
 ]
 
 [project.scripts]
@@ -21,8 +22,12 @@ jidra = "jidra.cli:main"
 
 [project.optional-dependencies]
 mcp = ["mcp"]
-
-test = ["pytest>=8.0.0", "ruff>=0.6.0"]
+test = [
+  "pytest>=7.0.0",
+  "pytest-cov>=4.0.0",
+  "ruff>=0.1.0",
+  "anthropic>=0.25.0"
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
