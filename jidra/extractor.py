@@ -1022,7 +1022,7 @@ def _resolve_calls(graph: Graph) -> None:
     graph.resolved_call_edges = sorted(edges, key=lambda e: e.id)
 
 
-def build_graph(codebase_root: Path) -> Graph:
+def build_graph(codebase_root: Path, on_progress=None) -> Graph:
     # Create the parser once for the entire codebase scan.
     parser = make_parser()
 
@@ -1039,6 +1039,9 @@ def build_graph(codebase_root: Path) -> Graph:
         all_fields.extend(result.fields)
         all_calls.extend(result.callsites)
         all_inheritance_edges.extend(result.inheritance_edges)
+
+        if on_progress:
+            on_progress(len(all_classes))
 
     graph = Graph(
         classes=all_classes,

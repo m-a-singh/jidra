@@ -155,13 +155,16 @@ def analyze_stack_trace(
     }
 
 
-def run_mcp_server(default_graph_path: str | None = None) -> None:
+def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | None = None) -> None:
     try:
         from mcp.server.fastmcp import FastMCP
     except Exception as exc:  # pragma: no cover - runtime dependency gate
         raise RuntimeError("MCP support requires installing jidra[mcp] or pip install mcp") from exc
 
+    import os
+
     default_path = default_graph_path or DEFAULT_MAIN_GRAPH
+    default_codebase = codebase_path or os.getcwd()
     mcp = FastMCP("JIDRA MCP")
 
     @mcp.tool()
@@ -170,6 +173,10 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
         graph_path: str | None = None,
         max_chars: int = 12000,
     ) -> dict:
+        """ALWAYS use this instead of Read/Glob/Grep when exploring Java code. Returns source,
+        all resolved call edges with target method IDs, callers, class hierarchy, and field access —
+        everything in one call. For any callee you want to explore deeper, call this tool again
+        with that method's name. Never open Java files manually when this tool is available."""
         engine = JidraEngine(graph_path or default_path)
         return engine.get_method_context(method=method, max_chars=max_chars)
 
@@ -180,6 +187,10 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
         depth: int = 4,
         top_n: int = 4,
     ) -> dict:
+        """Use this instead of manually tracing calls through files. Returns the full downstream
+        call graph ranked by importance — replaces reading multiple callee source files. After
+        calling jidra_get_method_context, call this to map the execution path without opening
+        any more files."""
         engine = JidraEngine(graph_path or default_path)
         return engine.get_flow(method=method, depth=depth, top_n=top_n)
 
@@ -190,6 +201,10 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
         depth: int = 4,
         top_n: int = 4,
     ) -> dict:
+        """Compact version of jidra_get_flow optimized for reasoning. Use this after
+        jidra_get_method_context to explore the call graph without reading files — filters
+        out noise, ranks by business importance, flags uncertain edges. Replaces Grep/Glob
+        for understanding what a method calls downstream."""
         engine = JidraEngine(graph_path or default_path)
         return engine.get_agent_flow(method=method, depth=depth, top_n=top_n)
 
@@ -198,6 +213,8 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
         method: str,
         graph_path: str | None = None,
     ) -> dict:
+        """Get source code for a specific Java method. Use this instead of Read when you
+        want just one method's implementation — no need to find the file or read the whole class."""
         engine = JidraEngine(graph_path or default_path)
         return engine.get_method_source(method=method)
 
@@ -208,6 +225,9 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
         graph_path: str | None = None,
         max_depth: int = 6,
     ) -> dict:
+        """Trace how one Java method reaches another through the call graph. Use this instead
+        of manually grepping for callers/callees — replaces multiple Grep/Read calls when you
+        need to know if and how two methods are connected."""
         engine = JidraEngine(graph_path or default_path)
         return engine.get_call_chain(
             from_method=from_method, to_method=to_method, max_depth=max_depth
@@ -221,6 +241,10 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
         max_nodes: int = 80,
         include_utility: bool = False,
     ) -> dict:
+        """Analyze a Java stack trace against the codebase graph. Given a raw stack trace,
+        matches each frame to known methods in the graph and returns a focused flow map
+        around the failure point with suggested debug locations. Use this whenever
+        investigating an exception or error report."""
         return analyze_stack_trace(
             stack_trace=stack_trace,
             graph_path=graph_path or default_path,
@@ -229,14 +253,53 @@ def run_mcp_server(default_graph_path: str | None = None) -> None:
             include_utility=include_utility,
         )
 
+    @mcp.tool()
+    def jidra_reindex(
+        graph_path: str | None = None,
+        codebase: str | None = None,
+    ) -> dict:
+        """Call this after modifying Java source files to keep the JIDRA graph current."""
+        from .cli import _index
+        from .graph_io import load_graph_jsonl, resolve_graph_paths
+        from pathlib import Path
+
+        resolved_graph = graph_path or default_path
+        resolved_codebase = codebase or default_codebase
+
+        try:
+            # Get the output directory (where the graph lives)
+            graph_path_obj = Path(resolved_graph).resolve()
+            output_dir = graph_path_obj.parent
+
+            # Re-index only (fast re-index, not full validation)
+            _index(str(resolved_codebase), str(output_dir))
+
+            # Load newly indexed graph to report updated counts
+            main_graph_path, test_graph_path, _ = resolve_graph_paths(output_dir)
+            graph = load_graph_jsonl(main_graph_path)
+            return {
+                "status": "success",
+                "message": "Graph reindexed successfully",
+                "graph_path": str(resolved_graph),
+                "nodes_updated": len(graph.methods),
+                "edges": len(graph.resolved_call_edges),
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Reindex failed: {str(e)}",
+                "graph_path": str(resolved_graph),
+            }
+
     mcp.run(transport="stdio")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the JIDRA MCP server")
     parser.add_argument("--graph", default=None, help="Path to graph.jsonl")
+    parser.add_argument("--codebase", default=None, help="Path to Java codebase (for reindex tool)")
     args = parser.parse_args()
-    run_mcp_server(default_graph_path=args.graph)
+    run_mcp_server(default_graph_path=args.graph, codebase_path=args.codebase)
 
 
 if __name__ == "__main__":
