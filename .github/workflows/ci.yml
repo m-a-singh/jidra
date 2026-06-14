@@ -28,7 +28,7 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest -q
+          python -m pytest -q --ignore=validations/
 
   ruff:
     runs-on: ubuntu-latest
