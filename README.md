@@ -112,9 +112,10 @@ package prefixes to distinguish your code from third-party libraries.
 
 Set a comma-separated list:
 
-```bash
-export JIDRA_PROJECT_PREFIXES="com.myco.,org.example."
-```
+
+# Clone repository
+git clone https://github.com/akhilsinghcodes/jidra.git
+cd jidra
 
 If unset, JIDRA treats any package as project code for anchoring.
 
