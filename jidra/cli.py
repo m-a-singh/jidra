@@ -609,8 +609,8 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="jidra", description="JIDRA Java trace/context CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    index_parser = subparsers.add_parser("index", help="Build graph JSONL from a Java codebase")
-    index_parser.add_argument("--codebase", required=True, help="Path to Java repository root")
+    index_parser = subparsers.add_parser("index", help="Build graph JSONL from a Java or TypeScript codebase")
+    index_parser.add_argument("--codebase", required=True, help="Path to repository root")
     index_parser.add_argument(
         "--output", required=True, help="Output graph file or output directory"
     )
@@ -840,24 +840,24 @@ def _parse_args() -> argparse.Namespace:
 
     process_parser = subparsers.add_parser(
         "process",
-        help="Complete end-to-end: index codebase → validate with actuator → generate visualization",
+        help="Complete end-to-end: index codebase → validate → generate visualization",
     )
-    process_parser.add_argument("--codebase", required=True, help="Path to Java codebase root")
+    process_parser.add_argument("--codebase", required=True, help="Path to codebase root")
     process_parser.add_argument(
         "--actuator-url",
-        help="Spring Boot actuator URL (e.g. http://localhost:8080). If omitted, uses Docker.",
+        help="Spring Boot actuator URL (e.g. http://localhost:8080). If omitted, uses Docker. Java only.",
     )
-    process_parser.add_argument("--port", type=int, default=8080, help="Docker container port")
+    process_parser.add_argument("--port", type=int, default=8080, help="Docker container port (Java only)")
     process_parser.add_argument(
-        "--timeout", type=int, default=180, help="Actuator health check timeout"
+        "--timeout", type=int, default=180, help="Actuator health check timeout (Java only)"
     )
     process_parser.add_argument("--output", help="Output directory for all generated files")
     process_parser.add_argument(
         "--skip-build",
         action="store_true",
-        help="Skip Java build (assume already built)",
+        help="Skip Java build (assume already built). Java only.",
     )
-    process_parser.add_argument("--build-dir", help="Build directory for multi-module projects")
+    process_parser.add_argument("--build-dir", help="Build directory for multi-module projects (Java only)")
 
     cost_roi_parser = subparsers.add_parser(
         "cost-roi", help="Measure token savings and LLM cost reduction from your graph"
@@ -943,7 +943,7 @@ def _load_cli_config(config_path: str | None = None) -> dict:
         return {}
 
 
-def _index(codebase: str, output: str, on_progress=None) -> None:
+def _index(codebase: str, output: str, on_progress=None, _quiet: bool = False) -> None:
     codebase_path = Path(codebase).resolve()
     output_path = Path(output).resolve()
     main_path, test_path, _ = resolve_graph_paths(output_path)
@@ -957,18 +957,19 @@ def _index(codebase: str, output: str, on_progress=None) -> None:
     export_jsonl(main_path, main_records)
     export_jsonl(test_path, test_records)
 
-    print(
-        json.dumps(
-            {
-                "main_graph": str(main_path),
-                "main_records": len(main_records),
-                "test_graph": str(test_path),
-                "test_records": len(test_records),
-            },
-            ensure_ascii=True,
-            indent=2,
+    if not _quiet:
+        print(
+            json.dumps(
+                {
+                    "main_graph": str(main_path),
+                    "main_records": len(main_records),
+                    "test_graph": str(test_path),
+                    "test_records": len(test_records),
+                },
+                ensure_ascii=True,
+                indent=2,
+            )
         )
-    )
 
 
 def _validate(
@@ -1063,99 +1064,102 @@ def _process(
     output_dir = Path(output).resolve() if output else OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    from .ts_filters import detect_language
+    lang = detect_language(codebase_path)
+
+    is_typescript = lang == "typescript"
+    total_steps = 2 if is_typescript else 3
+
     # ===== STEP 1: INDEX (Build static call graph) =====
-    print("\n[1/3] INDEXING CODEBASE")
+    print(f"\n[1/{total_steps}] INDEXING CODEBASE ({lang.upper()})")
     print(f"     Scanning: {codebase_path}")
-    _progress(0, 3, "Starting index...")
+    _progress(0, total_steps, "Starting index...")
 
     index_output = output_dir / "graph.jsonl"
     try:
-
         def on_class_parsed(class_count):
-            # Scale class count to progress: 0.5->1.0 range (step 0.5 to 1.0 of 3 total steps)
-            # Rough estimate: scale to fill bar by ~500 classes, then cap at 0.95 before final completion
-            print(
-                f"     AST:  [████░░░░░░░░░░░░░░░░] ~30% • Parsing {class_count} classes...",
-                end="\r",
-                flush=True,
-            )
+            print(f"     AST:  [████░░░░░░░░░░░░░░░░] ~30% • Parsing {class_count} classes...", end="\r", flush=True)
 
-        _index(str(codebase_path), str(index_output), on_progress=on_class_parsed)
+        _index(str(codebase_path), str(index_output), on_progress=on_class_parsed, _quiet=True)
         graph = load_graph_jsonl(index_output)
         print()  # newline after AST progress
-        _progress(
-            1,
-            3,
-            f"✓ Indexed {len(graph.classes)} classes, {len(graph.methods)} methods, {len(graph.resolved_call_edges)} edges",
-            newline=True,
-        )
+        _progress(1, total_steps, f"✓ Indexed {len(graph.classes)} classes, {len(graph.methods)} methods, {len(graph.resolved_call_edges)} edges", newline=True)
     except Exception as e:
         raise SystemExit(f"Indexing failed: {e}")
 
-    # ===== STEP 2: VALIDATE (Filter phantom edges with actuator) =====
-    print("\n[2/3] VALIDATING WITH SPRING ACTUATOR")
-    print(f"     Connecting to: {actuator_url or 'Docker (will auto-build)'}")
-    _progress(1, 3, "Fetching actuator beans...")
+    # ===== STEP 2: VALIDATE (Java only — filter phantom edges with Spring Actuator) =====
+    if is_typescript:
+        # No actuator for TypeScript — the static graph is the final graph
+        validated_path = output_dir / "graph_validated.jsonl"
+        records = graph_records(graph)
+        export_jsonl(validated_path, records)
+        report_dict = {
+            "total_classes": len(graph.classes),
+            "edges_before": len(graph.resolved_call_edges),
+            "edges_after": len(graph.resolved_call_edges),
+            "edges_removed": 0,
+            "edges_removed_pct": 0.0,
+            "note": "TypeScript — actuator validation not applicable",
+        }
+        report_path = output_dir / "validation_report.json"
+        report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
+        filtered_graph = graph
+    else:
+        print(f"\n[2/{total_steps}] VALIDATING WITH SPRING ACTUATOR")
+        print(f"     Connecting to: {actuator_url or 'Docker (will auto-build)'}")
+        _progress(1, total_steps, "Fetching actuator beans...")
 
-    try:
-        if actuator_url:
-            beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
-        elif codebase:
-            docker_context = Path(repo_root).resolve() if repo_root else codebase_path
-            with run_docker_and_fetch_beans(
-                str(docker_context),
-                port=port,
-                timeout=timeout,
-                skip_build=skip_build,
-                build_dir=build_dir,
-            ) as beans_response:
-                pass
-        else:
-            raise SystemExit("Either --actuator-url or --codebase is required")
-    except ActuatorError as e:
-        raise SystemExit(f"Actuator error: {e}") from e
+        try:
+            if actuator_url:
+                beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
+            elif codebase:
+                docker_context = Path(repo_root).resolve() if repo_root else codebase_path
+                with run_docker_and_fetch_beans(
+                    str(docker_context),
+                    port=port,
+                    timeout=timeout,
+                    skip_build=skip_build,
+                    build_dir=build_dir,
+                ) as beans_response:
+                    pass
+            else:
+                raise SystemExit("Either --actuator-url or --codebase is required")
+        except ActuatorError as e:
+            raise SystemExit(f"Actuator error: {e}") from e
 
-    _progress(2, 3, "Filtering phantom edges...")
-    confirmed_beans = parse_actuator_beans(beans_response)
-    filtered_graph, validation_report = validate_graph(graph, confirmed_beans, verbose=True)
+        _progress(2, total_steps, "Filtering phantom edges...")
+        confirmed_beans = parse_actuator_beans(beans_response)
+        filtered_graph, validation_report = validate_graph(graph, confirmed_beans, verbose=True)
 
-    # Write validated graph
-    validated_path = output_dir / "graph_validated.jsonl"
-    records = graph_records(filtered_graph)
-    export_jsonl(validated_path, records)
+        validated_path = output_dir / "graph_validated.jsonl"
+        records = graph_records(filtered_graph)
+        export_jsonl(validated_path, records)
 
-    # Write report
-    report_path = output_dir / "validation_report.json"
-    report_dict = {
-        "total_classes": validation_report.total_classes,
-        "confirmed_beans": validation_report.confirmed_beans,
-        "edges_before": validation_report.edges_before,
-        "edges_after": validation_report.edges_after,
-        "edges_removed": validation_report.edges_removed,
-        "edges_removed_pct": round(
-            100 * validation_report.edges_removed / max(1, validation_report.edges_before), 1
-        ),
-        "callsites_upgraded": validation_report.callsites_upgraded,
-    }
-    report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
-    _progress(
-        2,
-        3,
-        f"✓ Removed {validation_report.edges_removed} phantom edges ({report_dict['edges_removed_pct']:.1f}%)",
-        newline=True,
-    )
+        report_path = output_dir / "validation_report.json"
+        report_dict = {
+            "total_classes": validation_report.total_classes,
+            "confirmed_beans": validation_report.confirmed_beans,
+            "edges_before": validation_report.edges_before,
+            "edges_after": validation_report.edges_after,
+            "edges_removed": validation_report.edges_removed,
+            "edges_removed_pct": round(100 * validation_report.edges_removed / max(1, validation_report.edges_before), 1),
+            "callsites_upgraded": validation_report.callsites_upgraded,
+        }
+        report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
+        _progress(2, total_steps, f"✓ Removed {validation_report.edges_removed} phantom edges ({report_dict['edges_removed_pct']:.1f}%)", newline=True)
 
-    # ===== STEP 3: VISUALIZE (Generate interactive HTML) =====
-    print("\n[3/3] GENERATING INTERACTIVE VISUALIZATION")
+    # ===== FINAL STEP: VISUALIZE (Generate interactive HTML) =====
+    viz_step = total_steps
+    print(f"\n[{viz_step}/{total_steps}] GENERATING INTERACTIVE VISUALIZATION")
     print(f"     Output: {output_dir}")
-    _progress(2, 3, "Building graph visualization...")
+    _progress(viz_step - 1, total_steps, "Building graph visualization...")
 
     graph_data = build_graph_data(filtered_graph, verbose=True)
     html = render_interactive_html(graph_data)
 
     html_path = output_dir / "graph_visualization.html"
     html_path.write_text(html, encoding="utf-8")
-    _progress(3, 3, f"✓ Generated visualization: {html_path.name}", newline=True)
+    _progress(total_steps, total_steps, f"✓ Generated visualization: {html_path.name}", newline=True)
 
     # ===== SUMMARY =====
     print("\n" + "=" * 80)
@@ -1165,11 +1169,10 @@ def _process(
     print(f"  • {index_output.name}")
     print(f"      {len(graph.classes)} classes, {len(graph.methods)} methods")
     print(f"  • {validated_path.name}")
-    print(
-        f"      {len(filtered_graph.resolved_call_edges)} edges ({100 - report_dict['edges_removed_pct']:.1f}% of original)"
-    )
+    edges_pct = 100 - report_dict.get("edges_removed_pct", 0.0)
+    print(f"      {len(filtered_graph.resolved_call_edges)} edges ({edges_pct:.1f}% of original)")
     print(f"  • {report_path.name}")
-    print("      Validation metrics")
+    print(f"      Validation metrics")
     print(f"  • {html_path.name}")
     print("      Interactive graph with 3 tabs (Interactive | Graphviz | JSON)")
     print(f"\nView graph: file://{html_path}")
@@ -1228,6 +1231,51 @@ def _prompt_yn(prompt_text: str, default: bool = False) -> bool:
         continue
 
 
+
+_JIDRA_CLAUDE_MD_MARKER = "<!-- jidra-managed -->"
+
+_JIDRA_CLAUDE_MD_BLOCK = """{marker}
+## JIDRA — Code Graph Tools (MANDATORY)
+
+JIDRA is configured for this repository. You MUST follow these rules:
+
+1. **ALWAYS call a JIDRA tool first** before reading any file, running grep, or using glob — for any question about code structure, dependencies, call flows, or method implementations.
+2. **If a JIDRA tool returns `suggestions`** instead of a result, it means the selector didn't match exactly. Pick the best suggestion and immediately retry with that selector. Do NOT fall back to file reads.
+3. **Only fall back to file reads** if JIDRA explicitly returns no data AND suggestions are exhausted.
+
+### When to use each tool
+- `jidra_get_method_context` — understanding what a method/component does, its callers, callees, fields
+- `jidra_get_agent_flow` — tracing what a method calls downstream
+- `jidra_get_method_source` — reading a specific method's implementation
+- `jidra_get_call_chain` — checking if/how two methods are connected
+- `jidra_analyze_stack_trace` — debugging an exception
+{marker}"""
+
+
+def _write_claude_md(repo: Path, graph_path: Path) -> None:
+    """Write or update the JIDRA rules block in CLAUDE.md."""
+    claude_md = repo / "CLAUDE.md"
+    block = _JIDRA_CLAUDE_MD_BLOCK.format(marker=_JIDRA_CLAUDE_MD_MARKER)
+
+    if claude_md.exists():
+        existing = claude_md.read_text(encoding="utf-8")
+        # Replace existing jidra block if present
+        if _JIDRA_CLAUDE_MD_MARKER in existing:
+            import re
+            pattern = re.compile(
+                re.escape(_JIDRA_CLAUDE_MD_MARKER) + ".*?" + re.escape(_JIDRA_CLAUDE_MD_MARKER),
+                re.DOTALL,
+            )
+            updated = pattern.sub(block, existing)
+            claude_md.write_text(updated, encoding="utf-8")
+        else:
+            claude_md.write_text(existing.rstrip() + "\n\n" + block + "\n", encoding="utf-8")
+    else:
+        claude_md.write_text(block + "\n", encoding="utf-8")
+
+    print(f"✓ CLAUDE.md updated with JIDRA rules: {claude_md}\n")
+
+
 def _up() -> None:
     print(f"\n{'=' * 80}")
     print("JIDRA ONE-COMMAND SETUP")
@@ -1242,10 +1290,17 @@ def _up() -> None:
     codebase_path = repo / build_sub_dir if build_sub_dir != "." else repo
     build_dir = build_sub_dir if build_sub_dir != "." else None
 
-    actuator_url = _prompt(
-        "Spring Boot actuator URL (leave blank to use docker-compose)", "", optional=True
-    )
-    skip_build = _prompt_yn("Skip Java build step (assume already built)?", False)
+    from .ts_filters import detect_language
+    lang = detect_language(repo)
+    print(f"   Detected language: {lang}")
+
+    is_typescript = lang == "typescript"
+    if is_typescript:
+        actuator_url = None
+        skip_build = False
+    else:
+        actuator_url = _prompt("Spring Boot actuator URL (leave blank to use docker-compose)", "", optional=True)
+        skip_build = _prompt_yn("Skip Java build step (assume already built)?", False)
 
     write_config = _prompt_yn("Write MCP config to <repo>/.mcp.json?", True)
     watch = _prompt_yn("Watch for file changes? (keeps jidra up running)", False)
@@ -1316,6 +1371,8 @@ def _up() -> None:
             json.dumps(settings, indent=2, ensure_ascii=True), encoding="utf-8"
         )
         print(f"\n✓ MCP config written to: {settings_path}\n")
+
+        _write_claude_md(repo, graph_validated_path)
     else:
         cmd = " ".join(
             [
@@ -1334,13 +1391,15 @@ def _up() -> None:
         print(f"  Codex / other: command: {cmd}\n")
 
     if watch:
-        print("[3/3] WATCHING FOR CHANGES\n")
-        print("JIDRA is ready!\n")
+        watch_ext = (".ts", ".tsx") if is_typescript else (".java",)
+        watch_ext_str = "*.ts / *.tsx" if is_typescript else "*.java"
+        print(f"[3/3] WATCHING FOR CHANGES\n")
+        print(f"JIDRA is ready!\n")
         print(f"   Graph:   {graph_validated_path}")
         print(f"   Config:  {settings_path}")
         print(f"\n   Open Claude Code in {repo} and JIDRA tools will be available.")
-        print(f"   Watching {codebase_path}/**/*.java for changes (full re-validate on each)...\n")
-        print("   Press Ctrl+C to stop.\n")
+        print(f"   Watching {codebase_path}/**/{watch_ext_str} for changes (full re-index on each)...\n")
+        print(f"   Press Ctrl+C to stop.\n")
 
         try:
             from watchdog.observers import Observer
@@ -1348,11 +1407,11 @@ def _up() -> None:
 
             rebuild_in_progress = threading.Event()
 
-            class JavaFileHandler(FileSystemEventHandler):
+            class SourceFileHandler(FileSystemEventHandler):
                 def on_modified(self, event):
                     if rebuild_in_progress.is_set() or event.is_directory:
                         return
-                    if not event.src_path.endswith(".java"):
+                    if not any(event.src_path.endswith(ext) for ext in watch_ext):
                         return
 
                     rebuild_in_progress.set()
@@ -1376,7 +1435,7 @@ def _up() -> None:
                         rebuild_in_progress.clear()
 
             observer = Observer()
-            observer.schedule(JavaFileHandler(), str(codebase_path), recursive=True)
+            observer.schedule(SourceFileHandler(), str(codebase_path), recursive=True)
             observer.start()
 
             try:
