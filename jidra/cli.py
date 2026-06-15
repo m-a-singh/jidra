@@ -609,7 +609,9 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="jidra", description="JIDRA Java trace/context CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    index_parser = subparsers.add_parser("index", help="Build graph JSONL from a Java or TypeScript codebase")
+    index_parser = subparsers.add_parser(
+        "index", help="Build graph JSONL from a Java or TypeScript codebase"
+    )
     index_parser.add_argument("--codebase", required=True, help="Path to repository root")
     index_parser.add_argument(
         "--output", required=True, help="Output graph file or output directory"
@@ -847,7 +849,9 @@ def _parse_args() -> argparse.Namespace:
         "--actuator-url",
         help="Spring Boot actuator URL (e.g. http://localhost:8080). If omitted, uses Docker. Java only.",
     )
-    process_parser.add_argument("--port", type=int, default=8080, help="Docker container port (Java only)")
+    process_parser.add_argument(
+        "--port", type=int, default=8080, help="Docker container port (Java only)"
+    )
     process_parser.add_argument(
         "--timeout", type=int, default=180, help="Actuator health check timeout (Java only)"
     )
@@ -857,7 +861,9 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip Java build (assume already built). Java only.",
     )
-    process_parser.add_argument("--build-dir", help="Build directory for multi-module projects (Java only)")
+    process_parser.add_argument(
+        "--build-dir", help="Build directory for multi-module projects (Java only)"
+    )
 
     cost_roi_parser = subparsers.add_parser(
         "cost-roi", help="Measure token savings and LLM cost reduction from your graph"
@@ -1065,6 +1071,7 @@ def _process(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     from .ts_filters import detect_language
+
     lang = detect_language(codebase_path)
 
     is_typescript = lang == "typescript"
@@ -1077,13 +1084,23 @@ def _process(
 
     index_output = output_dir / "graph.jsonl"
     try:
+
         def on_class_parsed(class_count):
-            print(f"     AST:  [████░░░░░░░░░░░░░░░░] ~30% • Parsing {class_count} classes...", end="\r", flush=True)
+            print(
+                f"     AST:  [████░░░░░░░░░░░░░░░░] ~30% • Parsing {class_count} classes...",
+                end="\r",
+                flush=True,
+            )
 
         _index(str(codebase_path), str(index_output), on_progress=on_class_parsed, _quiet=True)
         graph = load_graph_jsonl(index_output)
         print()  # newline after AST progress
-        _progress(1, total_steps, f"✓ Indexed {len(graph.classes)} classes, {len(graph.methods)} methods, {len(graph.resolved_call_edges)} edges", newline=True)
+        _progress(
+            1,
+            total_steps,
+            f"✓ Indexed {len(graph.classes)} classes, {len(graph.methods)} methods, {len(graph.resolved_call_edges)} edges",
+            newline=True,
+        )
     except Exception as e:
         raise SystemExit(f"Indexing failed: {e}")
 
@@ -1142,11 +1159,18 @@ def _process(
             "edges_before": validation_report.edges_before,
             "edges_after": validation_report.edges_after,
             "edges_removed": validation_report.edges_removed,
-            "edges_removed_pct": round(100 * validation_report.edges_removed / max(1, validation_report.edges_before), 1),
+            "edges_removed_pct": round(
+                100 * validation_report.edges_removed / max(1, validation_report.edges_before), 1
+            ),
             "callsites_upgraded": validation_report.callsites_upgraded,
         }
         report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
-        _progress(2, total_steps, f"✓ Removed {validation_report.edges_removed} phantom edges ({report_dict['edges_removed_pct']:.1f}%)", newline=True)
+        _progress(
+            2,
+            total_steps,
+            f"✓ Removed {validation_report.edges_removed} phantom edges ({report_dict['edges_removed_pct']:.1f}%)",
+            newline=True,
+        )
 
     # ===== FINAL STEP: VISUALIZE (Generate interactive HTML) =====
     viz_step = total_steps
@@ -1159,7 +1183,9 @@ def _process(
 
     html_path = output_dir / "graph_visualization.html"
     html_path.write_text(html, encoding="utf-8")
-    _progress(total_steps, total_steps, f"✓ Generated visualization: {html_path.name}", newline=True)
+    _progress(
+        total_steps, total_steps, f"✓ Generated visualization: {html_path.name}", newline=True
+    )
 
     # ===== SUMMARY =====
     print("\n" + "=" * 80)
@@ -1231,7 +1257,6 @@ def _prompt_yn(prompt_text: str, default: bool = False) -> bool:
         continue
 
 
-
 _JIDRA_CLAUDE_MD_MARKER = "<!-- jidra-managed -->"
 
 _JIDRA_CLAUDE_MD_BLOCK = """{marker}
@@ -1262,6 +1287,7 @@ def _write_claude_md(repo: Path, graph_path: Path) -> None:
         # Replace existing jidra block if present
         if _JIDRA_CLAUDE_MD_MARKER in existing:
             import re
+
             pattern = re.compile(
                 re.escape(_JIDRA_CLAUDE_MD_MARKER) + ".*?" + re.escape(_JIDRA_CLAUDE_MD_MARKER),
                 re.DOTALL,
@@ -1291,6 +1317,7 @@ def _up() -> None:
     build_dir = build_sub_dir if build_sub_dir != "." else None
 
     from .ts_filters import detect_language
+
     lang = detect_language(repo)
     print(f"   Detected language: {lang}")
 
@@ -1299,7 +1326,9 @@ def _up() -> None:
         actuator_url = None
         skip_build = False
     else:
-        actuator_url = _prompt("Spring Boot actuator URL (leave blank to use docker-compose)", "", optional=True)
+        actuator_url = _prompt(
+            "Spring Boot actuator URL (leave blank to use docker-compose)", "", optional=True
+        )
         skip_build = _prompt_yn("Skip Java build step (assume already built)?", False)
 
     write_config = _prompt_yn("Write MCP config to <repo>/.mcp.json?", True)
@@ -1398,7 +1427,9 @@ def _up() -> None:
         print(f"   Graph:   {graph_validated_path}")
         print(f"   Config:  {settings_path}")
         print(f"\n   Open Claude Code in {repo} and JIDRA tools will be available.")
-        print(f"   Watching {codebase_path}/**/{watch_ext_str} for changes (full re-index on each)...\n")
+        print(
+            f"   Watching {codebase_path}/**/{watch_ext_str} for changes (full re-index on each)...\n"
+        )
         print(f"   Press Ctrl+C to stop.\n")
 
         try:
