@@ -7,6 +7,7 @@ from .context_builder import build_method_context
 from .flow_stitcher import stitch_flow
 from .graph_io import load_graph_jsonl
 from .selector import (
+    _fuzzy_suggestions,
     _method_ambiguous_error,
     _method_not_found_error,
     _resolve_method_selector,
@@ -59,7 +60,12 @@ class JidraEngine:
     def _resolve_single_method(self, selector: str) -> dict:
         candidates = _resolve_method_selector(self.graph, selector)
         if not candidates:
-            return {"error": _method_not_found_error(selector)}
+            suggestions = _fuzzy_suggestions(self.graph, selector)
+            return {
+                "error": f"No exact match for '{selector}' in the graph.",
+                "action": "Pick the best match from suggestions and retry with that selector.",
+                "suggestions": suggestions,
+            }
         if len(candidates) > 1:
             return {"error": _method_ambiguous_error(selector, candidates)}
         return {"method": candidates[0]}

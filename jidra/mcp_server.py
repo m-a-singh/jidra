@@ -173,10 +173,9 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
         graph_path: str | None = None,
         max_chars: int = 12000,
     ) -> dict:
-        """ALWAYS use this instead of Read/Glob/Grep when exploring Java code. Returns source,
-        all resolved call edges with target method IDs, callers, class hierarchy, and field access —
-        everything in one call. For any callee you want to explore deeper, call this tool again
-        with that method's name. Never open Java files manually when this tool is available."""
+        """TRIGGER: any question about what a class/method/component does, what it calls, who calls it, where something is defined, or how two things are connected. Call this BEFORE reading any file or running grep.
+        Returns source, all resolved call edges with target method IDs, callers, class hierarchy, and field access — everything in one call.
+        If the selector returns suggestions instead of a result, pick the best match and retry immediately with that selector."""
         engine = JidraEngine(graph_path or default_path)
         return engine.get_method_context(method=method, max_chars=max_chars)
 
@@ -201,10 +200,9 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
         depth: int = 4,
         top_n: int = 4,
     ) -> dict:
-        """Compact version of jidra_get_flow optimized for reasoning. Use this after
-        jidra_get_method_context to explore the call graph without reading files — filters
-        out noise, ranks by business importance, flags uncertain edges. Replaces Grep/Glob
-        for understanding what a method calls downstream."""
+        """TRIGGER: any question about what a method/component calls downstream or what its execution path looks like. Call this BEFORE grepping or reading files.
+        Compact call graph optimized for reasoning — filters noise, ranks by business importance, flags uncertain edges.
+        If selector returns suggestions, pick the best match and retry immediately."""
         engine = JidraEngine(graph_path or default_path)
         return engine.get_agent_flow(method=method, depth=depth, top_n=top_n)
 
@@ -213,8 +211,9 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
         method: str,
         graph_path: str | None = None,
     ) -> dict:
-        """Get source code for a specific Java method. Use this instead of Read when you
-        want just one method's implementation — no need to find the file or read the whole class."""
+        """TRIGGER: any request to see the implementation of a specific method or function. Call this BEFORE opening a file.
+        Returns the source of just that method — no need to find or read the whole file.
+        If selector returns suggestions, pick the best match and retry immediately."""
         engine = JidraEngine(graph_path or default_path)
         return engine.get_method_source(method=method)
 
@@ -225,9 +224,9 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
         graph_path: str | None = None,
         max_depth: int = 6,
     ) -> dict:
-        """Trace how one Java method reaches another through the call graph. Use this instead
-        of manually grepping for callers/callees — replaces multiple Grep/Read calls when you
-        need to know if and how two methods are connected."""
+        """TRIGGER: any question about whether or how two methods/components are connected, or tracing a path between them. Call this BEFORE grepping.
+        Returns the call chain between two methods if one exists.
+        If a selector returns suggestions, pick the best match and retry immediately."""
         engine = JidraEngine(graph_path or default_path)
         return engine.get_call_chain(
             from_method=from_method, to_method=to_method, max_depth=max_depth
@@ -241,7 +240,7 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
         max_nodes: int = 80,
         include_utility: bool = False,
     ) -> dict:
-        """Analyze a Java stack trace against the codebase graph. Given a raw stack trace,
+        """Analyze a stack trace against the codebase graph. Given a raw stack trace,
         matches each frame to known methods in the graph and returns a focused flow map
         around the failure point with suggested debug locations. Use this whenever
         investigating an exception or error report."""
@@ -258,7 +257,7 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
         graph_path: str | None = None,
         codebase: str | None = None,
     ) -> dict:
-        """Call this after modifying Java source files to keep the JIDRA graph current."""
+        """Call this after modifying source files to keep the JIDRA graph current."""
         from .cli import _index
         from .graph_io import load_graph_jsonl, resolve_graph_paths
         from pathlib import Path
@@ -297,7 +296,7 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the JIDRA MCP server")
     parser.add_argument("--graph", default=None, help="Path to graph.jsonl")
-    parser.add_argument("--codebase", default=None, help="Path to Java codebase (for reindex tool)")
+    parser.add_argument("--codebase", default=None, help="Path to codebase root (for reindex tool)")
     args = parser.parse_args()
     run_mcp_server(default_graph_path=args.graph, codebase_path=args.codebase)
 
