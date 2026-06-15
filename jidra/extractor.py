@@ -1033,9 +1033,9 @@ def build_graph(codebase_root: Path, on_progress=None) -> Graph:
         return build_ts_graph(codebase_root, on_progress=on_progress)
 
     if lang == "python":
-        from .py_extractor import build_py_graph
+        from .py_extractor import build_py_graph as build_py_graph_ast
 
-        return build_py_graph(codebase_root, on_progress=on_progress)
+        return build_py_graph_ast(codebase_root, on_progress=on_progress)
 
     # Java path
     parser = make_parser()

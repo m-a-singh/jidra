@@ -1,8 +1,8 @@
-# JIDRA: Enterprise Java Context Backend for LLM Workflows
+# JIDRA: Enterprise Codebase Context Backend for LLM Workflows
 
-**JIDRA = Java Integrated Graph Reduction & Analysis**
+**JIDRA = Java/TypeScript/Python Integrated Graph Reduction & Analysis**
 
-JIDRA is a structured context backend that reduces LLM input tokens by **73-95%** for code-native queries by giving Claude a pre-analyzed call graph instead of raw source files.
+JIDRA is a structured context backend that reduces LLM input tokens by **68-95%** for code-native queries by giving Claude a pre-analyzed call graph instead of raw source files. Multi-language support: **Java** (85% resolution), **TypeScript** (80% resolution), **Python** (68.5% resolution).
 
 ### What This Means
 
@@ -23,9 +23,10 @@ This project is intentionally focused and graph-driven.
 
 ## Pitch (TL;DR)
 
-- **Index once** → Get a deterministic, validated call graph (AST + Spring Actuator)
-- **Reduce noise** → Remove 71-78% phantom edges via runtime bean validation
-- **Generate context** → 73-95% smaller prompt-ready context for Claude/Codex/Gemini
+- **Multi-language** → Java, TypeScript, Python (auto-detected)
+- **Index once** → Get a deterministic call graph (AST-based, language-optimized)
+- **Reduce noise** → Remove phantom edges (Java: runtime validation, TS/Python: static analysis)
+- **Generate context** → 68-95% smaller prompt-ready context for Claude/Codex/Gemini
 - **Trace execution** → See likely business flow with uncertainty markers
 - **Reduce LLM cost** → Proven token reduction on code-native workflows (measured on real projects)
 
@@ -41,13 +42,13 @@ Same cost today at Sonnet pricing because output tokens dominate — but 606k fe
 
 ## What JIDRA Does
 
-- **Indexes** Java source into a deterministic call graph
-- **Validates** with Spring Actuator to remove phantom edges
-- **Generates** noise-free context (87-95% smaller)
-- **Traces** method/route execution with uncertainty markers
+- **Indexes** Java, TypeScript, and Python source into deterministic call graphs
+- **Validates** with language-specific strategies (Spring Actuator for Java, static analysis for TS/Python)
+- **Generates** noise-free context (68-95% smaller depending on language)
+- **Traces** method/function execution with uncertainty markers
 - **Exports** as JSON, MCP tools, or interactive HTML
-- **Integrates** with Claude/Codex via MCP
-- **Reduces** LLM token costs by 87-95% (proven)
+- **Integrates** with Claude/Codex/Gemini via MCP
+- **Reduces** LLM token costs by 68-95% (proven on real projects)
 
 ## What JIDRA Does NOT Do (By Design)
 
@@ -66,6 +67,8 @@ jidra/
 ├── pyproject.toml
 ├── requirements.txt
 ├── README.md
+├── ENTERPRISE_TYPESCRIPT_PROOF.md
+├── ENTERPRISE_PYTHON_PROOF.md
 └── jidra/
     ├── __init__.py
     ├── cli.py
@@ -78,7 +81,12 @@ jidra/
     ├── context_builder.py
     ├── extractor.py
     ├── exporter.py
-    ├── filters.py
+    ├── ts_filters.py          # TypeScript language detection
+    ├── ts_extractor.py        # TypeScript extraction
+    ├── py_filters.py          # Python language detection
+    ├── py_extractor.py        # Python extraction (AST + symbol table)
+    ├── py_type_provider.py    # Python type validation (Pyright)
+    ├── filters.py             # Legacy language detection
     └── cache.py
 ```
 
@@ -391,7 +399,12 @@ python -m jidra.cli error-doc \
 jidra index --codebase <path> --output <path-or-dir>
 ```
 
-Builds graph JSONL from Java source using tree-sitter parser pipeline.
+Builds graph JSONL from source code (auto-detects language):
+- **Java**: tree-sitter-based AST extraction + call resolution
+- **TypeScript**: ts-morph-based extraction (Docker sidecar)
+- **Python**: libcst/AST-based extraction + symbol table type inference
+
+Language detection is automatic via manifest files (`pom.xml`, `package.json`, `pyproject.toml`, etc.).
 
 ## `trace`
 
