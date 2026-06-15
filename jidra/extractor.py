@@ -1024,8 +1024,10 @@ def _resolve_calls(graph: Graph) -> None:
 
 def build_graph(codebase_root: Path, on_progress=None) -> Graph:
     from .ts_filters import detect_language
+
     if detect_language(codebase_root) == "typescript":
         from .ts_extractor import build_ts_graph
+
         return build_ts_graph(codebase_root, on_progress=on_progress)
 
     # Java path

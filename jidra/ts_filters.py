@@ -40,11 +40,16 @@ def detect_language(root: Path) -> str:
     """Return 'typescript' or 'java' by inspecting repo-level manifest files."""
     if (root / "package.json").exists():
         return "typescript"
-    if (root / "pom.xml").exists() or (root / "build.gradle").exists() or (root / "build.gradle.kts").exists():
+    if (
+        (root / "pom.xml").exists()
+        or (root / "build.gradle").exists()
+        or (root / "build.gradle.kts").exists()
+    ):
         return "java"
     # Fallback: count source files
     ts_count = sum(
-        1 for _ in root.rglob("*.ts")
+        1
+        for _ in root.rglob("*.ts")
         if not _.name.endswith(".d.ts") and should_include_dir(_.parent)
     )
     java_count = sum(1 for _ in root.rglob("*.java") if should_include_dir(_.parent))

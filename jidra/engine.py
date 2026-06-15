@@ -9,7 +9,6 @@ from .graph_io import load_graph_jsonl
 from .selector import (
     _fuzzy_suggestions,
     _method_ambiguous_error,
-    _method_not_found_error,
     _resolve_method_selector,
 )
 
