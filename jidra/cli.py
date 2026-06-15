@@ -1075,7 +1075,8 @@ def _process(
     lang = detect_language(codebase_path)
 
     is_typescript = lang == "typescript"
-    total_steps = 2 if is_typescript else 3
+    is_python = lang == "python"
+    total_steps = 2 if (is_typescript or is_python) else 3
 
     # ===== STEP 1: INDEX (Build static call graph) =====
     print(f"\n[1/{total_steps}] INDEXING CODEBASE ({lang.upper()})")
@@ -1105,18 +1106,19 @@ def _process(
         raise SystemExit(f"Indexing failed: {e}")
 
     # ===== STEP 2: VALIDATE (Java only — filter phantom edges with Spring Actuator) =====
-    if is_typescript:
-        # No actuator for TypeScript — the static graph is the final graph
+    if is_typescript or is_python:
+        # No actuator for TypeScript or Python — the static graph is the final graph
         validated_path = output_dir / "graph_validated.jsonl"
         records = graph_records(graph)
         export_jsonl(validated_path, records)
+        lang_note = "TypeScript" if is_typescript else "Python"
         report_dict = {
             "total_classes": len(graph.classes),
             "edges_before": len(graph.resolved_call_edges),
             "edges_after": len(graph.resolved_call_edges),
             "edges_removed": 0,
             "edges_removed_pct": 0.0,
-            "note": "TypeScript — actuator validation not applicable",
+            "note": f"{lang_note} — actuator validation not applicable",
         }
         report_path = output_dir / "validation_report.json"
         report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
@@ -1420,8 +1422,15 @@ def _up() -> None:
         print(f"  Codex / other: command: {cmd}\n")
 
     if watch:
-        watch_ext = (".ts", ".tsx") if is_typescript else (".java",)
-        watch_ext_str = "*.ts / *.tsx" if is_typescript else "*.java"
+        if is_typescript:
+            watch_ext = (".ts", ".tsx")
+            watch_ext_str = "*.ts / *.tsx"
+        elif is_python:
+            watch_ext = (".py",)
+            watch_ext_str = "*.py"
+        else:  # Java
+            watch_ext = (".java",)
+            watch_ext_str = "*.java"
         print("[3/3] WATCHING FOR CHANGES\n")
         print("JIDRA is ready!\n")
         print(f"   Graph:   {graph_validated_path}")
