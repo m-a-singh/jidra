@@ -1198,7 +1198,7 @@ def _process(
     edges_pct = 100 - report_dict.get("edges_removed_pct", 0.0)
     print(f"      {len(filtered_graph.resolved_call_edges)} edges ({edges_pct:.1f}% of original)")
     print(f"  • {report_path.name}")
-    print(f"      Validation metrics")
+    print("      Validation metrics")
     print(f"  • {html_path.name}")
     print("      Interactive graph with 3 tabs (Interactive | Graphviz | JSON)")
     print(f"\nView graph: file://{html_path}")
@@ -1422,15 +1422,15 @@ def _up() -> None:
     if watch:
         watch_ext = (".ts", ".tsx") if is_typescript else (".java",)
         watch_ext_str = "*.ts / *.tsx" if is_typescript else "*.java"
-        print(f"[3/3] WATCHING FOR CHANGES\n")
-        print(f"JIDRA is ready!\n")
+        print("[3/3] WATCHING FOR CHANGES\n")
+        print("JIDRA is ready!\n")
         print(f"   Graph:   {graph_validated_path}")
         print(f"   Config:  {settings_path}")
         print(f"\n   Open Claude Code in {repo} and JIDRA tools will be available.")
         print(
             f"   Watching {codebase_path}/**/{watch_ext_str} for changes (full re-index on each)...\n"
         )
-        print(f"   Press Ctrl+C to stop.\n")
+        print("   Press Ctrl+C to stop.\n")
 
         try:
             from watchdog.observers import Observer
