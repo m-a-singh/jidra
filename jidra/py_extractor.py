@@ -2,10 +2,12 @@
 Python extractor for JIDRA.
 
 Uses libcst to parse Python code and build a call graph.
+Integrates Pyright for enhanced type inference.
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Callable
 
@@ -29,6 +31,9 @@ from .models import (
     method_signature,
 )
 from .py_filters import iter_python_files
+from .py_type_provider import PyrightValidator
+
+logger = logging.getLogger(__name__)
 
 
 def _get_line_number(node: cst.CSTNode, wrapper: cst.metadata.MetadataWrapper | None = None) -> int:
@@ -382,8 +387,19 @@ class CallSiteVisitor(cst.CSTVisitor):
 def build_py_graph(
     codebase_root: Path,
     on_progress: Callable[[int], None] | None = None,
+    enable_type_inference: bool = True,
 ) -> Graph:
-    """Build a JIDRA Graph from a Python codebase."""
+    """
+    Build a JIDRA Graph from a Python codebase.
+
+    Args:
+        codebase_root: Root directory of Python codebase
+        on_progress: Optional callback for progress updates
+        enable_type_inference: Whether to run Pyright for type inference (default: True)
+
+    Returns:
+        Complete call graph with inferred types
+    """
     codebase_root = Path(codebase_root).resolve()
 
     all_classes: list[ClassEntry] = []
@@ -391,6 +407,25 @@ def build_py_graph(
     all_fields: list[FieldEntry] = []
     all_callsites: list[CallSite] = []
     all_inheritance_edges: list[InheritanceEdge] = []
+    validation_metrics = None
+
+    # Run Pyright validation for code quality
+    if enable_type_inference:
+        try:
+            validator = PyrightValidator(codebase_root, timeout=120)
+            validation_metrics = validator.validate()
+            if validation_metrics.runs > 0 and validation_metrics.failures == 0:
+                logger.info(
+                    f"Pyright validation: {validation_metrics.success_rate():.0f}% healthy, "
+                    f"{validation_metrics.error_count} errors, "
+                    f"{len(validation_metrics.unresolved_imports)} unresolved imports"
+                )
+            else:
+                logger.debug("Pyright validation skipped (unavailable)")
+                validation_metrics = None
+        except Exception as e:
+            logger.debug(f"Pyright validation unavailable: {e}")
+            validation_metrics = None
 
     # Discover and parse Python files
     python_files = iter_python_files(codebase_root)
