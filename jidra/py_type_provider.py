@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ValidationMetrics:
     """Metrics for code validation quality."""
+
     files_analyzed: int = 0
     error_count: int = 0
     warning_count: int = 0
