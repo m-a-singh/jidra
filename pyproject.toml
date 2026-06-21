@@ -11,6 +11,8 @@ license = {text = "MIT"}
 dependencies = [
   "tree-sitter>=0.22.0",
   "tree-sitter-java>=0.21.0",
+  "libcst>=0.4.10",
+  "pyright>=1.1.330",
   "litellm>=1.82.0",
   "pyyaml>=6.0.0",
   "mcp>=1.27.0",

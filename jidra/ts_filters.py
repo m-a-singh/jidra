@@ -37,7 +37,7 @@ def iter_ts_files(root: Path) -> list[Path]:
 
 
 def detect_language(root: Path) -> str:
-    """Return 'typescript' or 'java' by inspecting repo-level manifest files."""
+    """Return 'typescript', 'java', or 'python' by inspecting repo-level manifest files."""
     if (root / "package.json").exists():
         return "typescript"
     if (
@@ -46,6 +46,15 @@ def detect_language(root: Path) -> str:
         or (root / "build.gradle.kts").exists()
     ):
         return "java"
+    # Python checks
+    if (
+        (root / "pyproject.toml").exists()
+        or (root / "setup.py").exists()
+        or (root / "setup.cfg").exists()
+        or (root / "Pipfile").exists()
+    ):
+        return "python"
+
     # Fallback: count source files
     ts_count = sum(
         1
@@ -53,4 +62,8 @@ def detect_language(root: Path) -> str:
         if not _.name.endswith(".d.ts") and should_include_dir(_.parent)
     )
     java_count = sum(1 for _ in root.rglob("*.java") if should_include_dir(_.parent))
+    py_count = sum(1 for _ in root.rglob("*.py") if should_include_dir(_.parent))
+
+    if py_count > 0 and py_count >= max(ts_count, java_count):
+        return "python"
     return "typescript" if ts_count > java_count else "java"
