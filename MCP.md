@@ -1,6 +1,6 @@
 # JIDRA MCP Layer
 
-JIDRA includes a minimal MCP server so agents can call core graph-backed methods as tools.
+JIDRA includes a minimal MCP server so agents can call core graph-backed methods as tools. Works identically across all supported languages: **Java**, **TypeScript**, and **Python**.
 
 ## Install
 
@@ -48,7 +48,7 @@ jidra mcp --graph /path/to/graph.jsonl
 - `jidra_get_call_chain`:
   verifies path existence between two methods within depth bound.
 - `jidra_analyze_stack_trace`:
-  analyzes raw Java stack trace text, matches frames to graph methods, identifies primary anchor, and returns deterministic debug locations plus focused flow map summary.
+  analyzes raw stack trace text (Java/Python/TypeScript), matches frames to graph methods, identifies primary anchor, and returns deterministic debug locations plus focused flow map summary.
 
 All tools are graph-backed and deterministic for a fixed graph input. They do not run LLM diagnosis and do not mutate graph structure.
 
