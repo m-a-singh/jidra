@@ -1,9 +1,8 @@
 """JIDRA Cost/ROI Calculator — derived from actual graph_validated.jsonl, not estimates."""
-
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -22,7 +21,6 @@ LLM_PRICING = {
 _CHARS_PER_TOKEN = 4
 
 _ANALYSIS_QUESTION = """Analyze this method:
-
 1. What does it do? Describe the main processing steps.
 2. Identify 2-3 potential performance issues or bottlenecks.
 3. How does it interact with other components?
@@ -30,10 +28,10 @@ _ANALYSIS_QUESTION = """Analyze this method:
 Be technical and specific."""
 
 
+
 @dataclass
 class GraphStats:
     """Facts measured directly from graph_validated.jsonl."""
-
     num_classes: int
     num_methods: int
     num_endpoints: int
@@ -47,18 +45,17 @@ class GraphStats:
 @dataclass
 class MethodProof:
     """Token measurement for a specific method — offline (no API calls)."""
-
     method_qualified_name: str
     method_file: str
-    method_lines: str  # e.g. "345-568"
+    method_lines: str                  # e.g. "345-568"
 
     # JIDRA side
     jidra_tokens: int
-    jidra_context_preview: str  # first 200 chars of what JIDRA returns
+    jidra_context_preview: str         # first 200 chars of what JIDRA returns
 
     # Naive side
     naive_tokens: int
-    naive_files: list[str]  # source files included in naive context
+    naive_files: list[str]             # source files included in naive context
 
     # Derived
     token_reduction_pct: float
@@ -68,13 +65,12 @@ class MethodProof:
     cost_without_jidra: float = 0.0
     cost_with_jidra: float = 0.0
     savings_per_query: float = 0.0
-    annual_savings: float = 0.0  # savings_per_query * num_queries
+    annual_savings: float = 0.0        # savings_per_query * num_queries
 
 
 @dataclass
 class MethodProofOnline(MethodProof):
     """Extends MethodProof with real Claude API measurements."""
-
     # Traditional (raw source)
     api_traditional_input_tokens: int = 0
     api_traditional_output_tokens: int = 0
@@ -93,10 +89,10 @@ class MethodProofOnline(MethodProof):
     api_annual_savings: float = 0.0
 
 
+
 @dataclass
 class CostBreakdown:
     """Per-query cost comparison (graph-wide averages)."""
-
     model: str
     without_jidra: float
     with_jidra: float
@@ -112,7 +108,6 @@ class CostBreakdown:
 @dataclass
 class ROIAnalysis:
     """Full annual ROI analysis (graph-wide averages)."""
-
     model: str
     num_queries: int
     graph_stats: GraphStats
@@ -134,9 +129,7 @@ class ROIAnalysis:
                 self.payback_months = (self.jidra_setup_cost / net_savings) * 12
             if self.annual_savings > 0:
                 net_year1 = net_savings - self.jidra_setup_cost
-                self.year_1_roi_pct = (
-                    net_year1 / (self.jidra_setup_cost + self.jidra_annual_cost)
-                ) * 100
+                self.year_1_roi_pct = (net_year1 / (self.jidra_setup_cost + self.jidra_annual_cost)) * 100
 
 
 def _chars_to_tokens(chars: int) -> int:
@@ -151,16 +144,13 @@ def _calc_cost(model: str, input_tokens: int, output_tokens: int) -> float:
 def _build_jidra_context(method_node: dict) -> str:
     """Build the JIDRA tool response for a method node — what Claude actually receives."""
     p = method_node.get("payload", {})
-    return json.dumps(
-        {
-            "method": method_node.get("qualified_name"),
-            "source": p.get("source", ""),
-            "class_context": p.get("class_context", ""),
-            "calls": method_node.get("calls", [])[:10],
-            "called_by": method_node.get("called_by", [])[:10],
-        },
-        indent=2,
-    )
+    return json.dumps({
+        "method": method_node.get("qualified_name"),
+        "source": p.get("source", ""),
+        "class_context": p.get("class_context", ""),
+        "calls": method_node.get("calls", [])[:10],
+        "called_by": method_node.get("called_by", [])[:10],
+    }, indent=2)
 
 
 def _collect_naive_files(
@@ -195,7 +185,7 @@ def _collect_naive_files(
             codebase_parts = codebase.resolve().parts
             for i, part in enumerate(parts):
                 if part == codebase_parts[-1]:
-                    relative = Path(*parts[i + 1 :])
+                    relative = Path(*parts[i + 1:])
                     remapped = codebase / relative
                     if remapped.exists():
                         try:
@@ -229,7 +219,9 @@ def _collect_naive_files(
             elif callee_file:
                 file_paths[callee_file] = callee.get("payload", {}).get("source", "")
 
-    naive_source = "\n\n".join(f"// File: {fp}\n{src}" for fp, src in file_paths.items() if src)
+    naive_source = "\n\n".join(
+        f"// File: {fp}\n{src}" for fp, src in file_paths.items() if src
+    )
     return list(file_paths.keys()), naive_source
 
 
@@ -272,25 +264,13 @@ def analyze_method_offline(
 
     # Naive context (raw source files)
     naive_files, naive_source = _collect_naive_files(method_node, node_by_id, codebase)
-    naive_tokens = (
-        _chars_to_tokens(len(naive_source))
-        if naive_source
-        else _chars_to_tokens(
-            sum(
-                len(
-                    node_by_id.get(c.get("target_id") if isinstance(c, dict) else c, {})
-                    .get("payload", {})
-                    .get("source", "")
-                )
-                for c in method_node.get("calls", [])
-            )
-            + len(method_node.get("payload", {}).get("source", ""))
-        )
+    naive_tokens = _chars_to_tokens(len(naive_source)) if naive_source else _chars_to_tokens(
+        sum(len(node_by_id.get(c.get("target_id") if isinstance(c, dict) else c, {}).get("payload", {}).get("source", ""))
+            for c in method_node.get("calls", []))
+        + len(method_node.get("payload", {}).get("source", ""))
     )
 
-    reduction_pct = (
-        (naive_tokens - jidra_tokens) / naive_tokens * 100 if naive_tokens > jidra_tokens else 0.0
-    )
+    reduction_pct = (naive_tokens - jidra_tokens) / naive_tokens * 100 if naive_tokens > jidra_tokens else 0.0
 
     start = method_node.get("start_line", "?")
     end = method_node.get("end_line", "?")
@@ -329,7 +309,6 @@ def analyze_method_online(
     Mirrors the empirical_proof_test.py approach.
     """
     import time
-
     try:
         from anthropic import Anthropic
     except ImportError:
@@ -340,12 +319,10 @@ def analyze_method_online(
 
     # Re-derive the actual context strings
     from .graph_io import load_graph_jsonl
-
     nodes = [json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()]
     node_by_id = {n.get("id"): n for n in nodes}
 
     from .selector import _resolve_method_selector
-
     graph = load_graph_jsonl(graph_path)
     candidates = _resolve_method_selector(graph, method_selector)
     method_node = node_by_id.get(candidates[0].id)
@@ -360,9 +337,7 @@ def analyze_method_online(
         )
 
     client = Anthropic()
-    question = (
-        f"Analyze the {method_node.get('method_name', 'method')} method:\n{_ANALYSIS_QUESTION}"
-    )
+    question = f"Analyze the {method_node.get('method_name', 'method')} method:\n{_ANALYSIS_QUESTION}"
 
     def _call(context: str) -> tuple[int, int, float, str]:
         start = time.time()
@@ -379,9 +354,7 @@ def analyze_method_online(
         print(f"  {elapsed:.1f}s  input={inp}  output={out}  cost=${cost:.5f}")
         return inp, out, cost, answer
 
-    print(
-        f"\nCalling Claude API — Traditional context ({offline.naive_tokens} estimated tokens)..."
-    )
+    print(f"\nCalling Claude API — Traditional context ({offline.naive_tokens} estimated tokens)...")
     trad_in, trad_out, trad_cost, trad_answer = _call(naive_source)
 
     print(f"Calling Claude API — JIDRA context ({offline.jidra_tokens} estimated tokens)...")
@@ -428,7 +401,7 @@ def analyze_graph(graph_path: Path) -> GraphStats:
     nodes = [json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()]
 
     method_nodes = [n for n in nodes if n.get("node_type") == "method"]
-    class_nodes = [n for n in nodes if n.get("node_type") == "class"]
+    class_nodes  = [n for n in nodes if n.get("node_type") == "class"]
 
     jidra_token_sizes = []
     for m in method_nodes:
@@ -443,7 +416,8 @@ def analyze_graph(graph_path: Path) -> GraphStats:
         file_sources.setdefault(fp, []).append(src)
 
     file_token_sizes = [
-        _chars_to_tokens(sum(len(s) for s in srcs)) for srcs in file_sources.values()
+        _chars_to_tokens(sum(len(s) for s in srcs))
+        for srcs in file_sources.values()
     ]
     avg_file_tokens = sum(file_token_sizes) // len(file_token_sizes) if file_token_sizes else 0
 
@@ -480,11 +454,9 @@ class CostCalculator:
         pricing = self.get_llm_pricing(model)
         return (input_tokens * pricing["input"] + output_tokens * pricing["output"]) / 1_000_000
 
-    def calculate_cost_breakdown(
-        self, model: str, stats: GraphStats, avg_output_tokens: int = 1000
-    ) -> CostBreakdown:
+    def calculate_cost_breakdown(self, model: str, stats: GraphStats, avg_output_tokens: int = 1000) -> CostBreakdown:
         cost_without = self.calculate_query_cost(model, stats.avg_naive_tokens, avg_output_tokens)
-        cost_with = self.calculate_query_cost(model, stats.avg_jidra_tokens, avg_output_tokens)
+        cost_with    = self.calculate_query_cost(model, stats.avg_jidra_tokens, avg_output_tokens)
         return CostBreakdown(
             model=model,
             without_jidra=cost_without,
@@ -503,7 +475,7 @@ class CostCalculator:
     ) -> ROIAnalysis:
         breakdown = self.calculate_cost_breakdown(model, stats, avg_output_tokens)
         annual_without = breakdown.without_jidra * num_queries_per_year
-        annual_with = breakdown.with_jidra * num_queries_per_year
+        annual_with    = breakdown.with_jidra    * num_queries_per_year
         return ROIAnalysis(
             model=model,
             num_queries=num_queries_per_year,
@@ -542,7 +514,7 @@ def format_method_proof(proof: MethodProof) -> str:
             f"Without JIDRA: {proof.api_traditional_input_tokens:,} input tokens",
             f"  ({len(proof.naive_files)} source files concatenated)",
             f"With JIDRA:    {proof.api_jidra_input_tokens:,} input tokens",
-            "  (jidra_get_method_context response)",
+            f"  (jidra_get_method_context response)",
             f"Reduction:     {proof.api_token_reduction_pct:.1f}%",
             "",
             "Cost Per Query  (REAL)",
@@ -561,7 +533,7 @@ def format_method_proof(proof: MethodProof) -> str:
             f"Without JIDRA: {proof.naive_tokens:,} tokens",
             f"  ({len(proof.naive_files)} source file(s): {', '.join(Path(f).name for f in proof.naive_files[:3])}{'...' if len(proof.naive_files) > 3 else ''})",
             f"With JIDRA:    {proof.jidra_tokens:,} tokens",
-            "  (jidra_get_method_context response)",
+            f"  (jidra_get_method_context response)",
             f"Reduction:     {proof.token_reduction_pct:.1f}%",
             "",
             "Cost Per Query  (estimated)",
