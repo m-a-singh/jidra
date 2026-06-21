@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SymbolTable:
     """Tracks variable types and scopes."""
+
     scope_stack: list[dict[str, str]] = field(default_factory=list)
 
     def __init__(self):
@@ -205,7 +206,9 @@ class ASTExtractor(ast.NodeVisitor):
             # Track in symbol table
             self.symbol_table.set_type(field_name, type_name or "unknown")
 
-    def _extract_method(self, node: ast.FunctionDef | ast.AsyncFunctionDef, class_entry: ClassEntry):
+    def _extract_method(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef, class_entry: ClassEntry
+    ):
         """Extract method definition."""
         method_name = node.name
         param_types = []

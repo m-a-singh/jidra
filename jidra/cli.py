@@ -1324,6 +1324,7 @@ def _up() -> None:
     print(f"   Detected language: {lang}")
 
     is_typescript = lang == "typescript"
+    is_python = lang == "python"
     if is_typescript:
         actuator_url = None
         skip_build = False
