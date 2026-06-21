@@ -280,7 +280,9 @@ def _endpoint_meta(
     return is_endpoint, http_method, route, controller_route, full_route
 
 
-def _extract_extends_implements(class_node: Node, source: bytes) -> tuple[str | None, list[str]]:
+def _extract_extends_implements(
+    class_node: Node, source: bytes
+) -> tuple[str | None, list[str]]:
     extends_value: str | None = None
     implements_values: list[str] = []
     for child in class_node.children:
@@ -316,7 +318,9 @@ def _get_body_node(class_node: Node) -> Node | None:
     return _find_child(class_node, "class_body")
 
 
-def _extract_fields(class_node: Node, source: bytes, cls: ClassEntry) -> list[FieldEntry]:
+def _extract_fields(
+    class_node: Node, source: bytes, cls: ClassEntry
+) -> list[FieldEntry]:
     out: list[FieldEntry] = []
     body = _get_body_node(class_node)
     if not body:
@@ -366,7 +370,9 @@ def _extract_local_variable_types(body_node: Node, source: bytes) -> dict[str, s
     out: dict[str, str] = {}
     for node in _walk(body_node):
         if node.type == "local_variable_declaration":
-            type_name = _strip_generic(_first_type_text(node, source, default="unknown"))
+            type_name = _strip_generic(
+                _first_type_text(node, source, default="unknown")
+            )
             for decl in _children_by_type(node, "variable_declarator"):
                 ident = _find_child(decl, "identifier")
                 if ident:
@@ -374,21 +380,27 @@ def _extract_local_variable_types(body_node: Node, source: bytes) -> dict[str, s
 
         elif node.type == "resource":
             # try-with-resources: try (Type var = expr) { ... }
-            type_name = _strip_generic(_first_type_text(node, source, default="unknown"))
+            type_name = _strip_generic(
+                _first_type_text(node, source, default="unknown")
+            )
             ident = _find_child(node, "identifier")
             if ident:
                 out[_text(ident, source)] = type_name
 
         elif node.type == "catch_formal_parameter":
             # catch (ExceptionType e)
-            type_name = _strip_generic(_first_type_text(node, source, default="unknown"))
+            type_name = _strip_generic(
+                _first_type_text(node, source, default="unknown")
+            )
             ident = _find_child(node, "identifier")
             if ident:
                 out[_text(ident, source)] = type_name
 
         elif node.type == "enhanced_for_statement":
             # for (Type item : collection)
-            type_name = _strip_generic(_first_type_text(node, source, default="unknown"))
+            type_name = _strip_generic(
+                _first_type_text(node, source, default="unknown")
+            )
             ident = _find_child(node, "identifier")
             if ident:
                 out[_text(ident, source)] = type_name
@@ -518,7 +530,9 @@ def _extract_callsite(
 
         arguments = invocation.child_by_field_name("arguments")
         if arguments:
-            args_count = sum(1 for c in arguments.children if c.type not in {",", "(", ")"})
+            args_count = sum(
+                1 for c in arguments.children if c.type not in {",", "(", ")"}
+            )
 
     line = invocation.start_point[0] + 1
     column = invocation.start_point[1] + 1
@@ -559,7 +573,8 @@ def _extract_methods(
         "extends": cls.extends,
         "implements": cls.implements,
         "fields": [
-            {"name": f.name, "type": f.type_name, "modifiers": f.modifiers} for f in class_fields
+            {"name": f.name, "type": f.type_name, "modifiers": f.modifiers}
+            for f in class_fields
         ],
     }
 
@@ -591,7 +606,9 @@ def _extract_methods(
                 default=cls.name if node.type == "constructor_declaration" else "void",
             )
             parameter_types, parameter_names = _extract_parameters(node, source)
-            body_node = _find_child(node, "block") or _find_child(node, "constructor_body")
+            body_node = _find_child(node, "block") or _find_child(
+                node, "constructor_body"
+            )
             method_annotations = _extract_annotations(node, source)
 
         signature = method_signature(cls.full_name, method_name, parameter_types)
@@ -599,11 +616,17 @@ def _extract_methods(
         end_line = node.end_point[0] + 1
         mid = method_id(signature, cls.file_path, start_line)
 
-        local_types = _extract_local_variable_types(body_node, source) if body_node else {}
+        local_types = (
+            _extract_local_variable_types(body_node, source) if body_node else {}
+        )
         params_map = dict(zip(parameter_names, parameter_types))
         field_reads, field_writes = (
             _extract_field_accesses(
-                body_node, set(fields_map.keys()), set(parameter_names), local_types, source
+                body_node,
+                set(fields_map.keys()),
+                set(parameter_names),
+                local_types,
+                source,
             )
             if body_node
             else ([], [])
@@ -656,13 +679,20 @@ def _extract_methods(
                     )
                 else:
                     receiver_node = invocation.child_by_field_name("object")
-                    receiver_text = _text(receiver_node, source) if receiver_node else None
+                    receiver_text = (
+                        _text(receiver_node, source) if receiver_node else None
+                    )
                     receiver_type_raw, receiver_source = _infer_receiver_type_raw(
                         receiver_text, cls, symbols
                     )
                 calls.append(
                     _extract_callsite(
-                        invocation, source, mid, cls.file_path, receiver_type_raw, receiver_source
+                        invocation,
+                        source,
+                        mid,
+                        cls.file_path,
+                        receiver_type_raw,
+                        receiver_source,
                     )
                 )
 
@@ -714,7 +744,9 @@ def _extract_file(file_path: Path, parser=None) -> Graph:
             extends=extends_name,
             implements=implements_names,
             imports=imports,
-            stereotypes=_class_stereotypes(cls_name, class_annotations, class_node.type),
+            stereotypes=_class_stereotypes(
+                cls_name, class_annotations, class_node.type
+            ),
         )
         classes.append(cls)
 
@@ -742,7 +774,9 @@ def _extract_file(file_path: Path, parser=None) -> Graph:
         class_fields = _extract_fields(class_node, source, cls)
         fields.extend(class_fields)
 
-        class_methods, class_calls = _extract_methods(class_node, source, cls, class_fields)
+        class_methods, class_calls = _extract_methods(
+            class_node, source, cls, class_fields
+        )
         methods.extend(class_methods)
         calls.extend(class_calls)
 
@@ -788,7 +822,9 @@ def _normalize_type(
             owner = ".".join(parts[:-1])
             return owner, "static_import", [owner]
 
-    same_pkg = f"{caller_class.package_name}.{short}" if caller_class.package_name else short
+    same_pkg = (
+        f"{caller_class.package_name}.{short}" if caller_class.package_name else short
+    )
     if same_pkg in all_class_full_names:
         return same_pkg, "same_package", [same_pkg]
 
@@ -851,11 +887,15 @@ def _resolve_calls(graph: Graph) -> None:
     methods_by_full_class: dict[str, list[MethodEntry]] = {}
 
     for m in graph.methods:
-        methods_by_full_class_and_name.setdefault((m.class_full_name, m.method_name), []).append(m)
+        methods_by_full_class_and_name.setdefault(
+            (m.class_full_name, m.method_name), []
+        ).append(m)
         methods_by_short_class_and_name.setdefault(
             (m.class_full_name.split(".")[-1], m.method_name), []
         ).append(m)
-        methods_by_name_arity.setdefault((m.method_name, len(m.parameter_types)), []).append(m)
+        methods_by_name_arity.setdefault(
+            (m.method_name, len(m.parameter_types)), []
+        ).append(m)
         methods_by_name.setdefault(m.method_name, []).append(m)
         methods_by_full_class.setdefault(m.class_full_name, []).append(m)
 
@@ -869,7 +909,9 @@ def _resolve_calls(graph: Graph) -> None:
         for key in bucket:
             bucket[key] = sorted(bucket[key], key=lambda x: x.id)
 
-    all_class_full_names = set(methods_by_full_class.keys()) | {c.full_name for c in graph.classes}
+    all_class_full_names = set(methods_by_full_class.keys()) | {
+        c.full_name for c in graph.classes
+    }
 
     edges: list[ResolvedCallEdge] = []
 
@@ -991,7 +1033,9 @@ def _resolve_calls(graph: Graph) -> None:
                         )
                         if short_matches:
                             arity_matches = _arity_filter(short_matches)
-                            candidates = arity_matches if arity_matches else short_matches
+                            candidates = (
+                                arity_matches if arity_matches else short_matches
+                            )
                             status = "ambiguous_type"
                             reason = "fallback short-class match only"
                         elif normalized in all_class_full_names:
@@ -1076,14 +1120,17 @@ def build_graph(codebase_root: Path, on_progress=None) -> Graph:
 
     if "typescript" in langs:
         from .ts_extractor import build_ts_graph
+
         graphs.append(build_ts_graph(codebase_root, on_progress=on_progress))
 
     if "python" in langs:
         from .py_extractor import build_py_graph
+
         graphs.append(build_py_graph(codebase_root, on_progress=on_progress))
 
     if "scala" in langs:
         from .scala_extractor import build_scala_graph
+
         scala_graph = build_scala_graph(codebase_root, on_progress=on_progress)
         graphs.append(scala_graph)
 
@@ -1107,7 +1154,6 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
     Used for incremental reindexing on changed files only.
     Returns unresolved graph (resolved_call_edges will be empty).
     """
-    from .ts_filters import detect_languages
 
     graphs: list[Graph] = []
     parser = make_parser()
@@ -1136,19 +1182,22 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
             all_calls.extend(result.callsites)
             all_inheritance_edges.extend(result.inheritance_edges)
 
-        graphs.append(Graph(
-            classes=all_classes,
-            methods=all_methods,
-            fields=all_fields,
-            callsites=all_calls,
-            inheritance_edges=all_inheritance_edges,
-            resolved_call_edges=[],
-        ))
+        graphs.append(
+            Graph(
+                classes=all_classes,
+                methods=all_methods,
+                fields=all_fields,
+                callsites=all_calls,
+                inheritance_edges=all_inheritance_edges,
+                resolved_call_edges=[],
+            )
+        )
 
     # Extract Python files
     if py_files:
         try:
             from .py_extractor import build_py_graph_for_files
+
             py_graph = build_py_graph_for_files(py_files, codebase_root)
             graphs.append(py_graph)
         except (ImportError, AttributeError):
@@ -1158,6 +1207,7 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
     if ts_files:
         try:
             from .ts_extractor import build_ts_graph_for_files
+
             ts_graph = build_ts_graph_for_files(ts_files, codebase_root)
             graphs.append(ts_graph)
         except (ImportError, AttributeError):
@@ -1167,6 +1217,7 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
     if scala_files:
         try:
             from .scala_extractor import build_scala_graph_for_files
+
             scala_graph = build_scala_graph_for_files(scala_files, codebase_root)
             graphs.append(scala_graph)
         except (ImportError, AttributeError):
@@ -1178,4 +1229,11 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
         return _merge_graphs(graphs)
 
     # No files found, return empty graph
-    return Graph(classes=[], methods=[], fields=[], callsites=[], inheritance_edges=[], resolved_call_edges=[])
+    return Graph(
+        classes=[],
+        methods=[],
+        fields=[],
+        callsites=[],
+        inheritance_edges=[],
+        resolved_call_edges=[],
+    )

@@ -24,7 +24,9 @@ def _resolve_method_selector(graph: Graph, selector: str) -> list[MethodEntry]:
     if "." in selector:
         class_sel, method_sel = selector.rsplit(".", 1)
         by_full_class = [
-            m for m in methods if m.class_full_name == class_sel and m.method_name == method_sel
+            m
+            for m in methods
+            if m.class_full_name == class_sel and m.method_name == method_sel
         ]
         if by_full_class:
             return by_full_class
@@ -32,7 +34,8 @@ def _resolve_method_selector(graph: Graph, selector: str) -> list[MethodEntry]:
         by_short_class = [
             m
             for m in methods
-            if m.class_full_name.split(".")[-1] == class_sel and m.method_name == method_sel
+            if m.class_full_name.split(".")[-1] == class_sel
+            and m.method_name == method_sel
         ]
         if by_short_class:
             return by_short_class
@@ -104,7 +107,9 @@ def _method_not_found_error(selector: str) -> str:
     )
 
 
-def _method_ambiguous_error(selector: str, candidates: list[MethodEntry], use_flag: str = "--method") -> str:
+def _method_ambiguous_error(
+    selector: str, candidates: list[MethodEntry], use_flag: str = "--method"
+) -> str:
     lines = [
         f"Selector matched {len(candidates)} methods: {selector}",
         "Showing first 25 candidates:",

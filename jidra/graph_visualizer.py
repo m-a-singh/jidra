@@ -6,7 +6,6 @@ Generates interactive HTML with multiple export formats.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from .models import Graph
 
@@ -32,12 +31,14 @@ def build_graph_data(
         Dict with nodes, edges, and metadata
     """
     if verbose:
-        print(f"  • Building visualization data from {len(graph.methods)} methods and {len(graph.resolved_call_edges)} edges", flush=True)
+        print(
+            f"  • Building visualization data from {len(graph.methods)} methods and {len(graph.resolved_call_edges)} edges",
+            flush=True,
+        )
 
     # Build method/class lookups
     methods_by_id = {m.id: m for m in graph.methods}
     classes_by_id = {c.id: c for c in graph.classes}
-    classes_by_fullname = {c.full_name: c for c in graph.classes}
 
     # Determine which methods to include
     filtered_method_ids = set()
@@ -46,7 +47,8 @@ def build_graph_data(
         # BFS from focused method up to depth
         # Find the method by ClassName#methodName
         root_methods = [
-            m for m in graph.methods
+            m
+            for m in graph.methods
             if f"{m.class_full_name.split('.')[-1]}#{m.method_name}" == method_selector
             or f"{m.class_full_name}#{m.method_name}" == method_selector
         ]
@@ -66,16 +68,24 @@ def build_graph_data(
 
                 # Find edges from this method
                 for edge in graph.resolved_call_edges:
-                    if edge.caller_method_id == method_id and edge.callee_method_id not in visited:
+                    if (
+                        edge.caller_method_id == method_id
+                        and edge.callee_method_id not in visited
+                    ):
                         queue.append((edge.callee_method_id, current_depth + 1))
-                    elif edge.callee_method_id == method_id and edge.caller_method_id not in visited:
+                    elif (
+                        edge.callee_method_id == method_id
+                        and edge.caller_method_id not in visited
+                    ):
                         queue.append((edge.caller_method_id, current_depth + 1))
         else:
             # Method not found, include all
             filtered_method_ids = {m.id for m in graph.methods}
     elif package_filter:
         # Filter by package if specified
-        filtered_methods = [m for m in graph.methods if m.class_full_name.startswith(package_filter)]
+        filtered_methods = [
+            m for m in graph.methods if m.class_full_name.startswith(package_filter)
+        ]
         filtered_method_ids = {m.id for m in filtered_methods}
     else:
         filtered_method_ids = {m.id for m in graph.methods}
@@ -116,7 +126,10 @@ def build_graph_data(
     # Build edges
     edges = []
     for edge in graph.resolved_call_edges:
-        if edge.caller_method_id not in filtered_method_ids or edge.callee_method_id not in filtered_method_ids:
+        if (
+            edge.caller_method_id not in filtered_method_ids
+            or edge.callee_method_id not in filtered_method_ids
+        ):
             continue
 
         caller_method = methods_by_id.get(edge.caller_method_id)
@@ -148,7 +161,10 @@ def build_graph_data(
     }
 
     if verbose:
-        print(f"  • Generated {len(nodes)} nodes and {len(edges)} edges for visualization", flush=True)
+        print(
+            f"  • Generated {len(nodes)} nodes and {len(edges)} edges for visualization",
+            flush=True,
+        )
 
     return result
 
@@ -209,7 +225,7 @@ def render_interactive_html(graph_data: dict) -> str:
     <div class="container">
         <div class="header">
             <h2>jidra Graph Visualization</h2>
-            <div class="stats">Nodes: {graph_data['metadata']['total_nodes']} | Edges: {graph_data['metadata']['total_edges']}</div>
+            <div class="stats">Nodes: {graph_data["metadata"]["total_nodes"]} | Edges: {graph_data["metadata"]["total_edges"]}</div>
         </div>
         <div class="tabs">
             <button class="tab active" onclick="switchTab('interactive', this)">Interactive Graph</button>
@@ -292,12 +308,14 @@ def _generate_graphviz_dot(graph_data: dict) -> str:
     nodes = graph_data["nodes"]
     edges = graph_data["edges"]
 
-    lines = ["digraph {", '  rankdir=LR;', "  node [shape=box];"]
+    lines = ["digraph {", "  rankdir=LR;", "  node [shape=box];"]
 
     # Add nodes with colors
     for node in nodes:
         color = "green" if node["confirmed"] else "red"
-        lines.append(f'  "{node["id"]}" [label="{node["label"]}", fillcolor={color}, style=filled];')
+        lines.append(
+            f'  "{node["id"]}" [label="{node["label"]}", fillcolor={color}, style=filled];'
+        )
 
     # Add edges
     for edge in edges:
