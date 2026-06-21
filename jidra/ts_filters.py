@@ -55,9 +55,11 @@ def detect_languages(root: Path) -> list[str]:
     """Detect all source languages present in a multi-language repo."""
     langs = []
     # Scala before Java — build.sbt is the definitive Scala signal
-    if (root / "build.sbt").exists() or (
-        root / "project" / "build.properties"
-    ).exists() or list(root.rglob("build.sbt"))[:1]:
+    if (
+        (root / "build.sbt").exists()
+        or (root / "project" / "build.properties").exists()
+        or list(root.rglob("build.sbt"))[:1]
+    ):
         langs.append("scala")
     if (root / "package.json").exists() or list(root.rglob("package.json"))[:1]:
         langs.append("typescript")

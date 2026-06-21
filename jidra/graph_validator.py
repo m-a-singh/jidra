@@ -9,7 +9,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .models import CallSite, Graph, MethodEntry, ResolvedCallEdge
+from .models import Graph
 
 ACTUATOR_CACHE_FILENAME = "actuator_beans.json"
 
@@ -95,30 +95,32 @@ def validate_graph(
     )
 
     if verbose:
-        print(f"  • Analyzing {len(graph.classes)} classes against {len(confirmed_beans)} confirmed beans", flush=True)
+        print(
+            f"  • Analyzing {len(graph.classes)} classes against {len(confirmed_beans)} confirmed beans",
+            flush=True,
+        )
 
     # Build maps
     confirmed_class_ids = {
-        cls.id for cls in graph.classes
-        if cls.full_name in confirmed_beans
+        cls.id for cls in graph.classes if cls.full_name in confirmed_beans
     }
     confirmed_method_ids = {
-        method.id for method in graph.methods
-        if method.class_id in confirmed_class_ids
+        method.id for method in graph.methods if method.class_id in confirmed_class_ids
     }
 
     unconfirmed_class_ids = {
-        cls.id for cls in graph.classes
-        if cls.id not in confirmed_class_ids
+        cls.id for cls in graph.classes if cls.id not in confirmed_class_ids
     }
 
-    report.unconfirmed_classes = sorted([
-        cls.full_name for cls in graph.classes
-        if cls.id in unconfirmed_class_ids
-    ])
+    report.unconfirmed_classes = sorted(
+        [cls.full_name for cls in graph.classes if cls.id in unconfirmed_class_ids]
+    )
 
     if verbose:
-        print(f"  • Found {len(confirmed_class_ids)} confirmed classes, {len(unconfirmed_class_ids)} unconfirmed", flush=True)
+        print(
+            f"  • Found {len(confirmed_class_ids)} confirmed classes, {len(unconfirmed_class_ids)} unconfirmed",
+            flush=True,
+        )
 
     # Counts before filtering
     report.edges_before = len(graph.resolved_call_edges)
@@ -126,13 +128,13 @@ def validate_graph(
     if no_filter:
         # Annotate-only mode: keep all edges, just report what *would* be removed
         edges_to_remove = [
-            edge for edge in graph.resolved_call_edges
+            edge
+            for edge in graph.resolved_call_edges
             if edge.callee_method_id not in confirmed_method_ids
         ]
         report.edges_removed = len(edges_to_remove)
         report.removed_edges = [
-            (edge.caller_method_id, edge.callee_method_id)
-            for edge in edges_to_remove
+            (edge.caller_method_id, edge.callee_method_id) for edge in edges_to_remove
         ]
         # Return original graph, but with report of what would be removed
         report.edges_after = report.edges_before
@@ -140,7 +142,8 @@ def validate_graph(
 
     # Filter edges: keep only those pointing to confirmed methods
     filtered_edges = [
-        edge for edge in graph.resolved_call_edges
+        edge
+        for edge in graph.resolved_call_edges
         if edge.callee_method_id in confirmed_method_ids
     ]
     report.edges_removed = len(graph.resolved_call_edges) - len(filtered_edges)
@@ -179,7 +182,10 @@ def validate_graph(
     if verbose:
         pct = round(100 * report.edges_removed / max(1, report.edges_before), 1)
         print(f"  • Removed {report.edges_removed} phantom edges ({pct}%)", flush=True)
-        print(f"  • Filtered {len(graph.callsites) - len(filtered_callsites)} callsites", flush=True)
+        print(
+            f"  • Filtered {len(graph.callsites) - len(filtered_callsites)} callsites",
+            flush=True,
+        )
         if upgraded > 0:
             print(f"  • Upgraded {upgraded} callsites to actuator_resolved", flush=True)
 
@@ -224,7 +230,14 @@ def detect_beans_from_graph(graph: Graph) -> set[str]:
     """
     bean_classes = set()
 
-    bean_annotations = {"Service", "Repository", "Controller", "Component", "Configuration", "Entity"}
+    bean_annotations = {
+        "Service",
+        "Repository",
+        "Controller",
+        "Component",
+        "Configuration",
+        "Entity",
+    }
 
     for cls in graph.classes:
         # Check for bean annotations
@@ -235,14 +248,21 @@ def detect_beans_from_graph(graph: Graph) -> set[str]:
                 break
 
     # Find @Bean methods in @Configuration classes
-    config_classes = {cls.full_name for cls in graph.classes if any(
-        "Configuration" in (a.split(".")[-1] if "." in a else a) for a in cls.annotations
-    )}
+    config_classes = {
+        cls.full_name
+        for cls in graph.classes
+        if any(
+            "Configuration" in (a.split(".")[-1] if "." in a else a)
+            for a in cls.annotations
+        )
+    }
 
     for method in graph.methods:
         if method.class_full_name in config_classes:
             for annotation in method.annotations:
-                ann_name = annotation.split(".")[-1] if "." in annotation else annotation
+                ann_name = (
+                    annotation.split(".")[-1] if "." in annotation else annotation
+                )
                 if ann_name == "Bean":
                     # Return type is the bean class
                     if method.return_type and method.return_type != "void":
@@ -251,7 +271,9 @@ def detect_beans_from_graph(graph: Graph) -> set[str]:
     return bean_classes
 
 
-def load_confirmed_beans_for_reindex(graph_dir: Path, graph: Graph) -> tuple[set[str], str]:
+def load_confirmed_beans_for_reindex(
+    graph_dir: Path, graph: Graph
+) -> tuple[set[str], str]:
     """Load confirmed beans with priority fallback.
 
     Priority:
@@ -282,7 +304,15 @@ def _changed_files_affect_beans(mini_graph: Graph) -> bool:
     Returns True if any changed file contains classes with bean annotations
     or @Bean methods, which would invalidate the actuator cache.
     """
-    bean_annotations = {"Service", "Repository", "Controller", "Component", "Configuration", "Entity", "Bean"}
+    bean_annotations = {
+        "Service",
+        "Repository",
+        "Controller",
+        "Component",
+        "Configuration",
+        "Entity",
+        "Bean",
+    }
 
     for cls in mini_graph.classes:
         for annotation in cls.annotations:

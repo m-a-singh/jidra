@@ -64,10 +64,16 @@ def _parse_signature(signature: str) -> tuple[str, str]:
 def _selector_candidates(signature: str) -> tuple[str, str, str]:
     class_full, method_name = _parse_signature(signature)
     short_class = class_full.split(".")[-1] if class_full else ""
-    return f"{class_full}.{method_name}" if class_full else method_name, f"{short_class}.{method_name}".strip("."), method_name
+    return (
+        f"{class_full}.{method_name}" if class_full else method_name,
+        f"{short_class}.{method_name}".strip("."),
+        method_name,
+    )
 
 
-def _matches_selector(selector: str, node_signature: str, bare_name_unique: bool) -> bool:
+def _matches_selector(
+    selector: str, node_signature: str, bare_name_unique: bool
+) -> bool:
     full, short, bare = _selector_candidates(node_signature)
     if selector == full or selector == short:
         return True
@@ -90,9 +96,15 @@ def _base_match(node: dict, rules: dict) -> tuple[bool, str | None]:
     return False, None
 
 
-def _apply_selector_rules(nodes: list[dict], flow_config: dict) -> tuple[set[str], dict[str, str], set[str], dict[str, str]]:
-    include = (flow_config or {}).get("include", {}) if isinstance(flow_config, dict) else {}
-    exclude = (flow_config or {}).get("exclude", {}) if isinstance(flow_config, dict) else {}
+def _apply_selector_rules(
+    nodes: list[dict], flow_config: dict
+) -> tuple[set[str], dict[str, str], set[str], dict[str, str]]:
+    include = (
+        (flow_config or {}).get("include", {}) if isinstance(flow_config, dict) else {}
+    )
+    exclude = (
+        (flow_config or {}).get("exclude", {}) if isinstance(flow_config, dict) else {}
+    )
 
     include_ids: set[str] = set()
     include_reason: dict[str, str] = {}
@@ -144,7 +156,11 @@ def _apply_selector_rules(nodes: list[dict], flow_config: dict) -> tuple[set[str
 def _group_uncertain_edges(raw_uncertain: list[dict]) -> list[dict]:
     grouped: dict[tuple[str, str, str], int] = {}
     for e in raw_uncertain:
-        key = (str(e.get("from") or ""), str(e.get("call") or ""), str(e.get("reason") or ""))
+        key = (
+            str(e.get("from") or ""),
+            str(e.get("call") or ""),
+            str(e.get("reason") or ""),
+        )
         grouped[key] = grouped.get(key, 0) + 1
 
     out = []
@@ -154,7 +170,9 @@ def _group_uncertain_edges(raw_uncertain: list[dict]) -> list[dict]:
     return out
 
 
-def _bridge_edges(edges: list[dict], removed_ids: set[str], kept_ids: set[str]) -> list[dict]:
+def _bridge_edges(
+    edges: list[dict], removed_ids: set[str], kept_ids: set[str]
+) -> list[dict]:
     out_map = defaultdict(list)
     in_map = defaultdict(list)
     for e in edges:
@@ -162,7 +180,16 @@ def _bridge_edges(edges: list[dict], removed_ids: set[str], kept_ids: set[str]) 
         in_map[e["to"]].append(e)
 
     kept_edges = [e for e in edges if e["from"] in kept_ids and e["to"] in kept_ids]
-    seen = {(e["from"], e["to"], e.get("call"), tuple(e.get("lines", [])), e.get("resolution")) for e in kept_edges}
+    seen = {
+        (
+            e["from"],
+            e["to"],
+            e.get("call"),
+            tuple(e.get("lines", [])),
+            e.get("resolution"),
+        )
+        for e in kept_edges
+    }
 
     for rid in removed_ids:
         incoming = [e for e in in_map.get(rid, []) if e["from"] in kept_ids]
@@ -182,7 +209,9 @@ def _bridge_edges(edges: list[dict], removed_ids: set[str], kept_ids: set[str]) 
                         q.append((dst, nv))
                         continue
                     if dst in kept_ids:
-                        lines = sorted(set((inc.get("lines") or []) + (oe.get("lines") or [])))
+                        lines = sorted(
+                            set((inc.get("lines") or []) + (oe.get("lines") or []))
+                        )
                         bridged = {
                             "from": inc["from"],
                             "to": dst,
@@ -190,7 +219,13 @@ def _bridge_edges(edges: list[dict], removed_ids: set[str], kept_ids: set[str]) 
                             "lines": lines,
                             "resolution": "excluded_bridge",
                         }
-                        key = (bridged["from"], bridged["to"], bridged.get("call"), tuple(bridged.get("lines", [])), bridged.get("resolution"))
+                        key = (
+                            bridged["from"],
+                            bridged["to"],
+                            bridged.get("call"),
+                            tuple(bridged.get("lines", [])),
+                            bridged.get("resolution"),
+                        )
                         if key not in seen:
                             seen.add(key)
                             kept_edges.append(bridged)
@@ -268,14 +303,19 @@ def stitch_flow(
             add_stopped(method_id, "unresolved")
             return
 
-        resolved = list(context.get("business_flow") or context.get("resolved_callees", []))
+        resolved = list(
+            context.get("business_flow") or context.get("resolved_callees", [])
+        )
         if business_only and is_business_entry is not None:
             resolved = [item for item in resolved if is_business_entry(item)]
         unresolved = list(context.get("unresolved_calls", []))
         raw_unresolved = [
             c
             for c in graph.callsites
-            if c.caller_method_id == method_id and not c.resolved_candidates and (c.receiver or "").strip() and (c.callee_name or "").strip()
+            if c.caller_method_id == method_id
+            and not c.resolved_candidates
+            and (c.receiver or "").strip()
+            and (c.callee_name or "").strip()
         ]
 
         existing = nodes_map.get(method_id)
@@ -320,14 +360,22 @@ def stitch_flow(
                 or getattr(c, "receiver_type_raw", None)
             )
             receiver_type_text = str(receiver_type or "").strip()
-            receiver_type_simple = receiver_type_text.split(".")[-1] if receiver_type_text else ""
-            source_kind = str(getattr(c, "receiver_resolution_source", None) or "unknown")
+            receiver_type_simple = (
+                receiver_type_text.split(".")[-1] if receiver_type_text else ""
+            )
+            source_kind = str(
+                getattr(c, "receiver_resolution_source", None) or "unknown"
+            )
 
             possible = []
             if receiver_type_text:
                 candidates = []
-                candidates.extend(method_lookup_full.get((receiver_type_text, call_name), []))
-                candidates.extend(method_lookup_short.get((receiver_type_simple, call_name), []))
+                candidates.extend(
+                    method_lookup_full.get((receiver_type_text, call_name), [])
+                )
+                candidates.extend(
+                    method_lookup_short.get((receiver_type_simple, call_name), [])
+                )
                 seen_targets = set()
                 for m in candidates:
                     if m.id in seen_targets:
@@ -386,10 +434,18 @@ def stitch_flow(
             resolution = item.get("resolution") or "resolved_context"
 
             if not target:
-                uncertain_raw.append({"from": method_id, "call": call, "reason": "unresolved"})
+                uncertain_raw.append(
+                    {"from": method_id, "call": call, "reason": "unresolved"}
+                )
                 continue
 
-            edge_key = (method_id, target.id, str(call or ""), tuple(lines), str(resolution))
+            edge_key = (
+                method_id,
+                target.id,
+                str(call or ""),
+                tuple(lines),
+                str(resolution),
+            )
             if edge_key not in edges_seen:
                 edges_seen.add(edge_key)
                 edges.append(
@@ -415,7 +471,9 @@ def stitch_flow(
     walk(entry_method.id, 0, set())
 
     nodes = list(nodes_map.values())
-    include_ids, include_reason, exclude_ids, exclude_reason = _apply_selector_rules(nodes, flow_config)
+    include_ids, include_reason, exclude_ids, exclude_reason = _apply_selector_rules(
+        nodes, flow_config
+    )
 
     for node in nodes:
         nid = node["id"]
@@ -511,7 +569,11 @@ def stitch_flow(
             n["tier"] = "primary"
             n["confidence"] = "high"
             n["tier_reason"] = "structural:shallow_with_downstream"
-        elif out_deg.get(nid, 0) >= 5 or in_deg.get(nid, 0) >= 3 or out_deg.get(nid, 0) == 0:
+        elif (
+            out_deg.get(nid, 0) >= 5
+            or in_deg.get(nid, 0) >= 3
+            or out_deg.get(nid, 0) == 0
+        ):
             n["tier"] = "utility"
             n["confidence"] = "medium"
             n["tier_reason"] = "structural:fan_or_leaf"

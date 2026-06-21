@@ -3,16 +3,26 @@ import argparse
 from pathlib import Path
 from .engine import DEFAULT_MAIN_GRAPH, JidraEngine
 from .flow_doc_agent import FlowDocAgent
-from .cli import _parse_stack_trace, _match_stack_frames_to_methods, _is_meaningful_signature, _is_error_doc_noise_call, _extract_focused_map_sections, _no_stack_frame_error_payload
+from .cli import (
+    _parse_stack_trace,
+    _match_stack_frames_to_methods,
+    _is_meaningful_signature,
+    _is_error_doc_noise_call,
+    _extract_focused_map_sections,
+    _no_stack_frame_error_payload,
+)
 
 
 def _maybe_add_stale_hint(result: dict, graph_dir: Path) -> dict:
     """Add passive staleness hint if graph may be stale (O(1) check)."""
     try:
         from .reindexer import quick_stale_check
+
         if quick_stale_check(graph_dir):
             result["graph_may_be_stale"] = True
-            result["staleness_hint"] = "Source files changed since last index. Call jidra_check_staleness() or jidra_reindex()."
+            result["staleness_hint"] = (
+                "Source files changed since last index. Call jidra_check_staleness() or jidra_reindex()."
+            )
     except Exception:
         pass
     return result
@@ -27,7 +37,6 @@ def check_staleness(
 
     resolved_graph = graph_path or DEFAULT_MAIN_GRAPH
     resolved_codebase = codebase or str(Path(resolved_graph).parent.parent)
-    graph_dir = Path(resolved_graph) if Path(resolved_graph).is_dir() else Path(resolved_graph).parent
 
     return check_staleness_impl(Path(resolved_codebase), Path(resolved_graph))
 
@@ -42,8 +51,14 @@ def jidra_reindex_impl(
 
     resolved_graph = graph_path or DEFAULT_MAIN_GRAPH
     resolved_codebase = codebase or str(Path(resolved_graph).parent.parent)
-    result = incremental_reindex(Path(resolved_codebase), Path(resolved_graph), hint_changed_files=changed_files)
-    graph_dir = Path(resolved_graph) if Path(resolved_graph).is_dir() else Path(resolved_graph).parent
+    result = incremental_reindex(
+        Path(resolved_codebase), Path(resolved_graph), hint_changed_files=changed_files
+    )
+    graph_dir = (
+        Path(resolved_graph)
+        if Path(resolved_graph).is_dir()
+        else Path(resolved_graph).parent
+    )
     return _maybe_add_stale_hint(result, graph_dir)
 
 
@@ -55,7 +70,11 @@ def analyze_stack_trace(
     include_utility: bool = False,
 ) -> dict:
     resolved_graph = graph_path or DEFAULT_MAIN_GRAPH
-    graph_dir = Path(resolved_graph) if Path(resolved_graph).is_dir() else Path(resolved_graph).parent
+    graph_dir = (
+        Path(resolved_graph)
+        if Path(resolved_graph).is_dir()
+        else Path(resolved_graph).parent
+    )
     engine = JidraEngine(resolved_graph)
     graph = engine.graph
 
@@ -68,7 +87,11 @@ def analyze_stack_trace(
         result = {"error": "no_project_anchor_found", "stack_frames": matched_rows}
         return _maybe_add_stale_hint(result, graph_dir)
 
-    anchor_method_id = anchor["ambiguous_method_ids"][0] if anchor["match_status"] == "ambiguous" else anchor["matched_method_id"]
+    anchor_method_id = (
+        anchor["ambiguous_method_ids"][0]
+        if anchor["match_status"] == "ambiguous"
+        else anchor["matched_method_id"]
+    )
     agent = FlowDocAgent(
         engine,
         flow_depth=depth,
@@ -79,12 +102,22 @@ def analyze_stack_trace(
     )
     flow_result = agent.build(anchor_method_id)
     if flow_result.get("error"):
-        result = {"error": flow_result["error"], "stack_frames": matched_rows, "primary_anchor": anchor}
+        result = {
+            "error": flow_result["error"],
+            "stack_frames": matched_rows,
+            "primary_anchor": anchor,
+        }
         return _maybe_add_stale_hint(result, graph_dir)
 
     method_by_id = {m.id: m for m in graph.methods}
-    caller_row = matched_rows[anchor["frame_index"] - 1] if anchor["frame_index"] > 0 else None
-    unresolved_near = [c for c in (flow_result.get("mind_map", {}) or {}).get("unresolved_calls", []) if not _is_error_doc_noise_call(c)]
+    caller_row = (
+        matched_rows[anchor["frame_index"] - 1] if anchor["frame_index"] > 0 else None
+    )
+    unresolved_near = [
+        c
+        for c in (flow_result.get("mind_map", {}) or {}).get("unresolved_calls", [])
+        if not _is_error_doc_noise_call(c)
+    ]
     unresolved_near = unresolved_near[:10]
 
     neighbors = []
@@ -114,7 +147,13 @@ def analyze_stack_trace(
         mm = method_by_id.get(anchor["matched_method_id"])
         if mm:
             anchor_sig = mm.signature
-    suggested.append({"priority": 1, "location": anchor_sig or anchor_method_id, "reason": "failing project frame"})
+    suggested.append(
+        {
+            "priority": 1,
+            "location": anchor_sig or anchor_method_id,
+            "reason": "failing project frame",
+        }
+    )
     if caller_row:
         suggested.append(
             {
@@ -132,15 +171,35 @@ def analyze_stack_trace(
             location = call_name
         else:
             continue
-        suggested.append({"priority": 3, "location": location, "reason": "unresolved external call near failure"})
+        suggested.append(
+            {
+                "priority": 3,
+                "location": location,
+                "reason": "unresolved external call near failure",
+            }
+        )
     if upstream_mode:
         for sig in neighbors[:10]:
-            suggested.append({"priority": 4, "location": sig, "reason": "graph caller of failing method"})
+            suggested.append(
+                {
+                    "priority": 4,
+                    "location": sig,
+                    "reason": "graph caller of failing method",
+                }
+            )
     else:
         for sig in neighbors[:10]:
-            suggested.append({"priority": 4, "location": sig, "reason": "callee graph neighbor of failing method"})
+            suggested.append(
+                {
+                    "priority": 4,
+                    "location": sig,
+                    "reason": "callee graph neighbor of failing method",
+                }
+            )
 
-    focused_map_markdown = _extract_focused_map_sections(agent.render_markdown(flow_result))
+    focused_map_markdown = _extract_focused_map_sections(
+        agent.render_markdown(flow_result)
+    )
     match_summary = {"matched": 0, "ambiguous": 0, "unmatched": 0}
     for row in matched_rows:
         st = row.get("match_status", "unmatched")
@@ -167,7 +226,9 @@ def analyze_stack_trace(
     return _maybe_add_stale_hint(result, graph_dir)
 
 
-def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | None = None) -> None:
+def run_mcp_server(
+    default_graph_path: str | None = None, codebase_path: str | None = None
+) -> None:
     try:
         from mcp.server.fastmcp import FastMCP
     except Exception as exc:  # pragma: no cover - runtime dependency gate
@@ -175,9 +236,7 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
             "MCP support requires installing jidra[mcp] or pip install mcp"
         ) from exc
 
-    import os
     default_path = default_graph_path or DEFAULT_MAIN_GRAPH
-    default_codebase = codebase_path or os.getcwd()
     mcp = FastMCP("JIDRA MCP")
 
     @mcp.tool()
@@ -188,7 +247,11 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
     ) -> dict:
         """Query a method or class from the local code graph. Returns the method source, call edges, callers, and class hierarchy."""
         resolved_graph = graph_path or default_path
-        graph_dir = Path(resolved_graph) if Path(resolved_graph).is_dir() else Path(resolved_graph).parent
+        graph_dir = (
+            Path(resolved_graph)
+            if Path(resolved_graph).is_dir()
+            else Path(resolved_graph).parent
+        )
         engine = JidraEngine(resolved_graph)
         result = engine.get_method_context(method=method, max_chars=max_chars)
         return _maybe_add_stale_hint(result, graph_dir)
@@ -202,7 +265,11 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
     ) -> dict:
         """Get ranked downstream call graph for a method from the local code graph."""
         resolved_graph = graph_path or default_path
-        graph_dir = Path(resolved_graph) if Path(resolved_graph).is_dir() else Path(resolved_graph).parent
+        graph_dir = (
+            Path(resolved_graph)
+            if Path(resolved_graph).is_dir()
+            else Path(resolved_graph).parent
+        )
         engine = JidraEngine(resolved_graph)
         result = engine.get_flow(method=method, depth=depth, top_n=top_n)
         return _maybe_add_stale_hint(result, graph_dir)
@@ -216,7 +283,11 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
     ) -> dict:
         """Get downstream call graph for a method from the local code graph."""
         resolved_graph = graph_path or default_path
-        graph_dir = Path(resolved_graph) if Path(resolved_graph).is_dir() else Path(resolved_graph).parent
+        graph_dir = (
+            Path(resolved_graph)
+            if Path(resolved_graph).is_dir()
+            else Path(resolved_graph).parent
+        )
         engine = JidraEngine(resolved_graph)
         result = engine.get_agent_flow(method=method, depth=depth, top_n=top_n)
         return _maybe_add_stale_hint(result, graph_dir)
@@ -230,7 +301,11 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
         Returns the source of just that method — no need to find or read the whole file.
         If selector returns suggestions, pick the best match and retry immediately."""
         resolved_graph = graph_path or default_path
-        graph_dir = Path(resolved_graph) if Path(resolved_graph).is_dir() else Path(resolved_graph).parent
+        graph_dir = (
+            Path(resolved_graph)
+            if Path(resolved_graph).is_dir()
+            else Path(resolved_graph).parent
+        )
         engine = JidraEngine(resolved_graph)
         result = engine.get_method_source(method=method)
         return _maybe_add_stale_hint(result, graph_dir)
@@ -244,9 +319,15 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
     ) -> dict:
         """Find the call chain between two methods in the local code graph."""
         resolved_graph = graph_path or default_path
-        graph_dir = Path(resolved_graph) if Path(resolved_graph).is_dir() else Path(resolved_graph).parent
+        graph_dir = (
+            Path(resolved_graph)
+            if Path(resolved_graph).is_dir()
+            else Path(resolved_graph).parent
+        )
         engine = JidraEngine(resolved_graph)
-        result = engine.get_call_chain(from_method=from_method, to_method=to_method, max_depth=max_depth)
+        result = engine.get_call_chain(
+            from_method=from_method, to_method=to_method, max_depth=max_depth
+        )
         return _maybe_add_stale_hint(result, graph_dir)
 
     @mcp.tool()
@@ -281,14 +362,19 @@ def run_mcp_server(default_graph_path: str | None = None, codebase_path: str | N
         changed_files: list[str] | None = None,
     ) -> dict:
         """Update the local code graph after file changes."""
-        return jidra_reindex_impl(graph_path=graph_path, codebase=codebase, changed_files=changed_files)
+        return jidra_reindex_impl(
+            graph_path=graph_path, codebase=codebase, changed_files=changed_files
+        )
 
     mcp.run(transport="stdio")
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the JIDRA MCP server")
     parser.add_argument("--graph", default=None, help="Path to graph.jsonl")
-    parser.add_argument("--codebase", default=None, help="Path to codebase root (for reindex tool)")
+    parser.add_argument(
+        "--codebase", default=None, help="Path to codebase root (for reindex tool)"
+    )
     args = parser.parse_args()
     run_mcp_server(default_graph_path=args.graph, codebase_path=args.codebase)
 

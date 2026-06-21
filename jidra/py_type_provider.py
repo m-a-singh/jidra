@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ValidationMetrics:
     """Metrics for code validation quality."""
+
     files_analyzed: int = 0
     error_count: int = 0
     warning_count: int = 0
@@ -102,7 +103,9 @@ class PyrightValidator:
             self.metrics.failures += 1
             return self.metrics
         except FileNotFoundError:
-            logger.warning("Pyright not found (optional). Install with: pip install pyright")
+            logger.warning(
+                "Pyright not found (optional). Install with: pip install pyright"
+            )
             self.metrics.failures += 1
             return self.metrics
         except Exception as e:

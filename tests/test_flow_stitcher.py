@@ -1,5 +1,5 @@
 """Regression tests for flow stitcher."""
-import pytest
+
 from jidra.flow_stitcher import stitch_flow
 
 
@@ -79,11 +79,12 @@ class TestStitchFlow:
         def is_business(entry):
             return True  # All are business in test graph
 
-        result_all = stitch_flow(
-            loaded_test_graph, entry_method, business_only=False
-        )
+        result_all = stitch_flow(loaded_test_graph, entry_method, business_only=False)
         result_business = stitch_flow(
-            loaded_test_graph, entry_method, business_only=True, is_business_entry=is_business
+            loaded_test_graph,
+            entry_method,
+            business_only=True,
+            is_business_entry=is_business,
         )
 
         # Both should be valid
@@ -127,13 +128,15 @@ class TestStitchFlow:
         assert "supporting" in result or "supporting_flow" in result
         assert "low_priority" in result or "utility_flow" in result
 
-    def test_stitch_flow_backward_compat_aliases(self, loaded_test_graph, simple_test_graph):
+    def test_stitch_flow_backward_compat_aliases(
+        self, loaded_test_graph, simple_test_graph
+    ):
         """Test backward-compatible aliases."""
         entry_method = simple_test_graph.methods[0]
         result = stitch_flow(loaded_test_graph, entry_method)
 
         # Check both new names and old aliases exist
-        assert ("likely_primary" in result or "primary_flow" in result)
+        assert "likely_primary" in result or "primary_flow" in result
         primary = result.get("likely_primary") or result.get("primary_flow")
         assert isinstance(primary, list)
 
@@ -144,9 +147,7 @@ class TestStitchFlow:
         result = stitch_flow(loaded_test_graph, entry_method)
 
         stopped = result.get("stopped_paths", [])
-        # Stopped paths may include "cycle" reasons if they occur
-        reasons = [p.get("reason") for p in stopped]
-        # Just verify structure is valid
+        # Just verify structure is valid; stopped paths may include "cycle" reasons if they occur
         assert isinstance(stopped, list)
 
     def test_stitch_flow_uncertain_edges(self, loaded_test_graph, simple_test_graph):
