@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ast
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -41,7 +42,6 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SymbolTable:
     """Tracks variable types and scopes."""
-
     scope_stack: list[dict[str, str]] = field(default_factory=list)
 
     def __init__(self):
@@ -206,9 +206,7 @@ class ASTExtractor(ast.NodeVisitor):
             # Track in symbol table
             self.symbol_table.set_type(field_name, type_name or "unknown")
 
-    def _extract_method(
-        self, node: ast.FunctionDef | ast.AsyncFunctionDef, class_entry: ClassEntry
-    ):
+    def _extract_method(self, node: ast.FunctionDef | ast.AsyncFunctionDef, class_entry: ClassEntry):
         """Extract method definition."""
         method_name = node.name
         param_types = []
@@ -435,21 +433,108 @@ class ASTExtractor(ast.NodeVisitor):
         return "\n".join(self.source_lines[start - 1 : end])
 
 
+def _file_to_module(file_path: str) -> str:
+    """Convert a relative file path to a dotted module name."""
+    return file_path.replace("\\", "/").removesuffix(".py").replace("/", ".")
+
+
+def _build_import_graph(graph: Graph) -> dict[str, set[str]]:
+    """Build module → set of directly imported modules from ClassEntry.imports."""
+    import_graph: dict[str, set[str]] = {}
+    for cls in graph.classes:
+        module = _file_to_module(cls.file_path)
+        for imp in cls.imports:
+            import_graph.setdefault(module, set()).add(imp)
+    return import_graph
+
+
+def _reachable(import_graph: dict[str, set[str]], from_module: str, to_module: str) -> bool:
+    """BFS over the import graph to check if from_module can reach to_module."""
+    visited: set[str] = {from_module}
+    queue: deque[str] = deque([from_module])
+    while queue:
+        current = queue.popleft()
+        for imp in import_graph.get(current, set()):
+            # Match exact module or any parent package (e.g. "foo" covers "foo.bar")
+            if imp == to_module or to_module.startswith(imp + "."):
+                return True
+            if imp not in visited:
+                visited.add(imp)
+                queue.append(imp)
+    return False
+
+
+def _filter_phantom_edges(graph: Graph) -> int:
+    """
+    Remove resolved edges where the caller module has no import path to the
+    callee module. Same-module edges are always kept.
+
+    Returns the number of phantom edges dropped.
+    """
+    import_graph = _build_import_graph(graph)
+    method_file: dict[str, str] = {m.id: m.file_path for m in graph.methods}
+
+    kept: list[ResolvedCallEdge] = []
+    dropped = 0
+    for edge in graph.resolved_call_edges:
+        caller_file = method_file.get(edge.caller_method_id, "")
+        callee_file = method_file.get(edge.callee_method_id, "")
+        caller_mod = _file_to_module(caller_file)
+        callee_mod = _file_to_module(callee_file)
+
+        if caller_mod == callee_mod or _reachable(import_graph, caller_mod, callee_mod):
+            kept.append(edge)
+        else:
+            dropped += 1
+
+    graph.resolved_call_edges = kept
+    return dropped
+
+
+def _apply_pyright_type_hints(
+    callsites: list[CallSite],
+    hints: dict[tuple[str, int], str],
+    codebase_root: Path,
+) -> int:
+    """
+    Enrich call sites that the symbol table could not type using Pyright's
+    inferred types. Only overwrites call sites where receiver_type is None,
+    so the symbol table always wins when it has data.
+
+    Returns the number of call sites enriched.
+    """
+    enriched = 0
+    for cs in callsites:
+        if cs.receiver_type is not None:
+            continue
+        # Pyright reports absolute paths; call site stores relative paths
+        abs_path = str((codebase_root / cs.file_path).resolve())
+        key = (abs_path, cs.line)
+        if key in hints:
+            inferred = hints[key]
+            cs.receiver_type = inferred
+            cs.receiver_type_raw = inferred
+            cs.receiver_type_normalized = inferred
+            cs.receiver_resolution_source = "pyright"
+            enriched += 1
+    return enriched
+
+
 def build_py_graph(
     codebase_root: Path,
     on_progress: Callable[[int], None] | None = None,
     enable_validation: bool = True,
+    language: str = "python",
 ) -> Graph:
     """
     Build a JIDRA Graph from Python codebase using AST + symbol table.
 
     Pipeline:
-    1. AST parsing of all .py files
-    2. Symbol table tracking (variable type inference)
-    3. Three-phase call resolution (exact match → arity match → name match)
-    4. Pyright validation for code quality metrics
-
-    Expected: 68.5% call resolution (26% improvement over libcst).
+    1. Pyright validation (optional) — collects type hints for pre-pass
+    2. AST parsing of all .py files + symbol table tracking
+    3. Pyright type pre-pass — enrich untyped call sites before resolution
+    4. Multi-phase call resolution (exact → arity → close → name)
+    5. Import reachability filter — drop cross-module phantom edges
     """
     codebase_root = Path(codebase_root).resolve()
 
@@ -458,22 +543,23 @@ def build_py_graph(
     all_fields: list[FieldEntry] = []
     all_callsites: list[CallSite] = []
     all_inheritance_edges: list[InheritanceEdge] = []
-    validation_metrics = None
+    validator = None
 
-    # Run Pyright validation
+    # Step 1: Run Pyright — store validator so we can call get_type_hints() later
     if enable_validation:
         try:
             validator = PyrightValidator(codebase_root, timeout=120)
-            validation_metrics = validator.validate()
-            if validation_metrics.runs > 0 and validation_metrics.failures == 0:
+            metrics = validator.validate()
+            if metrics.runs > 0 and metrics.failures == 0:
                 logger.info(
-                    f"Pyright validation: {validation_metrics.success_rate():.0f}% healthy, "
-                    f"{validation_metrics.error_count} errors"
+                    f"Pyright validation: {metrics.success_rate():.0f}% healthy, "
+                    f"{metrics.error_count} errors"
                 )
         except Exception as e:
             logger.debug(f"Pyright validation unavailable: {e}")
+            validator = None
 
-    # Discover and parse Python files
+    # Step 2: Discover and parse Python files
     python_files = iter_python_files(codebase_root)
 
     for file_path in python_files:
@@ -501,7 +587,16 @@ def build_py_graph(
         except Exception as e:
             logger.warning(f"Error parsing {file_path}: {e}")
 
-    # Build graph
+    # Step 3: Enrich untyped call sites with Pyright-inferred receiver types
+    # This converts Phase-2/3/4 guesses into Phase-1 exact matches
+    if validator is not None and validator.metrics.failures == 0:
+        type_hints = validator.get_type_hints()
+        if type_hints:
+            enriched = _apply_pyright_type_hints(all_callsites, type_hints, codebase_root)
+            if enriched:
+                logger.info(f"Pyright type pre-pass: enriched {enriched} call sites")
+
+    # Step 4: Build graph and resolve calls
     graph = Graph(
         classes=all_classes,
         methods=all_methods,
@@ -510,9 +605,18 @@ def build_py_graph(
         inheritance_edges=all_inheritance_edges,
         resolved_call_edges=[],
     )
-
-    # Resolve calls (enhanced with symbol table context)
     _resolve_calls(graph)
+
+    # Step 5: Drop cross-module edges with no import path (phantom removal)
+    dropped = _filter_phantom_edges(graph)
+    if dropped:
+        logger.info(f"Import reachability filter: dropped {dropped} phantom edges")
+
+    # Step 6: Stamp language on all nodes
+    for cls in graph.classes:
+        cls.language = language
+    for m in graph.methods:
+        m.language = language
 
     return graph
 

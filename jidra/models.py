@@ -35,6 +35,7 @@ class ClassEntry:
     implements: list[str] = field(default_factory=list)
     imports: list[str] = field(default_factory=list)
     stereotypes: list[str] = field(default_factory=list)
+    language: str = "unknown"
 
 
 @dataclass
@@ -61,6 +62,7 @@ class MethodEntry:
     route: str | None = None
     controller_route: str | None = None
     full_route: str | None = None
+    language: str = "unknown"
 
 
 @dataclass

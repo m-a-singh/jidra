@@ -43,7 +43,7 @@ No persistent services. Container spins up, emits data, tears down.
 | Component | Purpose |
 |---|---|
 | `ts_sidecar/index.js` | ts-morph Node.js script — walks classes, arrow functions, React components; emits JSONL matching JIDRA's Graph schema |
-| `ts_sidecar/Dockerfile` | Docker image using public `node:20-slim` |
+| `ts_sidecar/Dockerfile` | Docker image using `node:22-alpine` from Docker Hub |
 | `ts_sidecar/package.json` | Declares `ts-morph` dependency — baked into image at build time |
 | `jidra/ts_extractor.py` | Manages ephemeral Docker lifecycle; reads JSONL; returns `Graph` object identical to Java extractor |
 | `jidra/ts_filters.py` | `iter_ts_files()` + `detect_language()` — manifest-based detection |

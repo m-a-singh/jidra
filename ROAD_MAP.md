@@ -2,9 +2,9 @@
 
 ## Overview
 
-**JIDRA = Java/TypeScript/Python Integrated Graph Reduction & Analysis**
+**JIDRA = Java/Scala/TypeScript/Python Integrated Graph Reduction & Analysis**
 
-JIDRA is an Enterprise Codebase Context Backend for LLM workflows. It transforms raw source code into structured, validated, noise-free context that reduces LLM token costs by 68-95% (depending on language) while maintaining 100% business logic coverage. Supports **Java** (85% resolution), **TypeScript** (80% resolution), and **Python** (68.5% resolution).
+JIDRA is an Enterprise Multi-Language Context Backend for LLM workflows. It transforms raw source code into structured, validated, noise-free context that reduces LLM token costs by 68-95% (depending on language) while maintaining 100% business logic coverage. Supports **Java** (85% resolution), **TypeScript** (80% resolution), and **Python** (68.5% resolution).
 
 **See [PIVOT_RATIONALE.md](./PIVOT_RATIONALE.md) for the complete strategic pivot from "Multi-Service Agent" to "Context Backend."**
 
@@ -19,23 +19,26 @@ JIDRA is an Enterprise Codebase Context Backend for LLM workflows. It transforms
 - ❌ A full semantic Java analyzer (AST + runtime validation is best-effort)
 
 ### What JIDRA IS
-- ✅ A structured context backend for LLM workflows (multi-language: Java, TypeScript, Python)
+- ✅ A structured context backend for LLM workflows
 - ✅ A graph-validated, noise-reduced code understanding layer
-- ✅ 68-95% token reduction (measured, proven, language-dependent)
+- ✅ 68-95% token reduction (measured, proven across languages)
 - ✅ 100% business logic coverage (0% false negatives)
 - ✅ Universal LLM compatibility (Claude, Codex, Gemini)
-- ✅ Auto-detected language support (manifest-based detection)
+- ✅ Multi-language: Scala (~90%), Java (~85%), TypeScript (~80%), Python (~68.5%)
 
 ### Current Product Shape (v1.0 - READY)
 ```text
-Java repo
-  → Static graph extraction (AST)
-  → Runtime validation (Spring Actuator)
-  → Phantom edge removal (71-78%)
-  → Context generation (87-95% smaller)
+Java repo   → tree-sitter AST → Spring Actuator validation → 71-78% phantom removal → 85% resolution
+Scala repo  → SemanticDB (sbt compile) → compiler-resolved edges → ~90% resolution
+TS repo     → ts-morph Docker sidecar → static analysis → ~80% resolution
+Python repo → AST + symbol table → Pyright validation → ~68.5% resolution
+
+All languages:
+  → Graph merge (multi-language repos handled automatically)
+  → Context generation (68-95% smaller)
   → Structured JSON output
   → MCP tools for Claude/Codex
-  → 87-95% cost reduction
+  → 68-95% cost reduction
 ```
 
 ### Future Product Shape (v2.0+)
@@ -398,48 +401,6 @@ JIDRA becomes a Multi-Service Logic Gateway: a structured reasoning layer over d
 
 ---
 
-## Phase 15: SCIP Integration for Multi-Language Support (Future - Recommended)
-
-### Goal
-Use Sourcegraph's SCIP (Semantic Code Intelligence Protocol) for precise type inference across Python, TypeScript, and Java.
-
-### Why This Matters
-Current resolution rates are limited by static analysis:
-- Java: 85% (constrained by bytecode complexity)
-- TypeScript: 80% (constrained by dynamic typing)
-- Python: 68.5% (constrained by dynamic typing without type hints)
-
-SCIP provides standardized, language-agnostic symbol indexing that enables:
-- Precise type resolution without type hints
-- Cross-module type tracking
-- Better resolution for polymorphic calls
-- Unified infrastructure for all three languages
-
-### Planned
-- SCIP Python indexer integration
-- SCIP TypeScript indexer integration
-- SCIP symbol database (alternative to libcst/ts-morph output)
-- Unified symbol lookup API across languages
-- `--use-scip` flag for extraction
-- Target: 75%+ call resolution for Python/TypeScript
-
-### Benefits
-1. **Language parity** — same type inference quality across all three languages
-2. **Better accuracy** — precise symbol info vs heuristic-based matching
-3. **Future-proof** — SCIP is language-agnostic, adds Golang/Ruby/etc. support easily
-4. **Research-backed** — Sourcegraph's production indexer, proven at scale
-
-### Implementation Notes
-- SCIP Python: `scip-python` CLI tool
-- SCIP TypeScript: `scip-typescript` CLI tool
-- May require Docker for isolated execution (like ts-morph)
-- Parallel to existing extractors (not replacement, optional enhancement)
-
-### Outcome
-JIDRA achieves 75%+ call resolution across all languages, unlocking 80-95% token reduction uniformly.
-
----
-
 ## Current State
 
 JIDRA is currently:
@@ -492,19 +453,13 @@ Next immediate focus:
 - Maven fallback for reliability
 - Interactive visualization
 
-**BONUS: TypeScript/JavaScript Support** ✅ (NEW)
-- ts-morph based extraction (Docker sidecar)
-- 80% call resolution
-- Auto language detection
-- MCP integration
-
-**BONUS: Python Support** ✅ (NEW)
-- libcst/AST-based extraction
-- Symbol table type inference
-- 68.5% call resolution (26.3% better than naive AST)
-- Pyright validation for code quality
-- Auto language detection
-- MCP integration
+**Scala Support** ✅ (NEW)
+- SemanticDB two-pass extraction (compiler-resolved call edges)
+- Scala 2 + Scala 3 auto-detection
+- Docker sidecar using eclipse-temurin:21-jdk-jammy + Maven Central
+- ~90% call resolution — highest of any JIDRA language
+- Multi-language merge: Scala + TypeScript + Python in one graph
+- Manifest-only language detection (no false positives from node_modules)
 
 ---
 
@@ -547,14 +502,13 @@ Next immediate focus:
 
 #### v2.0 - Enhancement (Future)
 - ⏳ **Phase 16:** YAML/JSON parsing for Spring config
-- ⏳ **Phase 11:** Error-first diagnostics (interactive)
+- ⏳ **Phase 15:** Error-first diagnostics (interactive)
 - ⏳ **Phase 17:** Multi-service basics (service registry)
-- ⏳ **Phase 15 (Recommended):** SCIP integration for 75%+ resolution across all languages
 
 ---
 
 ## One-Line Product Thesis
 
-**JIDRA is the structured context backend for Enterprise codebases (Java/TypeScript/Python) that reduces LLM token costs by 68-95% while maintaining 100% business logic coverage and zero false negatives.**
+**JIDRA is the structured context backend for Enterprise polyglot codebases (Scala, Java, TypeScript, Python) that reduces LLM token costs by 68-95% while maintaining 100% business logic coverage and zero false negatives.**
 
-Competitors: None (no other tool combines multi-language support + static analysis + runtime validation + LLM optimization)
+Competitors: None (no other tool combines static analysis + runtime validation + LLM optimization)

@@ -1,8 +1,8 @@
 # JIDRA: Enterprise Codebase Context Backend for LLM Workflows
 
-**JIDRA = Java/TypeScript/Python Integrated Graph Reduction & Analysis**
+**JIDRA = Java/Scala/TypeScript/Python Integrated Graph Reduction & Analysis**
 
-JIDRA is a structured context backend that reduces LLM input tokens by **68-95%** for code-native queries by giving Claude a pre-analyzed call graph instead of raw source files. Multi-language support: **Java** (85% resolution), **TypeScript** (80% resolution), **Python** (68.5% resolution).
+JIDRA is a structured context backend that reduces LLM input tokens by **68-95%** for code-native queries by giving Claude a pre-analyzed call graph instead of raw source files. Multi-language support: **Scala** (~90% resolution), **Java** (~85% resolution), **TypeScript** (~80% resolution), **Python** (~68.5% resolution).
 
 ### What This Means
 
@@ -19,13 +19,17 @@ With JIDRA:      $3.41/query
 Savings:         $9.10/query  →  $4,550/year at 500 queries
 ```
 
+JIDRA connects to Claude Code as an MCP server — one command to set up:
+
+![JIDRA MCP connected in Claude Code](docs/assets/mcp_connected.png)
+
 This project is intentionally focused and graph-driven.
 
 ## Pitch (TL;DR)
 
-- **Multi-language** → Java, TypeScript, Python (auto-detected)
+- **Multi-language** → Scala, Java, TypeScript, Python (auto-detected)
 - **Index once** → Get a deterministic call graph (AST-based, language-optimized)
-- **Reduce noise** → Remove phantom edges (Java: runtime validation, TS/Python: static analysis)
+- **Reduce noise** → Remove phantom edges (Java: runtime validation, TS/Python/Scala: static analysis)
 - **Generate context** → 68-95% smaller prompt-ready context for Claude/Codex/Gemini
 - **Trace execution** → See likely business flow with uncertainty markers
 - **Reduce LLM cost** → Proven token reduction on code-native workflows (measured on real projects)
@@ -42,8 +46,8 @@ Same cost today at Sonnet pricing because output tokens dominate — but 606k fe
 
 ## What JIDRA Does
 
-- **Indexes** Java, TypeScript, and Python source into deterministic call graphs
-- **Validates** with language-specific strategies (Spring Actuator for Java, static analysis for TS/Python)
+- **Indexes** Scala, Java, TypeScript, and Python source into deterministic call graphs
+- **Validates** with language-specific strategies (Spring Actuator for Java, compiler-resolved for Scala, static analysis for TS/Python)
 - **Generates** noise-free context (68-95% smaller depending on language)
 - **Traces** method/function execution with uncertainty markers
 - **Exports** as JSON, MCP tools, or interactive HTML
@@ -69,6 +73,10 @@ jidra/
 ├── README.md
 ├── ENTERPRISE_TYPESCRIPT_PROOF.md
 ├── ENTERPRISE_PYTHON_PROOF.md
+├── ENTERPRISE_SCALA_PROOF.md
+├── scala_sidecar/
+│   ├── Dockerfile             # JDK 21 base (eclipse-temurin) + sbt launcher from Maven Central
+│   └── entrypoint.sh          # Injects semanticdb plugin, runs sbt compile, exports .semanticdb
 └── jidra/
     ├── __init__.py
     ├── cli.py
@@ -81,12 +89,17 @@ jidra/
     ├── context_builder.py
     ├── extractor.py
     ├── exporter.py
-    ├── ts_filters.py          # TypeScript language detection
-    ├── ts_extractor.py        # TypeScript extraction
+    ├── ts_filters.py          # Language detection (all languages) + TypeScript file iteration
+    ├── ts_extractor.py        # TypeScript extraction (Docker sidecar)
+    ├── scala_filters.py       # Scala file iteration + excluded dirs
+    ├── scala_extractor.py     # Scala extraction (SemanticDB two-pass)
+    ├── scala_proto/           # Generated protobuf bindings for SemanticDB
+    │   ├── semanticdb.proto
+    │   └── semanticdb_pb2.py
     ├── py_filters.py          # Python language detection
     ├── py_extractor.py        # Python extraction (AST + symbol table)
     ├── py_type_provider.py    # Python type validation (Pyright)
-    ├── filters.py             # Legacy language detection
+    ├── filters.py             # Java file iteration
     └── cache.py
 ```
 
@@ -400,11 +413,12 @@ jidra index --codebase <path> --output <path-or-dir>
 ```
 
 Builds graph JSONL from source code (auto-detects language):
-- **Java**: tree-sitter-based AST extraction + call resolution
-- **TypeScript**: ts-morph-based extraction (Docker sidecar)
-- **Python**: libcst/AST-based extraction + symbol table type inference
+- **Scala**: SemanticDB-based extraction (Docker sidecar) — compiler-resolved call edges, ~90% resolution
+- **Java**: tree-sitter-based AST extraction + call resolution, ~85% resolution
+- **TypeScript**: ts-morph-based extraction (Docker sidecar), ~80% resolution
+- **Python**: libcst/AST-based extraction + symbol table type inference, ~68.5% resolution
 
-Language detection is automatic via manifest files (`pom.xml`, `package.json`, `pyproject.toml`, etc.).
+Language detection is automatic via manifest files (`build.sbt`, `pom.xml`, `package.json`, `pyproject.toml`, etc.). Multiple languages in the same repo are detected and merged into a single graph automatically.
 
 ## `trace`
 

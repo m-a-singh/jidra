@@ -1010,6 +1010,11 @@ def _validate(
     confirmed_beans = parse_actuator_beans(beans_response)
     filtered_graph, validation_report = validate_graph(graph, confirmed_beans, no_filter=no_filter)
 
+    # Cache actuator response for future incremental reindex
+    from .graph_validator import save_actuator_cache
+    graph_dir = Path(output).resolve() if output else graph_path.parent
+    save_actuator_cache(graph_dir, beans_response)
+
     # Determine output path
     if output:
         output_path = Path(output).resolve()
@@ -1070,16 +1075,17 @@ def _process(
     output_dir = Path(output).resolve() if output else OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    from .ts_filters import detect_language
+    from .ts_filters import detect_languages
 
-    lang = detect_language(codebase_path)
-
-    is_typescript = lang == "typescript"
-    is_python = lang == "python"
-    total_steps = 2 if (is_typescript or is_python) else 3
+    langs = detect_languages(codebase_path)
+    if not langs:
+        langs = ["java"]
+    has_java = "java" in langs
+    lang_label = " + ".join(l.upper() for l in langs)
+    total_steps = 3 if has_java else 2
 
     # ===== STEP 1: INDEX (Build static call graph) =====
-    print(f"\n[1/{total_steps}] INDEXING CODEBASE ({lang.upper()})")
+    print(f"\n[1/{total_steps}] INDEXING CODEBASE ({lang_label})")
     print(f"     Scanning: {codebase_path}")
     _progress(0, total_steps, "Starting index...")
 
@@ -1106,19 +1112,18 @@ def _process(
         raise SystemExit(f"Indexing failed: {e}")
 
     # ===== STEP 2: VALIDATE (Java only — filter phantom edges with Spring Actuator) =====
-    if is_typescript or is_python:
-        # No actuator for TypeScript or Python — the static graph is the final graph
+    if not has_java:
+        # No actuator for non-Java repos — the static graph is the final graph
         validated_path = output_dir / "graph_validated.jsonl"
         records = graph_records(graph)
         export_jsonl(validated_path, records)
-        lang_note = "TypeScript" if is_typescript else "Python"
         report_dict = {
             "total_classes": len(graph.classes),
             "edges_before": len(graph.resolved_call_edges),
             "edges_after": len(graph.resolved_call_edges),
             "edges_removed": 0,
             "edges_removed_pct": 0.0,
-            "note": f"{lang_note} — actuator validation not applicable",
+            "note": f"{lang_label} — actuator validation not applicable",
         }
         report_path = output_dir / "validation_report.json"
         report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
@@ -1131,6 +1136,7 @@ def _process(
         try:
             if actuator_url:
                 beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
+                confirmed_beans = parse_actuator_beans(beans_response)
             elif codebase:
                 docker_context = Path(repo_root).resolve() if repo_root else codebase_path
                 with run_docker_and_fetch_beans(
@@ -1140,14 +1146,16 @@ def _process(
                     skip_build=skip_build,
                     build_dir=build_dir,
                 ) as beans_response:
-                    pass
+                    confirmed_beans = parse_actuator_beans(beans_response)
+                    # Cache actuator response for future incremental reindex
+                    from .graph_validator import save_actuator_cache
+                    save_actuator_cache(output_dir, beans_response)
             else:
                 raise SystemExit("Either --actuator-url or --codebase is required")
         except ActuatorError as e:
             raise SystemExit(f"Actuator error: {e}") from e
 
         _progress(2, total_steps, "Filtering phantom edges...")
-        confirmed_beans = parse_actuator_beans(beans_response)
         filtered_graph, validation_report = validate_graph(graph, confirmed_beans, verbose=True)
 
         validated_path = output_dir / "graph_validated.jsonl"
@@ -1261,47 +1269,58 @@ def _prompt_yn(prompt_text: str, default: bool = False) -> bool:
 
 _JIDRA_CLAUDE_MD_MARKER = "<!-- jidra-managed -->"
 
-_JIDRA_CLAUDE_MD_BLOCK = """{marker}
+def _write_claude_md(repo: Path, langs: list[str]) -> None:
+    """
+    Inject JIDRA instructions into the repo's CLAUDE.md.
+    - If no CLAUDE.md exists: create one.
+    - If CLAUDE.md exists without our marker: append our section.
+    - If CLAUDE.md already has our marker: replace just our section (idempotent).
+    """
+    lang_note = ""
+    if len(langs) > 1:
+        lang_note = (
+            f"\nThis is a multi-language repo ({', '.join(langs)}). "
+            "Each node in the graph has a `language` field. "
+            "When a method name appears in multiple languages, check `language` to pick the right one."
+        )
+
+    jidra_section = f"""{_JIDRA_CLAUDE_MD_MARKER}
 ## JIDRA — Code Graph Tools (MANDATORY)
 
-JIDRA is configured for this repository. You MUST follow these rules:
+ALWAYS call a JIDRA tool first before reading any file, running grep, or using
+glob — for any question about code structure, call flows, or method implementations.{lang_note}
 
-1. **ALWAYS call a JIDRA tool first** before reading any file, running grep, or using glob — for any question about code structure, dependencies, call flows, or method implementations.
-2. **If a JIDRA tool returns `suggestions`** instead of a result, it means the selector didn't match exactly. Pick the best suggestion and immediately retry with that selector. Do NOT fall back to file reads.
-3. **Only fall back to file reads** if JIDRA explicitly returns no data AND suggestions are exhausted.
+- If a JIDRA tool returns suggestions, pick the best match and retry immediately.
+- Only fall back to file reads if JIDRA explicitly returns no data.
+<!-- /jidra-managed -->"""
 
-### When to use each tool
-- `jidra_get_method_context` — understanding what a method/component does, its callers, callees, fields
-- `jidra_get_agent_flow` — tracing what a method calls downstream
-- `jidra_get_method_source` — reading a specific method's implementation
-- `jidra_get_call_chain` — checking if/how two methods are connected
-- `jidra_analyze_stack_trace` — debugging an exception
-{marker}"""
-
-
-def _write_claude_md(repo: Path, graph_path: Path) -> None:
-    """Write or update the JIDRA rules block in CLAUDE.md."""
     claude_md = repo / "CLAUDE.md"
-    block = _JIDRA_CLAUDE_MD_BLOCK.format(marker=_JIDRA_CLAUDE_MD_MARKER)
 
-    if claude_md.exists():
-        existing = claude_md.read_text(encoding="utf-8")
-        # Replace existing jidra block if present
-        if _JIDRA_CLAUDE_MD_MARKER in existing:
-            import re
+    if not claude_md.exists():
+        claude_md.write_text(jidra_section + "\n", encoding="utf-8")
+        print(f"✓ Created CLAUDE.md in {repo}")
+        return
 
-            pattern = re.compile(
-                re.escape(_JIDRA_CLAUDE_MD_MARKER) + ".*?" + re.escape(_JIDRA_CLAUDE_MD_MARKER),
-                re.DOTALL,
-            )
-            updated = pattern.sub(block, existing)
-            claude_md.write_text(updated, encoding="utf-8")
-        else:
-            claude_md.write_text(existing.rstrip() + "\n\n" + block + "\n", encoding="utf-8")
+    existing = claude_md.read_text(encoding="utf-8")
+
+    if _JIDRA_CLAUDE_MD_MARKER in existing:
+        # Replace our existing section
+        import re
+        updated = re.sub(
+            r"<!-- jidra-managed -->.*?<!-- /jidra-managed -->",
+            jidra_section,
+            existing,
+            flags=re.DOTALL,
+        )
+        claude_md.write_text(updated, encoding="utf-8")
+        print(f"✓ Updated JIDRA section in existing CLAUDE.md")
     else:
-        claude_md.write_text(block + "\n", encoding="utf-8")
-
-    print(f"✓ CLAUDE.md updated with JIDRA rules: {claude_md}\n")
+        # Append our section without touching existing content
+        claude_md.write_text(
+            existing.rstrip() + "\n\n" + jidra_section + "\n",
+            encoding="utf-8",
+        )
+        print(f"✓ Appended JIDRA section to existing CLAUDE.md")
 
 
 def _up() -> None:
@@ -1318,21 +1337,25 @@ def _up() -> None:
     codebase_path = repo / build_sub_dir if build_sub_dir != "." else repo
     build_dir = build_sub_dir if build_sub_dir != "." else None
 
-    from .ts_filters import detect_language
+    from .ts_filters import detect_languages
 
-    lang = detect_language(repo)
-    print(f"   Detected language: {lang}")
+    langs = detect_languages(repo)
+    if not langs:
+        langs = ["java"]
+    has_java = "java" in langs
+    has_typescript = "typescript" in langs
+    has_python = "python" in langs
 
-    is_typescript = lang == "typescript"
-    is_python = lang == "python"
-    if is_typescript:
-        actuator_url = None
-        skip_build = False
-    else:
+    print(f"   Detected languages: {', '.join(langs)}")
+
+    if has_java:
         actuator_url = _prompt(
             "Spring Boot actuator URL (leave blank to use docker-compose)", "", optional=True
         )
         skip_build = _prompt_yn("Skip Java build step (assume already built)?", False)
+    else:
+        actuator_url = None
+        skip_build = False
 
     write_config = _prompt_yn("Write MCP config to <repo>/.mcp.json?", True)
     watch = _prompt_yn("Watch for file changes? (keeps jidra up running)", False)
@@ -1365,9 +1388,14 @@ def _up() -> None:
     except Exception as e:
         raise SystemExit(f"Graph build failed: {e}") from e
 
-    graph_validated_path = jidra_dir / "graph_validated.jsonl"
+    # Java repos get graph_validated.jsonl (phantom edges removed by Spring Actuator).
+    # All other languages use graph.jsonl directly — validation is static (Pyright/ts-morph).
+    if has_java:
+        graph_validated_path = jidra_dir / "graph_validated.jsonl"
+    else:
+        graph_validated_path = jidra_dir / "graph.jsonl"
     if not graph_validated_path.exists():
-        raise SystemExit(f"Graph validation failed: {graph_validated_path} not created")
+        raise SystemExit(f"Graph build failed: {graph_validated_path} not created")
 
     print("\n[2/2] MCP CONFIGURATION")
 
@@ -1387,6 +1415,16 @@ def _up() -> None:
             "--codebase",
             str(codebase_path),
         ],
+        "alwaysAllow": [
+            "jidra_get_method_context",
+            "jidra_get_method_source",
+            "jidra_get_flow",
+            "jidra_get_agent_flow",
+            "jidra_get_call_chain",
+            "jidra_analyze_stack_trace",
+            "jidra_check_staleness",
+            "jidra_reindex",
+        ],
     }
 
     if write_config:
@@ -1403,8 +1441,6 @@ def _up() -> None:
             json.dumps(settings, indent=2, ensure_ascii=True), encoding="utf-8"
         )
         print(f"\n✓ MCP config written to: {settings_path}\n")
-
-        _write_claude_md(repo, graph_validated_path)
     else:
         cmd = " ".join(
             [
@@ -1423,15 +1459,12 @@ def _up() -> None:
         print(f"  Codex / other: command: {cmd}\n")
 
     if watch:
-        if is_typescript:
-            watch_ext = (".ts", ".tsx")
-            watch_ext_str = "*.ts / *.tsx"
-        elif is_python:
-            watch_ext = (".py",)
-            watch_ext_str = "*.py"
-        else:  # Java
-            watch_ext = (".java",)
-            watch_ext_str = "*.java"
+        ext_map = []
+        if has_java: ext_map += [".java"]
+        if has_python: ext_map += [".py"]
+        if has_typescript: ext_map += [".ts", ".tsx", ".js", ".jsx"]
+        watch_ext = tuple(ext_map)
+        watch_ext_str = " / ".join(f"*{e}" for e in watch_ext)
         print("[3/3] WATCHING FOR CHANGES\n")
         print("JIDRA is ready!\n")
         print(f"   Graph:   {graph_validated_path}")
@@ -1496,6 +1529,8 @@ def _up() -> None:
         print(f"   Config:  {settings_path}\n")
         print(f"   Open Claude Code in {repo} and JIDRA tools will be available.\n")
         print(f"{'=' * 80}\n")
+
+    _write_claude_md(repo, langs)
 
 
 def _cost_roi(

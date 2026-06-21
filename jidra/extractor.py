@@ -1022,22 +1022,7 @@ def _resolve_calls(graph: Graph) -> None:
     graph.resolved_call_edges = sorted(edges, key=lambda e: e.id)
 
 
-def build_graph(codebase_root: Path, on_progress=None) -> Graph:
-    from .ts_filters import detect_language
-
-    lang = detect_language(codebase_root)
-
-    if lang == "typescript":
-        from .ts_extractor import build_ts_graph
-
-        return build_ts_graph(codebase_root, on_progress=on_progress)
-
-    if lang == "python":
-        from .py_extractor import build_py_graph as build_py_graph_ast
-
-        return build_py_graph_ast(codebase_root, on_progress=on_progress)
-
-    # Java path
+def _build_java_graph(codebase_root: Path, on_progress=None) -> Graph:
     parser = make_parser()
 
     all_classes: list[ClassEntry] = []
@@ -1067,3 +1052,130 @@ def build_graph(codebase_root: Path, on_progress=None) -> Graph:
     )
     _resolve_calls(graph)
     return graph
+
+
+def _merge_graphs(graphs: list[Graph]) -> Graph:
+    return Graph(
+        classes=sum([g.classes for g in graphs], []),
+        methods=sum([g.methods for g in graphs], []),
+        fields=sum([g.fields for g in graphs], []),
+        callsites=sum([g.callsites for g in graphs], []),
+        inheritance_edges=sum([g.inheritance_edges for g in graphs], []),
+        resolved_call_edges=sum([g.resolved_call_edges for g in graphs], []),
+    )
+
+
+def build_graph(codebase_root: Path, on_progress=None) -> Graph:
+    from .ts_filters import detect_languages
+
+    langs = detect_languages(codebase_root)
+    if not langs:
+        langs = ["java"]  # backward-compat fallback
+
+    graphs: list[Graph] = []
+
+    if "typescript" in langs:
+        from .ts_extractor import build_ts_graph
+        graphs.append(build_ts_graph(codebase_root, on_progress=on_progress))
+
+    if "python" in langs:
+        from .py_extractor import build_py_graph
+        graphs.append(build_py_graph(codebase_root, on_progress=on_progress))
+
+    if "scala" in langs:
+        from .scala_extractor import build_scala_graph
+        scala_graph = build_scala_graph(codebase_root, on_progress=on_progress)
+        graphs.append(scala_graph)
+
+    if "java" in langs:
+        java_graph = _build_java_graph(codebase_root, on_progress=on_progress)
+        for cls in java_graph.classes:
+            cls.language = "java"
+        for m in java_graph.methods:
+            m.language = "java"
+        graphs.append(java_graph)
+
+    if len(graphs) == 1:
+        return graphs[0]
+
+    return _merge_graphs(graphs)
+
+
+def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
+    """Build graph for specific set of files without running _resolve_calls().
+
+    Used for incremental reindexing on changed files only.
+    Returns unresolved graph (resolved_call_edges will be empty).
+    """
+    from .ts_filters import detect_languages
+
+    graphs: list[Graph] = []
+    parser = make_parser()
+
+    # Filter files by language and extract per language
+    java_files = {f for f in files if f.suffix == ".java" or ".java" in str(f)}
+    py_files = {f for f in files if f.suffix == ".py" or ".py" in str(f)}
+    ts_files = {f for f in files if f.suffix in {".ts", ".tsx"}}
+    scala_files = {f for f in files if f.suffix == ".scala"}
+
+    # Extract Java files
+    if java_files:
+        all_classes: list[ClassEntry] = []
+        all_methods: list[MethodEntry] = []
+        all_fields: list[FieldEntry] = []
+        all_calls: list[CallSite] = []
+        all_inheritance_edges: list[InheritanceEdge] = []
+
+        for file_path in java_files:
+            if not file_path.exists():
+                continue
+            result = _extract_file(file_path, parser)
+            all_classes.extend(result.classes)
+            all_methods.extend(result.methods)
+            all_fields.extend(result.fields)
+            all_calls.extend(result.callsites)
+            all_inheritance_edges.extend(result.inheritance_edges)
+
+        graphs.append(Graph(
+            classes=all_classes,
+            methods=all_methods,
+            fields=all_fields,
+            callsites=all_calls,
+            inheritance_edges=all_inheritance_edges,
+            resolved_call_edges=[],
+        ))
+
+    # Extract Python files
+    if py_files:
+        try:
+            from .py_extractor import build_py_graph_for_files
+            py_graph = build_py_graph_for_files(py_files, codebase_root)
+            graphs.append(py_graph)
+        except (ImportError, AttributeError):
+            pass
+
+    # Extract TypeScript files
+    if ts_files:
+        try:
+            from .ts_extractor import build_ts_graph_for_files
+            ts_graph = build_ts_graph_for_files(ts_files, codebase_root)
+            graphs.append(ts_graph)
+        except (ImportError, AttributeError):
+            pass
+
+    # Extract Scala files
+    if scala_files:
+        try:
+            from .scala_extractor import build_scala_graph_for_files
+            scala_graph = build_scala_graph_for_files(scala_files, codebase_root)
+            graphs.append(scala_graph)
+        except (ImportError, AttributeError):
+            pass
+
+    if len(graphs) == 1:
+        return graphs[0]
+    if graphs:
+        return _merge_graphs(graphs)
+
+    # No files found, return empty graph
+    return Graph(classes=[], methods=[], fields=[], callsites=[], inheritance_edges=[], resolved_call_edges=[])

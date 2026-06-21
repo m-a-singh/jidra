@@ -3,17 +3,32 @@ from __future__ import annotations
 from pathlib import Path
 
 EXCLUDED_DIRS = {
+    # Package managers / dependencies
     "node_modules",
+    "vendor",
+    # Compiled / build output
     "dist",
-    ".next",
-    "out",
     "build",
-    "coverage",
-    ".git",
+    "out",
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".output",
+    "storybook-static",
+    # CI / deployment artifacts
+    ".vercel",
     ".turbo",
     ".cache",
+    "coverage",
+    # VCS
+    ".git",
+    # Generated code
     "generated",
     "__generated__",
+    # Static assets — never source code
+    "public",
+    "static",
+    # Mobile (monorepo)
     ".expo",
     "android",
     "ios",
@@ -34,6 +49,41 @@ def iter_ts_files(root: Path) -> list[Path]:
             if should_include_dir(path.parent):
                 files.append(path)
     return sorted(files)
+
+
+def detect_languages(root: Path) -> list[str]:
+    """Detect all source languages present in a multi-language repo."""
+    langs = []
+    # Scala before Java — build.sbt is the definitive Scala signal
+    if (root / "build.sbt").exists() or (
+        root / "project" / "build.properties"
+    ).exists() or list(root.rglob("build.sbt"))[:1]:
+        langs.append("scala")
+    if (root / "package.json").exists() or list(root.rglob("package.json"))[:1]:
+        langs.append("typescript")
+    if (
+        (root / "pom.xml").exists()
+        or (root / "build.gradle").exists()
+        or (root / "build.gradle.kts").exists()
+        or list(root.rglob("pom.xml"))[:1]
+        or list(root.rglob("build.gradle"))[:1]
+        or list(root.rglob("build.gradle.kts"))[:1]
+    ):
+        langs.append("java")
+    if (
+        (root / "pyproject.toml").exists()
+        or (root / "setup.py").exists()
+        or (root / "setup.cfg").exists()
+        or (root / "Pipfile").exists()
+        or (root / ".venv").exists()
+        or (root / "venv").exists()
+        or (root / "requirements.txt").exists()
+        or list(root.rglob("pyproject.toml"))[:1]
+        or list(root.rglob("setup.py"))[:1]
+        or list(root.rglob("requirements.txt"))[:1]
+    ):
+        langs.append("python")
+    return langs
 
 
 def detect_language(root: Path) -> str:

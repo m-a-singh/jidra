@@ -36,7 +36,5 @@ flow:
       - "io.micrometer."
       - "net.logstash."
       - "org.apache.commons."
-      - "com.example.search.components.metrics"
     method_name_patterns: []
-    class_name_patterns:
-      - "ServiceMetrics"
+    class_name_patterns: []
