@@ -1122,11 +1122,15 @@ def build_graph(
 
         merged = Graph(
             classes=[
-                c for c in previous_graph.classes if c.file_path not in changed_paths_str
+                c
+                for c in previous_graph.classes
+                if c.file_path not in changed_paths_str
             ]
             + mini_graph.classes,
             methods=[
-                m for m in previous_graph.methods if m.file_path not in changed_paths_str
+                m
+                for m in previous_graph.methods
+                if m.file_path not in changed_paths_str
             ]
             + mini_graph.methods,
             fields=[

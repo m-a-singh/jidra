@@ -116,9 +116,7 @@ def format_report(result: dict) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "logs", nargs="+", help="Path(s) to session_log.jsonl files"
-    )
+    parser.add_argument("logs", nargs="+", help="Path(s) to session_log.jsonl files")
     parser.add_argument(
         "--graph", required=True, help="Path to the graph.jsonl used during the session"
     )

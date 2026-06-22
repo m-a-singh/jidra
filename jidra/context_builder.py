@@ -154,7 +154,9 @@ def _is_noisy_callsite(callsite, language: str = "java"):
     if callee_name in NOISY_METHOD_NAMES:
         return True
 
-    prefixes = _NOISY_RECEIVER_PREFIXES_BY_LANGUAGE.get(language, NOISY_RECEIVER_PREFIXES)
+    prefixes = _NOISY_RECEIVER_PREFIXES_BY_LANGUAGE.get(
+        language, NOISY_RECEIVER_PREFIXES
+    )
 
     if receiver_type:
         simple = _simple_type_name(receiver_type)

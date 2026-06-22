@@ -44,9 +44,12 @@ def test_second_run_with_no_changes_skips_rebuild(tmp_path, monkeypatch, capsys)
 
     calls = []
     monkeypatch.setattr(
-        cli, "build_graph", lambda *a, **k: calls.append(1) or (_ for _ in ()).throw(
-            AssertionError("build_graph should not be called")
-        )
+        cli,
+        "build_graph",
+        lambda *a, **k: (
+            calls.append(1)
+            or (_ for _ in ()).throw(AssertionError("build_graph should not be called"))
+        ),
     )
 
     cli._index(str(codebase), str(output))
