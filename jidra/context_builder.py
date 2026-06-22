@@ -134,7 +134,9 @@ def _is_noisy_callsite(callsite):
         simple = _simple_type_name(receiver_type)
         if simple in NOISY_RECEIVER_TYPES:
             return True
-        if any(str(receiver_type).startswith(prefix) for prefix in NOISY_RECEIVER_PREFIXES):
+        if any(
+            str(receiver_type).startswith(prefix) for prefix in NOISY_RECEIVER_PREFIXES
+        ):
             return True
 
     if status == "external_library":
@@ -284,7 +286,9 @@ def build_method_context(graph, method_id: str, max_chars: int = 12000) -> dict:
         "method_source": method.source,
         "class_annotations": class_entry.annotations if class_entry else [],
         "class_stereotype": (
-            class_entry.stereotypes[0] if class_entry and class_entry.stereotypes else "unknown"
+            class_entry.stereotypes[0]
+            if class_entry and class_entry.stereotypes
+            else "unknown"
         ),
         "endpoint": {
             "is_endpoint": method.is_endpoint,

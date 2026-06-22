@@ -64,26 +64,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import pytest
-
-from anthropic import Anthropic
-
 from jidra.cost_calculator import _build_jidra_context, _collect_naive_files
 from jidra.graph_io import load_graph_jsonl
 from jidra.selector import _resolve_method_selector
-
-
-@pytest.fixture
-def client():
-    """Provide Anthropic client for tests."""
-    try:
-        return Anthropic()
-    except ImportError as e:
-        if "socksio" in str(e):
-            pytest.skip(
-                "SOCKS proxy dependencies not available; run with: ANTHROPIC_API_KEY=... python validations/hallucination_test.py"
-            )
-        raise
 
 
 def _load_methods_from_file(path: str) -> list[str]:

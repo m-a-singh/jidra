@@ -22,7 +22,6 @@ LLM_PRICING = {
 _CHARS_PER_TOKEN = 4
 
 _ANALYSIS_QUESTION = """Analyze this method:
-
 1. What does it do? Describe the main processing steps.
 2. Identify 2-3 potential performance issues or bottlenecks.
 3. How does it interact with other components?
@@ -145,7 +144,9 @@ def _chars_to_tokens(chars: int) -> int:
 
 def _calc_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     pricing = LLM_PRICING.get(model, {"input": 3.0, "output": 15.0})
-    return (input_tokens * pricing["input"] + output_tokens * pricing["output"]) / 1_000_000
+    return (
+        input_tokens * pricing["input"] + output_tokens * pricing["output"]
+    ) / 1_000_000
 
 
 def _build_jidra_context(method_node: dict) -> str:
@@ -229,7 +230,9 @@ def _collect_naive_files(
             elif callee_file:
                 file_paths[callee_file] = callee.get("payload", {}).get("source", "")
 
-    naive_source = "\n\n".join(f"// File: {fp}\n{src}" for fp, src in file_paths.items() if src)
+    naive_source = "\n\n".join(
+        f"// File: {fp}\n{src}" for fp, src in file_paths.items() if src
+    )
     return list(file_paths.keys()), naive_source
 
 
@@ -260,7 +263,9 @@ def analyze_method_offline(
     method = candidates[0]
 
     # Reload as raw dicts so we can walk node structure
-    nodes = [json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()]
+    nodes = [
+        json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()
+    ]
     node_by_id = {n.get("id"): n for n in nodes}
     method_node = node_by_id.get(method.id)
     if not method_node:
@@ -289,7 +294,9 @@ def analyze_method_offline(
     )
 
     reduction_pct = (
-        (naive_tokens - jidra_tokens) / naive_tokens * 100 if naive_tokens > jidra_tokens else 0.0
+        (naive_tokens - jidra_tokens) / naive_tokens * 100
+        if naive_tokens > jidra_tokens
+        else 0.0
     )
 
     start = method_node.get("start_line", "?")
@@ -333,15 +340,21 @@ def analyze_method_online(
     try:
         from anthropic import Anthropic
     except ImportError:
-        raise RuntimeError("anthropic package required for online mode: pip install anthropic")
+        raise RuntimeError(
+            "anthropic package required for online mode: pip install anthropic"
+        )
 
     # Run offline first to get contexts
-    offline = analyze_method_offline(graph_path, method_selector, model, num_queries, codebase)
+    offline = analyze_method_offline(
+        graph_path, method_selector, model, num_queries, codebase
+    )
 
     # Re-derive the actual context strings
     from .graph_io import load_graph_jsonl
 
-    nodes = [json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()]
+    nodes = [
+        json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()
+    ]
     node_by_id = {n.get("id"): n for n in nodes}
 
     from .selector import _resolve_method_selector
@@ -360,16 +373,16 @@ def analyze_method_online(
         )
 
     client = Anthropic()
-    question = (
-        f"Analyze the {method_node.get('method_name', 'method')} method:\n{_ANALYSIS_QUESTION}"
-    )
+    question = f"Analyze the {method_node.get('method_name', 'method')} method:\n{_ANALYSIS_QUESTION}"
 
     def _call(context: str) -> tuple[int, int, float, str]:
         start = time.time()
         resp = client.messages.create(
             model=model,
             max_tokens=800,
-            messages=[{"role": "user", "content": f"CONTEXT:\n{context}\n\n{question}"}],
+            messages=[
+                {"role": "user", "content": f"CONTEXT:\n{context}\n\n{question}"}
+            ],
         )
         elapsed = time.time() - start
         inp = resp.usage.input_tokens
@@ -384,7 +397,9 @@ def analyze_method_online(
     )
     trad_in, trad_out, trad_cost, trad_answer = _call(naive_source)
 
-    print(f"Calling Claude API — JIDRA context ({offline.jidra_tokens} estimated tokens)...")
+    print(
+        f"Calling Claude API — JIDRA context ({offline.jidra_tokens} estimated tokens)..."
+    )
     jidra_in, jidra_out, jidra_cost, jidra_answer = _call(jidra_ctx)
 
     api_reduction = (trad_in - jidra_in) / trad_in * 100 if trad_in > jidra_in else 0.0
@@ -425,7 +440,9 @@ def analyze_graph(graph_path: Path) -> GraphStats:
     Read graph_validated.jsonl and measure real average token costs across all methods.
     Use analyze_method_offline() for a specific method instead.
     """
-    nodes = [json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()]
+    nodes = [
+        json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()
+    ]
 
     method_nodes = [n for n in nodes if n.get("node_type") == "method"]
     class_nodes = [n for n in nodes if n.get("node_type") == "class"]
@@ -434,7 +451,9 @@ def analyze_graph(graph_path: Path) -> GraphStats:
     for m in method_nodes:
         jidra_token_sizes.append(_chars_to_tokens(len(_build_jidra_context(m))))
 
-    avg_jidra = sum(jidra_token_sizes) // len(jidra_token_sizes) if jidra_token_sizes else 0
+    avg_jidra = (
+        sum(jidra_token_sizes) // len(jidra_token_sizes) if jidra_token_sizes else 0
+    )
 
     file_sources: dict[str, list[str]] = {}
     for m in method_nodes:
@@ -445,13 +464,17 @@ def analyze_graph(graph_path: Path) -> GraphStats:
     file_token_sizes = [
         _chars_to_tokens(sum(len(s) for s in srcs)) for srcs in file_sources.values()
     ]
-    avg_file_tokens = sum(file_token_sizes) // len(file_token_sizes) if file_token_sizes else 0
+    avg_file_tokens = (
+        sum(file_token_sizes) // len(file_token_sizes) if file_token_sizes else 0
+    )
 
     calls_counts = [len(m.get("calls", [])) for m in method_nodes if m.get("calls")]
     avg_calls = sum(calls_counts) / len(calls_counts) if calls_counts else 1.0
     avg_naive = int(avg_calls * avg_file_tokens)
 
-    reduction_pct = (avg_naive - avg_jidra) / avg_naive * 100 if avg_naive > avg_jidra else 0.0
+    reduction_pct = (
+        (avg_naive - avg_jidra) / avg_naive * 100 if avg_naive > avg_jidra else 0.0
+    )
 
     return GraphStats(
         num_classes=len(class_nodes),
@@ -473,18 +496,28 @@ class CostCalculator:
 
     def get_llm_pricing(self, model: str) -> dict[str, float]:
         if model not in self.pricing:
-            raise ValueError(f"Unknown model: {model}. Available: {list(self.pricing.keys())}")
+            raise ValueError(
+                f"Unknown model: {model}. Available: {list(self.pricing.keys())}"
+            )
         return self.pricing[model]
 
-    def calculate_query_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
+    def calculate_query_cost(
+        self, model: str, input_tokens: int, output_tokens: int
+    ) -> float:
         pricing = self.get_llm_pricing(model)
-        return (input_tokens * pricing["input"] + output_tokens * pricing["output"]) / 1_000_000
+        return (
+            input_tokens * pricing["input"] + output_tokens * pricing["output"]
+        ) / 1_000_000
 
     def calculate_cost_breakdown(
         self, model: str, stats: GraphStats, avg_output_tokens: int = 1000
     ) -> CostBreakdown:
-        cost_without = self.calculate_query_cost(model, stats.avg_naive_tokens, avg_output_tokens)
-        cost_with = self.calculate_query_cost(model, stats.avg_jidra_tokens, avg_output_tokens)
+        cost_without = self.calculate_query_cost(
+            model, stats.avg_naive_tokens, avg_output_tokens
+        )
+        cost_with = self.calculate_query_cost(
+            model, stats.avg_jidra_tokens, avg_output_tokens
+        )
         return CostBreakdown(
             model=model,
             without_jidra=cost_without,

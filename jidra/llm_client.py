@@ -70,7 +70,9 @@ class JidraLLMClient:
             api_base=selected_cfg.get("api_base"),
             api_key=api_key,
             default_model=str(
-                selected_cfg.get("default_model", "ollama/qwen2.5-coder:7b-instruct-q4_K_M")
+                selected_cfg.get(
+                    "default_model", "ollama/qwen2.5-coder:7b-instruct-q4_K_M"
+                )
             ),
             timeout_seconds=float(selected_cfg.get("timeout_seconds", 120)),
             temperature=float(selected_cfg.get("temperature", 0.2)),
@@ -139,14 +141,18 @@ class JidraLLMClient:
 
         choices = self._get_field(response, "choices", [])
         first_choice = choices[0] if isinstance(choices, list) and choices else {}
-        text = self._get_field(self._get_field(first_choice, "message", {}), "content", "")
+        text = self._get_field(
+            self._get_field(first_choice, "message", {}), "content", ""
+        )
 
         usage = self._get_field(response, "usage")
         prompt_tokens = self._get_field(usage, "prompt_tokens")
         completion_tokens = self._get_field(usage, "completion_tokens")
         total_tokens = self._get_field(usage, "total_tokens")
         completion_details = self._get_field(usage, "completion_tokens_details", {})
-        reasoning_tokens = self._get_field(completion_details, "reasoning_tokens", 0) or 0
+        reasoning_tokens = (
+            self._get_field(completion_details, "reasoning_tokens", 0) or 0
+        )
 
         usage_out = {
             "input_tokens": int(prompt_tokens or 0),

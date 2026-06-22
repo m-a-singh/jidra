@@ -72,7 +72,15 @@ class JidraEngine:
     def get_method_context(self, method: str, max_chars: int = 12000) -> dict:
         resolved = self._resolve_single_method(method)
         if "error" in resolved:
-            return resolved
+            # Auto-retry with top suggestion if available and high-confidence
+            suggestions = resolved.get("suggestions", [])
+            if suggestions and suggestions[0].get("score", 0) >= 100:
+                top_selector = suggestions[0]["selector"]
+                resolved = self._resolve_single_method(top_selector)
+                if "error" in resolved:
+                    return resolved
+            else:
+                return resolved
         selected = resolved["method"]
         if not hasattr(selected, "id"):
             return {"error": "invalid_method_selector_result"}
@@ -82,7 +90,14 @@ class JidraEngine:
         _ = top_n
         resolved = self._resolve_single_method(method)
         if "error" in resolved:
-            return resolved
+            suggestions = resolved.get("suggestions", [])
+            if suggestions and suggestions[0].get("score", 0) >= 100:
+                top_selector = suggestions[0]["selector"]
+                resolved = self._resolve_single_method(top_selector)
+                if "error" in resolved:
+                    return resolved
+            else:
+                return resolved
         selected = resolved["method"]
         if not hasattr(selected, "id"):
             return {"error": "invalid_method_selector_result"}
@@ -103,10 +118,14 @@ class JidraEngine:
             utility = [n for n in all_top_nodes if n.get("tier") == "utility"]
             top_nodes = (non_utility + utility)[:wanted]
 
-        uncertain_edges = agent_view.get("uncertain_edges", flow.get("uncertain_edges", []))
+        uncertain_edges = agent_view.get(
+            "uncertain_edges", flow.get("uncertain_edges", [])
+        )
         stopped_paths = agent_view.get("stopped_paths", flow.get("stopped_paths", []))
         selected_ids = {
-            str(node.get("method_id") or "") for node in top_nodes if node.get("method_id")
+            str(node.get("method_id") or "")
+            for node in top_nodes
+            if node.get("method_id")
         }
         top_edges: list[dict] = []
         for edge in flow.get("edges", []):
@@ -118,9 +137,12 @@ class JidraEngine:
                 {
                     "from": from_id,
                     "to": to_id,
-                    "call": edge.get("call") or edge.get("callee") or edge.get("callee_name"),
+                    "call": edge.get("call")
+                    or edge.get("callee")
+                    or edge.get("callee_name"),
                     "lines": edge.get("lines") or edge.get("line_numbers") or [],
-                    "resolution": edge.get("resolution") or edge.get("resolution_status"),
+                    "resolution": edge.get("resolution")
+                    or edge.get("resolution_status"),
                 }
             )
         summary = flow.get("summary", {}) if isinstance(flow, dict) else {}
@@ -144,7 +166,14 @@ class JidraEngine:
     def get_method_source(self, method: str) -> dict:
         resolved = self._resolve_single_method(method)
         if "error" in resolved:
-            return resolved
+            suggestions = resolved.get("suggestions", [])
+            if suggestions and suggestions[0].get("score", 0) >= 100:
+                top_selector = suggestions[0]["selector"]
+                resolved = self._resolve_single_method(top_selector)
+                if "error" in resolved:
+                    return resolved
+            else:
+                return resolved
         selected = resolved["method"]
         if not hasattr(selected, "id"):
             return {"error": "invalid_method_selector_result"}
@@ -157,13 +186,29 @@ class JidraEngine:
             "source": selected.source or "",
         }
 
-    def get_call_chain(self, from_method: str, to_method: str, max_depth: int = 6) -> dict:
+    def get_call_chain(
+        self, from_method: str, to_method: str, max_depth: int = 6
+    ) -> dict:
         resolved_from = self._resolve_single_method(from_method)
         if "error" in resolved_from:
-            return resolved_from
+            suggestions = resolved_from.get("suggestions", [])
+            if suggestions and suggestions[0].get("score", 0) >= 100:
+                top_selector = suggestions[0]["selector"]
+                resolved_from = self._resolve_single_method(top_selector)
+                if "error" in resolved_from:
+                    return resolved_from
+            else:
+                return resolved_from
         resolved_to = self._resolve_single_method(to_method)
         if "error" in resolved_to:
-            return resolved_to
+            suggestions = resolved_to.get("suggestions", [])
+            if suggestions and suggestions[0].get("score", 0) >= 100:
+                top_selector = suggestions[0]["selector"]
+                resolved_to = self._resolve_single_method(top_selector)
+                if "error" in resolved_to:
+                    return resolved_to
+            else:
+                return resolved_to
 
         source = resolved_from["method"]
         target = resolved_to["method"]
@@ -255,13 +300,17 @@ class JidraEngine:
 
             call = getattr(edge_obj, "call", None) if edge_obj is not None else None
             if call is None and edge_obj is not None:
-                call = getattr(edge_obj, "callee_name", None) or getattr(edge_obj, "name", None)
+                call = getattr(edge_obj, "callee_name", None) or getattr(
+                    edge_obj, "name", None
+                )
 
             lines = getattr(edge_obj, "lines", None) if edge_obj is not None else None
             if lines is None and edge_obj is not None:
                 lines = getattr(edge_obj, "line_numbers", None)
 
-            resolution = getattr(edge_obj, "resolution", None) if edge_obj is not None else None
+            resolution = (
+                getattr(edge_obj, "resolution", None) if edge_obj is not None else None
+            )
             if resolution is None and edge_obj is not None:
                 resolution = getattr(edge_obj, "resolution_status", None)
 

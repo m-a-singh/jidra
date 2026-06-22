@@ -47,7 +47,9 @@ def _ensure_image() -> None:
         text=True,
     )
     if result.returncode != 0:
-        raise TsExtractorError(f"Failed to build ts-sidecar image:\n{result.stderr[-2000:]}")
+        raise TsExtractorError(
+            f"Failed to build ts-sidecar image:\n{result.stderr[-2000:]}"
+        )
 
 
 def _run_sidecar(codebase_root: Path, timeout: int = 300) -> list[dict]:
@@ -215,6 +217,11 @@ def _build_graph_from_records(records: list[dict]) -> Graph:
                     callee_method_id=r["callee_method_id"],
                 )
             )
+
+    for cls in classes:
+        cls.language = "typescript"
+    for m in methods:
+        m.language = "typescript"
 
     return Graph(
         classes=classes,

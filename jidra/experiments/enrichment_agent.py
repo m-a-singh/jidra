@@ -23,7 +23,9 @@ class MethodEnrichmentAgent:
         self.model = model
         self.max_tokens = max_tokens
 
-    def _build_extraction_prompt(self, method_entry, context: dict | None = None) -> str:
+    def _build_extraction_prompt(
+        self, method_entry, context: dict | None = None
+    ) -> str:
         """Build the prompt for method extraction."""
         source = method_entry.source
         class_context = method_entry.class_context or {}
@@ -83,7 +85,9 @@ Extract semantic fields in JSON format:
 }}
 """
 
-    async def extract(self, method_entry, context: dict | None = None) -> dict[str, Any]:
+    async def extract(
+        self, method_entry, context: dict | None = None
+    ) -> dict[str, Any]:
         """Extract enrichment data from a method using LLM."""
         prompt = self._build_extraction_prompt(method_entry, context=context)
 

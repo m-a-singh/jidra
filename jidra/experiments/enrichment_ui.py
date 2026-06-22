@@ -52,7 +52,9 @@ class AgentProgressUI:
         """Initialize display and start render thread."""
         if self._is_tty:
             self._print_header()
-            self._render_thread = threading.Thread(target=self._render_loop, daemon=True)
+            self._render_thread = threading.Thread(
+                target=self._render_loop, daemon=True
+            )
             self._render_thread.start()
 
     def update(
@@ -76,7 +78,10 @@ class AgentProgressUI:
                 pass
             else:
                 # State transition
-                if state in ("extracting", "judging") and self._start_time[name] is None:
+                if (
+                    state in ("extracting", "judging")
+                    and self._start_time[name] is None
+                ):
                     self._start_time[name] = time.monotonic()
                 if state == "enriched":
                     self._enriched += 1
@@ -144,7 +149,9 @@ class AgentProgressUI:
     def _format_row(self, index: int, name: str) -> str:
         """Format a single agent status row."""
         state = self.state[name]
-        elapsed = time.monotonic() - self._start_time[name] if self._start_time[name] else 0.0
+        elapsed = (
+            time.monotonic() - self._start_time[name] if self._start_time[name] else 0.0
+        )
 
         # Icon and color
         if state == "queued":

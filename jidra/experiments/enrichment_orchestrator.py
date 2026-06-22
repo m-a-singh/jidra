@@ -190,11 +190,17 @@ def _enrich_one_method_in_process(
                         "reason": str(feedback),
                     }
                 )
-            return {"success": False, "reason": err_msg, "feedback": result.get("feedback")}
+            return {
+                "success": False,
+                "reason": err_msg,
+                "feedback": result.get("feedback"),
+            }
     except Exception as e:
         import traceback
 
-        logger.error(f"Process worker error for {method_id}: {e}\n{traceback.format_exc()}")
+        logger.error(
+            f"Process worker error for {method_id}: {e}\n{traceback.format_exc()}"
+        )
         return {"success": False, "reason": f"exception:{str(e)}"}
 
 
@@ -305,7 +311,9 @@ class EnrichmentOrchestrator:
             result = await self.agent.extract(method_entry, context=context)
 
             if not result["success"]:
-                logger.warning(f"Extraction attempt {attempt + 1} failed: {result.get('error')}")
+                logger.warning(
+                    f"Extraction attempt {attempt + 1} failed: {result.get('error')}"
+                )
                 self._emit(
                     "extraction_failed_attempt",
                     method_id=method_id,
@@ -320,7 +328,9 @@ class EnrichmentOrchestrator:
             break
 
         if not extraction:
-            logger.error(f"Failed to extract method {method_id} after {self.max_retries} attempts")
+            logger.error(
+                f"Failed to extract method {method_id} after {self.max_retries} attempts"
+            )
             self.stats["failed"] += 1
             self._emit(
                 "method_failed",
@@ -344,7 +354,9 @@ class EnrichmentOrchestrator:
         judge_confidence = extraction_confidence
         if self.use_judge and self.judge:
             logger.info(f"Judging extraction for {method_entry.signature}")
-            self._emit("judge_started", method_id=method_id, signature=method_entry.signature)
+            self._emit(
+                "judge_started", method_id=method_id, signature=method_entry.signature
+            )
             judge_result = await self.judge.judge(method_entry, extraction)
 
             if not judge_result["success"]:
@@ -488,7 +500,9 @@ class EnrichmentOrchestrator:
                     break
 
                 # Find method in graph
-                method_entry = next((m for m in self.graph.methods if m.id == method_id), None)
+                method_entry = next(
+                    (m for m in self.graph.methods if m.id == method_id), None
+                )
                 if not method_entry:
                     logger.warning(f"Method not found: {method_id}")
                     continue
@@ -560,13 +574,21 @@ class EnrichmentOrchestrator:
         for cs in self.graph.callsites:
             if cs.caller_method_id in method_ids:
                 # Exclude internal same-class calls
-                if cs.resolution_status != "resolved_same_class" and cs.receiver_type_normalized:
+                if (
+                    cs.resolution_status != "resolved_same_class"
+                    and cs.receiver_type_normalized
+                ):
                     # Only include classes that are in the indexed codebase
-                    if any(c.full_name == cs.receiver_type_normalized for c in self.graph.classes):
+                    if any(
+                        c.full_name == cs.receiver_type_normalized
+                        for c in self.graph.classes
+                    ):
                         external.add(cs.receiver_type_normalized)
         return external
 
-    def enrich_class(self, class_name: str, output_path: Path, ui: Any = None) -> dict[str, Any]:
+    def enrich_class(
+        self, class_name: str, output_path: Path, ui: Any = None
+    ) -> dict[str, Any]:
         """
         Spawn N worker processes for all methods in a class.
         Each process enriches one method independently.
@@ -649,7 +671,9 @@ class EnrichmentOrchestrator:
                                 for i, m in enumerate(self.graph.methods):
                                     if m.id == method_id:
                                         # Reconstruct method entry from dict
-                                        self.graph.methods[i] = replace(m, **enriched_data)
+                                        self.graph.methods[i] = replace(
+                                            m, **enriched_data
+                                        )
                                         break
                             logger.info(f"✓ Process enriched {method_id}")
                         else:
@@ -666,11 +690,19 @@ class EnrichmentOrchestrator:
                 relay_done.set()
                 if relay_thread:
                     relay_thread.join(timeout=1.0)
-                ui.stop({"enriched": enriched_count, "failed": failed_count, "total": len(methods)})
+                ui.stop(
+                    {
+                        "enriched": enriched_count,
+                        "failed": failed_count,
+                        "total": len(methods),
+                    }
+                )
 
             # Export enriched graph
             self.export_enriched_graph(output_path)
-            logger.info(f"Class mode complete: enriched {enriched_count}/{len(methods)} methods")
+            logger.info(
+                f"Class mode complete: enriched {enriched_count}/{len(methods)} methods"
+            )
             return {
                 "success": True,
                 "enriched": enriched_count,
@@ -683,7 +715,9 @@ class EnrichmentOrchestrator:
 
     def _get_methods_in_class(self, class_full_name: str) -> list[str]:
         """Get all method IDs in a class."""
-        return [m.id for m in self.graph.methods if m.class_full_name == class_full_name]
+        return [
+            m.id for m in self.graph.methods if m.class_full_name == class_full_name
+        ]
 
     def enrich_flow(
         self,
