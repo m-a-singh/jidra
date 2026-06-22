@@ -124,7 +124,7 @@ def test_file_deletion_removes_records(tmp_path):
 
 def test_new_file_adds_records(tmp_path):
     codebase = tmp_path / "repo"
-    files = _make_multi_file_codebase(codebase)
+    _make_multi_file_codebase(codebase)
     output = tmp_path / "out"
 
     cli._index(str(codebase), str(output), _quiet=True)
