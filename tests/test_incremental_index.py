@@ -200,3 +200,40 @@ public class UserService {
         (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
     }
     assert (fetch_all.id, find_all.id) in edges
+
+
+def test_unchanged_caller_edge_into_changed_file_still_resolves(tmp_path):
+    """Critical risk case: a method in a file that was NOT re-parsed calls a
+    method in a file that WAS re-parsed. The edge must still resolve correctly
+    after the partial reindex, since call resolution needs full-graph context."""
+    codebase = tmp_path / "repo"
+    files = _make_multi_file_codebase(codebase)
+    output = tmp_path / "out"
+
+    cli._index(str(codebase), str(output), _quiet=True)
+
+    # Only touch the repository file; service.java (the caller) is untouched.
+    time.sleep(0.01)
+    files["repository"].write_text(
+        """package com.example;
+
+public class UserRepository {
+    public String find(String id) {
+        return id.trim();
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    cli._index(str(codebase), str(output), _quiet=True)
+
+    graph = load_graph_jsonl(output / "graph.jsonl")
+    method_by_sig = {m.signature: m for m in graph.methods}
+    fetch = method_by_sig["com.example.UserService#fetch(String)"]
+    find = method_by_sig["com.example.UserRepository#find(String)"]
+
+    edges = {
+        (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
+    }
+    assert (fetch.id, find.id) in edges
