@@ -1091,7 +1091,12 @@ def _index(
     force: bool = False,
     compress: bool = False,
 ) -> None:
-    from .cache import compute_file_manifest, compute_fingerprint, load_cache, save_cache
+    from .cache import (
+        compute_file_manifest,
+        compute_fingerprint,
+        load_cache,
+        save_cache,
+    )
     from .graph_io import load_graph_jsonl
     from .models import Graph as _Graph
 
@@ -1150,10 +1155,14 @@ def _index(
             )
             if deleted_paths:
                 previous_graph.classes = [
-                    c for c in previous_graph.classes if c.file_path not in deleted_paths
+                    c
+                    for c in previous_graph.classes
+                    if c.file_path not in deleted_paths
                 ]
                 previous_graph.methods = [
-                    m for m in previous_graph.methods if m.file_path not in deleted_paths
+                    m
+                    for m in previous_graph.methods
+                    if m.file_path not in deleted_paths
                 ]
                 previous_graph.fields = [
                     f for f in previous_graph.fields if f.file_path not in deleted_paths
