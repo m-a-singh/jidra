@@ -239,6 +239,194 @@ def _class_stereotypes(
     return sorted(set(out))
 
 
+SPRING_DATA_REPOSITORY_MARKERS = {
+    "Repository",
+    "CrudRepository",
+    "PagingAndSortingRepository",
+    "JpaRepository",
+    "MongoRepository",
+    "ReactiveCrudRepository",
+    "ReactiveMongoRepository",
+    "ReactiveSortingRepository",
+    "JpaSpecificationExecutor",
+    "QuerydslPredicateExecutor",
+}
+
+# (method_name, parameter_types, return_type) — the CRUD surface Spring Data
+# synthesizes at runtime via a dynamic proxy. Never declared in source, so the
+# AST-based extractor would otherwise never see these methods at all.
+SPRING_DATA_REPOSITORY_METHODS: list[tuple[str, list[str], str]] = [
+    ("findById", ["Object"], "Optional"),
+    ("findAll", [], "List"),
+    ("save", ["Object"], "Object"),
+    ("saveAll", ["Iterable"], "List"),
+    ("delete", ["Object"], "void"),
+    ("deleteById", ["Object"], "void"),
+    ("deleteAll", [], "void"),
+    ("existsById", ["Object"], "boolean"),
+    ("count", [], "long"),
+    ("flush", [], "void"),
+]
+
+
+def _is_spring_data_repository(cls: ClassEntry) -> bool:
+    supertypes = set(cls.implements)
+    if cls.extends:
+        supertypes.add(cls.extends)
+    return any(
+        _strip_generic(t).split(".")[-1] in SPRING_DATA_REPOSITORY_MARKERS
+        for t in supertypes
+    )
+
+
+def _make_synthetic_method(
+    cls_full_name: str,
+    cls_id: str,
+    file_path: str,
+    start_line: int,
+    name: str,
+    param_types: list[str],
+    return_type: str,
+    language: str,
+) -> MethodEntry:
+    signature = method_signature(cls_full_name, name, param_types)
+    return MethodEntry(
+        id=method_id(signature, file_path, start_line),
+        class_id=cls_id,
+        class_full_name=cls_full_name,
+        method_name=name,
+        return_type=return_type,
+        parameter_types=param_types,
+        parameter_names=[f"arg{i}" for i in range(len(param_types))],
+        signature=signature,
+        file_path=file_path,
+        start_line=start_line,
+        end_line=start_line,
+        source="",
+        class_context={},
+        annotations=[],
+        language=language,
+    )
+
+
+def _synthesize_spring_repository_methods(cls: ClassEntry) -> list[MethodEntry]:
+    if not _is_spring_data_repository(cls):
+        return []
+    return [
+        _make_synthetic_method(
+            cls.full_name, cls.id, cls.file_path, cls.start_line,
+            name, param_types, return_type, cls.language,
+        )
+        for name, param_types, return_type in SPRING_DATA_REPOSITORY_METHODS
+    ]
+
+
+LOMBOK_CLASS_ANNOTATIONS = {
+    "Data",
+    "Getter",
+    "Setter",
+    "Value",
+    "Builder",
+    "NoArgsConstructor",
+    "AllArgsConstructor",
+    "RequiredArgsConstructor",
+}
+
+
+def _lombok_getter_name(field_name: str, type_name: str) -> str:
+    if type_name == "boolean":
+        if field_name.lower().startswith("is"):
+            return field_name
+        return "is" + field_name[:1].upper() + field_name[1:]
+    return "get" + field_name[:1].upper() + field_name[1:]
+
+
+def _lombok_setter_name(field_name: str) -> str:
+    return "set" + field_name[:1].upper() + field_name[1:]
+
+
+def _synthesize_lombok_artifacts(
+    cls: ClassEntry, class_fields: list[FieldEntry]
+) -> tuple[list[ClassEntry], list[MethodEntry]]:
+    """Lombok annotations (@Data/@Getter/@Setter/@Value/@Builder/...) generate
+    real methods at compile time that never appear as text in the source file,
+    so the AST-based extractor never sees them as declarations. Synthesize the
+    methods Lombok would emit so calls to them resolve instead of dead-ending
+    as 'class found, method not found'."""
+    names = {_annotation_name(a) for a in cls.annotations}
+    if not names & LOMBOK_CLASS_ANNOTATIONS:
+        return [], []
+
+    has_value = "Value" in names
+    want_getters = "Data" in names or has_value or "Getter" in names
+    want_setters = "Data" in names or ("Setter" in names and not has_value)
+    want_builder = "Builder" in names
+
+    methods: list[MethodEntry] = []
+    classes: list[ClassEntry] = []
+    instance_fields = [f for f in class_fields if "static" not in f.modifiers]
+
+    if want_getters:
+        for f in instance_fields:
+            methods.append(
+                _make_synthetic_method(
+                    cls.full_name, cls.id, cls.file_path, cls.start_line,
+                    _lombok_getter_name(f.name, f.type_name), [], f.type_name,
+                    cls.language,
+                )
+            )
+
+    if want_setters:
+        for f in instance_fields:
+            if "final" in f.modifiers:
+                continue
+            methods.append(
+                _make_synthetic_method(
+                    cls.full_name, cls.id, cls.file_path, cls.start_line,
+                    _lombok_setter_name(f.name), [f.type_name], "void",
+                    cls.language,
+                )
+            )
+
+    if want_builder:
+        builder_full_name = f"{cls.full_name}.Builder"
+        builder_id = class_id(builder_full_name, cls.file_path)
+        classes.append(
+            ClassEntry(
+                id=builder_id,
+                package_name=cls.package_name,
+                name=f"{cls.name}.Builder",
+                full_name=builder_full_name,
+                file_path=cls.file_path,
+                start_line=cls.start_line,
+                end_line=cls.start_line,
+                stereotypes=["lombok_builder"],
+                language=cls.language,
+            )
+        )
+        methods.append(
+            _make_synthetic_method(
+                cls.full_name, cls.id, cls.file_path, cls.start_line,
+                "builder", [], builder_full_name, cls.language,
+            )
+        )
+        for f in instance_fields:
+            methods.append(
+                _make_synthetic_method(
+                    builder_full_name, builder_id, cls.file_path, cls.start_line,
+                    f.name, [f.type_name], builder_full_name, cls.language,
+                )
+            )
+        methods.append(
+            _make_synthetic_method(
+                builder_full_name, builder_id, cls.file_path, cls.start_line,
+                "build", [], cls.full_name, cls.language,
+            )
+        )
+
+    return classes, methods
+
+
 def _endpoint_meta(
     method_annotations: list[str], class_annotations: list[str]
 ) -> tuple[bool, str | None, str | None, str | None, str | None]:
@@ -780,6 +968,13 @@ def _extract_file(file_path: Path, parser=None) -> Graph:
         methods.extend(class_methods)
         calls.extend(class_calls)
 
+        synthetic_classes, synthetic_methods = _synthesize_lombok_artifacts(
+            cls, class_fields
+        )
+        classes.extend(synthetic_classes)
+        methods.extend(synthetic_methods)
+        methods.extend(_synthesize_spring_repository_methods(cls))
+
     return Graph(
         classes=classes,
         methods=methods,
@@ -924,9 +1119,16 @@ def _resolve_calls(graph: Graph) -> None:
         if edge.source_class not in implementers:
             implementers.append(edge.source_class)
 
-    edges: list[ResolvedCallEdge] = []
+    # Chained/fluent calls (`a.b().c()`) have a receiver that is itself a call
+    # expression's full text, not a declared variable — there's no type to look
+    # up until the inner call (`a.b()`) is itself resolved. Index callsites by
+    # their own full text so a later pass can borrow the inner call's resolved
+    # return type as the outer call's receiver type.
+    chain_index: dict[tuple[str, str], CallSite] = {}
+    for c in graph.callsites:
+        chain_index[(c.caller_method_id, c.text)] = c
 
-    for call in graph.callsites:
+    def _resolve_one(call: CallSite) -> None:
         caller_method = method_by_id[call.caller_method_id]
         caller_class = class_by_id[caller_method.class_id]
 
@@ -1087,13 +1289,46 @@ def _resolve_calls(graph: Graph) -> None:
         call.resolution_status = status
         call.resolution_reason = reason
 
-        for callee in candidates:
+    # First pass: resolve everything as before. Then repeatedly retry only the
+    # chain-receiver callsites that are still stuck, using newly-resolved inner
+    # calls' return types — bounded so we don't loop forever on a malformed chain.
+    for call in graph.callsites:
+        _resolve_one(call)
+
+    MAX_CHAIN_PASSES = 6
+    for _ in range(MAX_CHAIN_PASSES):
+        changed = False
+        for call in graph.callsites:
+            if call.resolution_status != "unresolved_receiver":
+                continue
+            receiver = call.receiver
+            if not receiver or not receiver.rstrip().endswith(")"):
+                continue
+            inner = chain_index.get((call.caller_method_id, receiver))
+            if inner is None or not inner.resolved_candidates:
+                continue
+            inner_method = method_by_id.get(inner.resolved_candidates[0])
+            if not inner_method or not inner_method.return_type:
+                continue
+            new_raw = _strip_generic(inner_method.return_type)
+            if new_raw == call.receiver_type_raw:
+                continue
+            call.receiver_type_raw = new_raw
+            call.receiver_resolution_source = None
+            _resolve_one(call)
+            changed = True
+        if not changed:
+            break
+
+    edges: list[ResolvedCallEdge] = []
+    for call in graph.callsites:
+        for callee_id in call.resolved_candidates:
             edges.append(
                 ResolvedCallEdge(
-                    id=resolved_call_edge_id(call.id, callee.id),
+                    id=resolved_call_edge_id(call.id, callee_id),
                     callsite_id=call.id,
                     caller_method_id=call.caller_method_id,
-                    callee_method_id=callee.id,
+                    callee_method_id=callee_id,
                 )
             )
 
