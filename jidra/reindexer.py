@@ -261,8 +261,11 @@ def quick_stale_check(graph_dir: Path) -> bool:
 
     last_indexed_at_ns = manifest.get("last_indexed_at_ns", 0)
 
-    # Sample one file (first key for determinism)
-    sample_path = next(iter(entries.keys()))
+    # Sample one file at random so the check doesn't always land on the same
+    # (often stable) file, e.g. whichever sorts/inserts first.
+    import random
+
+    sample_path = random.choice(list(entries.keys()))
     try:
         stat = Path(sample_path).stat()
         return stat.st_mtime_ns > last_indexed_at_ns
@@ -480,10 +483,15 @@ def _patch_metadata_only(
         if method.id in line_shift_map:
             new_line, delta = line_shift_map[method.id]
             method.start_line = new_line
-            method.end_line = (method.end_line or 0) + delta
 
-            # Update source from mini-graph
+            # Prefer the mini-graph's own end_line (accounts for body growth
+            # or shrinkage); fall back to a plain shift if unavailable.
             mini_m = next((m for m in mini_graph.methods if m.id == method.id), None)
+            if mini_m and mini_m.end_line is not None:
+                method.end_line = mini_m.end_line
+            else:
+                method.end_line = (method.end_line or 0) + delta
+
             if mini_m:
                 method.source = mini_m.source
 
@@ -531,6 +539,9 @@ def _do_structural_reindex(
     from .extractor import _resolve_calls
 
     # Strip records for changed files
+    removed_class_ids = {
+        c.id for c in existing_graph.classes if c.file_path in changed_files_set
+    }
     existing_graph.classes = [
         c for c in existing_graph.classes if c.file_path not in changed_files_set
     ]
@@ -544,8 +555,10 @@ def _do_structural_reindex(
         c for c in existing_graph.callsites if c.file_path not in changed_files_set
     ]
     existing_graph.inheritance_edges = [
-        e for e in existing_graph.inheritance_edges
-    ]  # Filter by source_class in mini_graph
+        e
+        for e in existing_graph.inheritance_edges
+        if e.source_class_id not in removed_class_ids
+    ]
 
     # Merge mini_graph
     existing_graph.classes.extend(mini_graph.classes)
