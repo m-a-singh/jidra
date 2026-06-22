@@ -234,15 +234,21 @@ def detect_beans_from_graph(graph: Graph) -> set[str]:
         "Service",
         "Repository",
         "Controller",
+        "RestController",
         "Component",
         "Configuration",
         "Entity",
     }
 
+    def _ann_name(annotation: str) -> str:
+        name = annotation.split("(")[0].strip()
+        name = name.split(".")[-1] if "." in name else name
+        return name.lstrip("@")
+
     for cls in graph.classes:
         # Check for bean annotations
         for annotation in cls.annotations:
-            ann_name = annotation.split(".")[-1] if "." in annotation else annotation
+            ann_name = _ann_name(annotation)
             if ann_name in bean_annotations:
                 bean_classes.add(cls.full_name)
                 break
@@ -251,18 +257,13 @@ def detect_beans_from_graph(graph: Graph) -> set[str]:
     config_classes = {
         cls.full_name
         for cls in graph.classes
-        if any(
-            "Configuration" in (a.split(".")[-1] if "." in a else a)
-            for a in cls.annotations
-        )
+        if any(_ann_name(a) == "Configuration" for a in cls.annotations)
     }
 
     for method in graph.methods:
         if method.class_full_name in config_classes:
             for annotation in method.annotations:
-                ann_name = (
-                    annotation.split(".")[-1] if "." in annotation else annotation
-                )
+                ann_name = _ann_name(annotation)
                 if ann_name == "Bean":
                     # Return type is the bean class
                     if method.return_type and method.return_type != "void":

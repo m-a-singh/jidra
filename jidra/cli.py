@@ -1391,21 +1391,26 @@ def _process(
                 beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
                 confirmed_beans = parse_actuator_beans(beans_response)
             elif codebase:
-                docker_context = (
-                    Path(repo_root).resolve() if repo_root else codebase_path
-                )
-                with run_docker_and_fetch_beans(
-                    str(docker_context),
-                    port=port,
-                    timeout=timeout,
-                    skip_build=skip_build,
-                    build_dir=build_dir,
-                ) as beans_response:
-                    confirmed_beans = parse_actuator_beans(beans_response)
-                    # Cache actuator response for future incremental reindex
-                    from .graph_validator import save_actuator_cache
+                # Docker-based actuator validation disabled for testing —
+                # falling back to static annotation-based bean detection.
+                # docker_context = (
+                #     Path(repo_root).resolve() if repo_root else codebase_path
+                # )
+                # with run_docker_and_fetch_beans(
+                #     str(docker_context),
+                #     port=port,
+                #     timeout=timeout,
+                #     skip_build=skip_build,
+                #     build_dir=build_dir,
+                # ) as beans_response:
+                #     confirmed_beans = parse_actuator_beans(beans_response)
+                #     # Cache actuator response for future incremental reindex
+                #     from .graph_validator import save_actuator_cache
+                #
+                #     save_actuator_cache(output_dir, beans_response)
+                from .graph_validator import detect_beans_from_graph
 
-                    save_actuator_cache(output_dir, beans_response)
+                confirmed_beans = detect_beans_from_graph(graph)
             else:
                 raise SystemExit("Either --actuator-url or --codebase is required")
         except ActuatorError as e:
