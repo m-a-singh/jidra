@@ -27,6 +27,15 @@ def resolve_graph_paths(output: Path) -> tuple[Path, Path, Path]:
     return main, test, main
 
 
+def _read_jsonl_text(path: Path) -> str:
+    if path.suffix == ".zst":
+        import zstandard
+
+        raw = zstandard.ZstdDecompressor().decompress(path.read_bytes())
+        return raw.decode("utf-8")
+    return path.read_text(encoding="utf-8")
+
+
 def load_graph_jsonl(path: Path) -> Graph:
     classes: list[ClassEntry] = []
     methods: list[MethodEntry] = []
@@ -35,7 +44,7 @@ def load_graph_jsonl(path: Path) -> Graph:
     inheritance_edges: list[InheritanceEdge] = []
     resolved_call_edges: list[ResolvedCallEdge] = []
 
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in _read_jsonl_text(path).splitlines():
         if not line.strip():
             continue
         rec = json.loads(line)

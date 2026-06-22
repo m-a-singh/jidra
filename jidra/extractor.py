@@ -1109,7 +1109,45 @@ def _merge_graphs(graphs: list[Graph]) -> Graph:
     )
 
 
-def build_graph(codebase_root: Path, on_progress=None) -> Graph:
+def build_graph(
+    codebase_root: Path,
+    on_progress=None,
+    changed_files: set[Path] | None = None,
+    previous_graph: Graph | None = None,
+) -> Graph:
+    if changed_files is not None and previous_graph is not None:
+        changed_paths_str = {str(p) for p in changed_files}
+
+        mini_graph = build_graph_for_files(changed_files, codebase_root)
+
+        merged = Graph(
+            classes=[
+                c for c in previous_graph.classes if c.file_path not in changed_paths_str
+            ]
+            + mini_graph.classes,
+            methods=[
+                m for m in previous_graph.methods if m.file_path not in changed_paths_str
+            ]
+            + mini_graph.methods,
+            fields=[
+                f for f in previous_graph.fields if f.file_path not in changed_paths_str
+            ]
+            + mini_graph.fields,
+            callsites=[
+                c
+                for c in previous_graph.callsites
+                if c.file_path not in changed_paths_str
+            ]
+            + mini_graph.callsites,
+            inheritance_edges=previous_graph.inheritance_edges
+            + mini_graph.inheritance_edges,
+            resolved_call_edges=[],
+        )
+        if on_progress:
+            on_progress(len(merged.classes))
+        _resolve_calls(merged)
+        return merged
+
     from .ts_filters import detect_languages
 
     langs = detect_languages(codebase_root)
@@ -1237,3 +1275,48 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
         inheritance_edges=[],
         resolved_call_edges=[],
     )
+
+
+def build_graph_partitioned(
+    codebase_root: Path,
+    output_dir: Path,
+    on_progress=None,
+) -> dict:
+    """Build one graph.jsonl per detected build module, plus a composed index.
+
+    Falls back to a single graph.jsonl (identical to build_graph()) when no
+    multi-module structure is detected.
+
+    Returns:
+        {"multi_module": bool, "modules": {module_name: graph_path}, "index_path": str | None}
+    """
+    import json as _json
+
+    from .actuator_client import _detect_build_directories
+    from .exporter import export_jsonl, graph_records
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    modules = _detect_build_directories(str(codebase_root))
+
+    if len(modules) <= 1:
+        graph = build_graph(codebase_root, on_progress=on_progress)
+        graph_path = output_dir / "graph.jsonl"
+        export_jsonl(graph_path, graph_records(graph))
+        return {"multi_module": False, "modules": {}, "index_path": None}
+
+    index: dict[str, str] = {}
+    for _tool, module_dir in modules:
+        module_name = module_dir.name
+        module_graph = build_graph(module_dir, on_progress=on_progress)
+        module_output_dir = output_dir / module_name
+        module_output_dir.mkdir(parents=True, exist_ok=True)
+        graph_path = module_output_dir / "graph.jsonl"
+        export_jsonl(graph_path, graph_records(module_graph))
+        index[module_name] = str(graph_path)
+
+    index_path = output_dir / "modules_index.json"
+    index_path.write_text(_json.dumps(index, indent=2), encoding="utf-8")
+
+    return {"multi_module": True, "modules": index, "index_path": str(index_path)}
