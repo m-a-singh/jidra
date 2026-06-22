@@ -634,6 +634,16 @@ def _parse_args() -> argparse.Namespace:
     index_parser.add_argument(
         "--output", required=True, help="Output graph file or output directory"
     )
+    index_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force full rebuild, bypassing the fingerprint cache",
+    )
+    index_parser.add_argument(
+        "--compress",
+        action="store_true",
+        help="Write graph.jsonl.zst (zstd-compressed) instead of graph.jsonl",
+    )
 
     trace_parser = subparsers.add_parser("trace", help="Trace a method call flow")
     trace_parser.add_argument(
@@ -1023,19 +1033,157 @@ def _load_cli_config(config_path: str | None = None) -> dict:
         return {}
 
 
-def _index(codebase: str, output: str, on_progress=None, _quiet: bool = False) -> None:
+_SOURCE_FILE_EXTENSIONS = (".java", ".py", ".ts", ".tsx", ".scala")
+
+
+def _gather_source_files(codebase_path: Path) -> list[Path]:
+    files: list[Path] = []
+    for ext in _SOURCE_FILE_EXTENSIONS:
+        files.extend(codebase_path.rglob(f"*{ext}"))
+    return sorted(files)
+
+
+def compute_graph_health(graph) -> dict:
+    """Resolved/unresolved/external breakdown of callsites, by status and reason."""
+    callsites = graph.callsites
+    total = len(callsites)
+
+    resolved = 0
+    external = 0
+    unresolved = 0
+    by_status: dict[str, int] = {}
+    by_reason: dict[str, int] = {}
+
+    for c in callsites:
+        status = c.resolution_status or "unresolved"
+        by_status[status] = by_status.get(status, 0) + 1
+        if c.resolution_reason:
+            by_reason[c.resolution_reason] = by_reason.get(c.resolution_reason, 0) + 1
+
+        if status == "external_library":
+            external += 1
+        elif status.startswith("resolved"):
+            resolved += 1
+        else:
+            unresolved += 1
+
+    def pct(n: int) -> float:
+        return round(100 * n / total, 1) if total else 0.0
+
+    return {
+        "total_callsites": total,
+        "resolved": resolved,
+        "resolved_pct": pct(resolved),
+        "unresolved": unresolved,
+        "unresolved_pct": pct(unresolved),
+        "external": external,
+        "external_pct": pct(external),
+        "by_status": by_status,
+        "by_reason": by_reason,
+    }
+
+
+def _index(
+    codebase: str,
+    output: str,
+    on_progress=None,
+    _quiet: bool = False,
+    force: bool = False,
+    compress: bool = False,
+) -> None:
+    from .cache import compute_file_manifest, compute_fingerprint, load_cache, save_cache
+    from .graph_io import load_graph_jsonl
+    from .models import Graph as _Graph
+
     codebase_path = Path(codebase).resolve()
     output_path = Path(output).resolve()
     main_path, test_path, _ = resolve_graph_paths(output_path)
+    if compress:
+        main_path = main_path.parent / (main_path.name + ".zst")
+        test_path = test_path.parent / (test_path.name + ".zst")
     main_path.parent.mkdir(parents=True, exist_ok=True)
     test_path.parent.mkdir(parents=True, exist_ok=True)
 
-    graph = build_graph(codebase_path, on_progress=on_progress)
+    source_files = _gather_source_files(codebase_path)
+    fp = compute_fingerprint(source_files)
+    manifest = compute_file_manifest(source_files)
+
+    cached = None if force else load_cache(codebase_path)
+
+    if (
+        cached
+        and cached.get("fingerprint") == fp
+        and main_path.exists()
+        and test_path.exists()
+    ):
+        if not _quiet:
+            print("Graph up to date, skipping rebuild.")
+        return
+
+    old_manifest = (cached or {}).get("manifest", {})
+    changed_files: set[Path] | None = None
+    previous_graph: _Graph | None = None
+
+    if old_manifest:
+        changed_paths = {
+            Path(p) for p, h in manifest.items() if old_manifest.get(p) != h
+        }
+        deleted_paths = {p for p in old_manifest if p not in manifest}
+
+        prev_parts = []
+        for path in (main_path, test_path):
+            if not path.exists():
+                continue
+            try:
+                prev_parts.append(load_graph_jsonl(path))
+            except Exception:
+                pass
+
+        if prev_parts and (changed_paths or deleted_paths):
+            previous_graph = _Graph(
+                classes=sum((g.classes for g in prev_parts), []),
+                methods=sum((g.methods for g in prev_parts), []),
+                fields=sum((g.fields for g in prev_parts), []),
+                callsites=sum((g.callsites for g in prev_parts), []),
+                inheritance_edges=sum((g.inheritance_edges for g in prev_parts), []),
+                resolved_call_edges=[],
+            )
+            if deleted_paths:
+                previous_graph.classes = [
+                    c for c in previous_graph.classes if c.file_path not in deleted_paths
+                ]
+                previous_graph.methods = [
+                    m for m in previous_graph.methods if m.file_path not in deleted_paths
+                ]
+                previous_graph.fields = [
+                    f for f in previous_graph.fields if f.file_path not in deleted_paths
+                ]
+                previous_graph.callsites = [
+                    c
+                    for c in previous_graph.callsites
+                    if c.file_path not in deleted_paths
+                ]
+            changed_files = changed_paths
+
+    graph = build_graph(
+        codebase_path,
+        on_progress=on_progress,
+        changed_files=changed_files,
+        previous_graph=previous_graph,
+    )
+
+    if changed_files is not None and previous_graph is not None and not _quiet:
+        print(f"Re-parsed {len(changed_files)}/{len(source_files)} files")
+
     records = graph_records(graph)
     main_records, test_records = split_graph_records_by_source(records)
 
     export_jsonl(main_path, main_records)
     export_jsonl(test_path, test_records)
+
+    save_cache(codebase_path, {"fingerprint": fp, "manifest": manifest})
+
+    health = compute_graph_health(graph)
 
     if not _quiet:
         print(
@@ -1049,6 +1197,12 @@ def _index(codebase: str, output: str, on_progress=None, _quiet: bool = False) -
                 ensure_ascii=True,
                 indent=2,
             )
+        )
+        print(
+            f"Graph health: {health['resolved_pct']}% resolved, "
+            f"{health['unresolved_pct']}% unresolved, "
+            f"{health['external_pct']}% external "
+            f"({health['total_callsites']} callsites)"
         )
 
 
@@ -1753,7 +1907,7 @@ def main() -> None:
         return
 
     if args.command == "index":
-        _index(args.codebase, args.output)
+        _index(args.codebase, args.output, force=args.force, compress=args.compress)
         return
 
     if args.command == "validate":
