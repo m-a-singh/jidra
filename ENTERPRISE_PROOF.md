@@ -220,6 +220,7 @@ jidra graph-view --graph graph_validated.jsonl --package com.example.search.comp
 ### SearchController in Graph
 ✓ checkIfEmptySet()  
 ✓ createMockedData()  
+✓ getSearchFilters()  
 ✓ hasFilterCriteria() (2 overloads)  
 ✓ history()  
 ✓ search()  

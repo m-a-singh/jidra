@@ -102,7 +102,14 @@ def _get_service_container_name(compose_file: Path) -> str | None:
 def _fetch_beans_via_exec(container_name: str, port: int) -> dict:
     """Fetch /actuator/beans from inside a container via docker exec."""
     result = subprocess.run(
-        ["docker", "exec", container_name, "curl", "-s", f"http://localhost:{port}/actuator/beans"],
+        [
+            "docker",
+            "exec",
+            container_name,
+            "curl",
+            "-s",
+            f"http://localhost:{port}/actuator/beans",
+        ],
         capture_output=True,
         text=True,
         timeout=30,
@@ -185,13 +192,44 @@ def _find_dockerfile(codebase_root: str) -> Path:
     )
 
 
+_TEST_DIR_PATTERNS = {
+    "integration-tests",
+    "integration-test",
+    "integrationtests",
+    "integrationtest",
+    "e2e",
+    "e2e-tests",
+    "e2e-test",
+    "functional-tests",
+    "functional-test",
+    "acceptance-tests",
+    "acceptance-test",
+    "test",
+    "tests",
+    "it",
+    "ittest",
+    "it-tests",
+    "perf-tests",
+    "performance-tests",
+    "load-tests",
+    "contract-tests",
+    "contract-test",
+}
+
+
+def _is_test_dir(subdir: Path) -> bool:
+    name = subdir.name.lower()
+    return (
+        name in _TEST_DIR_PATTERNS or name.endswith("-tests") or name.endswith("-test")
+    )
+
+
 def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
     """
     Detect all build tool directories: gradle or maven.
 
     Returns list of (tool_name, build_directory) tuples.
-    For multi-module projects, returns all submodules with build tools.
-    Prioritizes submodules with their own gradlew/mvnw over root.
+    For multi-module projects, returns submodules with build tools, skipping test modules.
     """
     root = Path(codebase_root)
     root_candidates = []
@@ -207,9 +245,12 @@ def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
     if (root / "mvnw").exists() or (root / "pom.xml").exists():
         root_candidates.append(("maven", root))
 
-    # For multi-module: look for build tools in subdirectories
+    # For multi-module: look for build tools in subdirectories, skip test modules
+    seen = set()
     for subdir in sorted(root.glob("*/")):
-        if subdir.name.startswith("."):
+        if subdir.name.startswith(".") or _is_test_dir(subdir):
+            continue
+        if subdir in seen:
             continue
         if (
             (subdir / "gradlew").exists()
@@ -217,24 +258,26 @@ def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
             or (subdir / "build.gradle.kts").exists()
         ):
             submodule_candidates.append(("gradle", subdir))
+            seen.add(subdir)
         elif (subdir / "mvnw").exists() or (subdir / "pom.xml").exists():
             submodule_candidates.append(("maven", subdir))
+            seen.add(subdir)
 
-    # Prioritize submodules with their own wrapper over root
+    # Submodules with their own wrapper take priority over root
     if submodule_candidates:
-        # Filter to only submodules with their own wrapper script
         with_wrapper = [
             c
             for c in submodule_candidates
             if (c[1] / ("gradlew" if c[0] == "gradle" else "mvnw")).exists()
         ]
-        if with_wrapper:
-            return with_wrapper + submodule_candidates
+        return with_wrapper if with_wrapper else submodule_candidates
 
-    return submodule_candidates + root_candidates
+    return root_candidates
 
 
-def _detect_build_tool(codebase_root: str, build_dir: str | None = None) -> tuple[str, Path]:
+def _detect_build_tool(
+    codebase_root: str, build_dir: str | None = None
+) -> tuple[str, Path]:
     """
     Detect build tool and return (tool, build_directory).
 
@@ -259,7 +302,9 @@ def _detect_build_tool(codebase_root: str, build_dir: str | None = None) -> tupl
         # Prefer Maven if both exist (more reliable for toolchain issues)
         if (explicit_dir / "mvnw").exists() or (explicit_dir / "pom.xml").exists():
             return ("maven", explicit_dir)
-        elif (explicit_dir / "gradlew").exists() or (explicit_dir / "build.gradle").exists():
+        elif (explicit_dir / "gradlew").exists() or (
+            explicit_dir / "build.gradle"
+        ).exists():
             return ("gradle", explicit_dir)
         else:
             raise ActuatorError(f"No build tool found in {explicit_dir}")
@@ -320,7 +365,9 @@ def _build_java_app(codebase_root: str, build_dir: str | None = None) -> None:
         ).returncode
 
         if result_code != 0:
-            raise ActuatorError(f"Build failed with {build_tool} (exit code {result_code})")
+            raise ActuatorError(
+                f"Build failed with {build_tool} (exit code {result_code})"
+            )
         print("✓ Build successful", flush=True)
 
         # Verify artifacts exist - check both build_path and root
@@ -330,7 +377,9 @@ def _build_java_app(codebase_root: str, build_dir: str | None = None) -> None:
             else []
         )
         maven_jars = (
-            list((build_path / "target").glob("*.jar")) if (build_path / "target").exists() else []
+            list((build_path / "target").glob("*.jar"))
+            if (build_path / "target").exists()
+            else []
         )
         # For multi-module, also check root
         root_jars = (
@@ -412,10 +461,35 @@ def run_docker_and_fetch_beans(
         if detected_port:
             port = detected_port
             print(
-                f"Auto-detected port {port} from docker-compose.yml (service profile)", flush=True
+                f"Auto-detected port {port} from docker-compose.yml (service profile)",
+                flush=True,
             )
 
     actuator_url = f"http://localhost:{port}"
+    # Track image_tag so cleanup can reference it even if set before a failure
+    image_tag: str | None = None
+
+    def _cleanup() -> None:
+        """Stop and remove all containers, swallowing errors so the original exception surfaces."""
+        print("Stopping Docker services...", flush=True)
+        try:
+            if use_compose:
+                subprocess.run(
+                    ["docker-compose", "down", "--remove-orphans"],
+                    cwd=root,
+                    capture_output=True,
+                    timeout=60,
+                )
+            elif image_tag:
+                for cmd in [
+                    ["docker", "stop", image_tag],
+                    ["docker", "rm", image_tag],
+                    ["docker", "rmi", image_tag],
+                ]:
+                    subprocess.run(cmd, capture_output=True, timeout=30)
+            print("✓ Cleanup complete", flush=True)
+        except Exception as cleanup_err:
+            print(f"⚠ Cleanup warning (non-fatal): {cleanup_err}", flush=True)
 
     try:
         if skip_build:
@@ -439,12 +513,11 @@ def run_docker_and_fetch_beans(
             )
             print("✓ All services started", flush=True)
 
-        if not use_compose:
+        else:
             print("Using Dockerfile for single-container build...", flush=True)
             _find_dockerfile(codebase_root)
             image_tag = _compute_image_tag(codebase_root)
 
-            # Build Docker image
             print(f"Building Docker image: {image_tag}...", flush=True)
             subprocess.run(
                 ["docker", "build", "-t", image_tag, str(codebase_root)],
@@ -453,10 +526,18 @@ def run_docker_and_fetch_beans(
             )
             print("✓ Docker image built", flush=True)
 
-            # Run container
             print(f"Starting container on port {port}...", flush=True)
             subprocess.run(
-                ["docker", "run", "-d", "-p", f"{port}:8080", "--name", image_tag, image_tag],
+                [
+                    "docker",
+                    "run",
+                    "-d",
+                    "-p",
+                    f"{port}:8080",
+                    "--name",
+                    image_tag,
+                    image_tag,
+                ],
                 check=True,
                 timeout=60,
             )
@@ -464,10 +545,9 @@ def run_docker_and_fetch_beans(
 
         # Wait for health and fetch beans — use docker exec if compose (avoids host proxy issues)
         print(f"Waiting for app to be ready (timeout: {timeout}s)...", flush=True)
-        if use_compose:
-            container_name = _get_service_container_name(compose_file)
-        else:
-            container_name = None
+        container_name = (
+            _get_service_container_name(compose_file) if use_compose else None
+        )
 
         if container_name:
             print(f"Using docker exec via container: {container_name}", flush=True)
@@ -480,36 +560,28 @@ def run_docker_and_fetch_beans(
             print("✓ App is healthy", flush=True)
             print("Fetching /actuator/beans...", flush=True)
             beans = fetch_beans_from_url(actuator_url)
-        # Count total beans across all contexts
-        total_bean_count = 0
-        for context_data in beans.get("contexts", {}).values():
-            total_bean_count += len(context_data.get("beans", {}))
+
+        total_bean_count = sum(
+            len(ctx.get("beans", {})) for ctx in beans.get("contexts", {}).values()
+        )
         print(f"✓ Fetched {total_bean_count} beans from actuator", flush=True)
         yield beans
 
     except subprocess.CalledProcessError as e:
+        _cleanup()
         raise ActuatorError(f"Docker operation failed: {e}") from e
-    finally:
-        print("Stopping Docker services...", flush=True)
-        if use_compose:
-            subprocess.run(
-                ["docker-compose", "stop"],
-                cwd=root,
-                capture_output=True,
-                timeout=60,
-            )
-            subprocess.run(
-                ["docker-compose", "rm", "-f"],
-                cwd=root,
-                capture_output=True,
-                timeout=60,
-            )
-        else:
-            image_tag = _compute_image_tag(codebase_root)
-            for cmd in [
-                ["docker", "stop", image_tag],
-                ["docker", "rm", image_tag],
-                ["docker", "rmi", image_tag],
-            ]:
-                subprocess.run(cmd, capture_output=True, timeout=30)
-        print("✓ Cleanup complete", flush=True)
+    except subprocess.TimeoutExpired as e:
+        _cleanup()
+        raise ActuatorError(f"Docker operation timed out: {e}") from e
+    except ActuatorError:
+        _cleanup()
+        raise
+    except KeyboardInterrupt:
+        _cleanup()
+        raise
+    except Exception as e:
+        _cleanup()
+        raise ActuatorError(f"Unexpected error during Docker lifecycle: {e}") from e
+    else:
+        # Success path — normal teardown
+        _cleanup()

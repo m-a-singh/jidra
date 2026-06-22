@@ -371,7 +371,7 @@ Method: SearchController.search
 Show output:
 ```json
 {
-  "method": "com.example.SearchController",
+  "method": "com.example.SearchController#search",
   "signature": "public List<SearchResult> search(String query, int page)",
   "source": "...",
   "resolved_callees": [...],

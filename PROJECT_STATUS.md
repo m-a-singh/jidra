@@ -1,15 +1,19 @@
 # PROJECT_STATUS
 
-## PIVOT COMPLETE: From "Multi-Service Agent" to "Enterprise Java Context Backend"
+## PIVOT COMPLETE: From "Multi-Service Agent" to "Enterprise Multi-Language Context Backend"
 
 See [PIVOT_RATIONALE.md](./PIVOT_RATIONALE.md) for detailed strategic context.
 
 ## 1) What Currently Works & Is Production-Ready ✅
 
 ### Core Graph Pipeline
-- ✅ Static graph extraction from Java source into JSONL (`graph.jsonl`, `graph_test.jsonl`)
-- ✅ Spring Actuator validation (Docker + bean extraction)
-- ✅ Phantom edge removal (71-78% noise reduction)
+- ✅ Multi-language graph extraction into JSONL (`graph.jsonl`, `graph_test.jsonl`)
+- ✅ **Scala**: SemanticDB two-pass extraction (~90% compiler-resolved), Docker sidecar via Maven Central
+- ✅ **Java**: tree-sitter AST + Spring Actuator validation, 71-78% phantom edge removal
+- ✅ **TypeScript**: ts-morph Docker sidecar, ~80% resolution
+- ✅ **Python**: AST + symbol table + Pyright, ~68.5% resolution
+- ✅ Multi-language merge: polyglot repos handled automatically, `language` tag on every node
+- ✅ Manifest-only language detection (no false positives from `node_modules` / vendored files)
 - ✅ Interactive HTML visualization with 3 export formats
 
 ### Context & Flow
@@ -27,14 +31,16 @@ See [PIVOT_RATIONALE.md](./PIVOT_RATIONALE.md) for detailed strategic context.
 - ✅ `jidra_get_call_chain` - Path finding
 
 ### Empirical Proof (Real Claude API)
-- ✅ **87-95% token reduction** (measured on 8 methods, 2 projects)
+- ✅ **68-95% token reduction** (measured across Java, Python, Scala)
 - ✅ **100% business logic coverage** (manual code tracing validation)
 - ✅ **0% false negatives** (completeness proven)
-- ✅ **71-78% phantom edge removal** (Spring Actuator validation)
+- ✅ **71-78% phantom edge removal** (Java Spring Actuator validation)
+- ✅ **Scala absence detection** — graph surfaces what has no callers (can't be found by grep)
 
 ### Multi-Project Validation
-- ✅ Proprietary: search (complex, 768 classes, 95.9% reduction)
-- ✅ Public: Spring Petclinic (simple, 25 classes, 87.4% reduction)
+- ✅ Proprietary Java: search-service (complex, 768 classes, 95.9% reduction)
+- ✅ Public Java: Spring Petclinic (simple, 25 classes, 87.4% reduction)
+- ✅ Proprietary Scala: recent-search-service (multi-language: Scala + TypeScript) — compiler-resolved graph, qualitatively better answers than file reading
 
 ---
 
@@ -134,15 +140,17 @@ Average: 87.4% reduction, all output quality equivalent ✅
 ## 6) Current Status: PRODUCTION READY ✅
 
 ### Completion Checklist
-- ✅ Graph extraction (AST)
-- ✅ Graph validation (Spring Actuator)
-- ✅ Context generation (87-95% reduction)
+- ✅ Graph extraction — Scala (SemanticDB), Java (AST), TypeScript (ts-morph), Python (AST+symbol table)
+- ✅ Graph validation — Java (Spring Actuator), Scala (compiler-resolved, no validation step needed)
+- ✅ Context generation (68-95% reduction across languages)
+- ✅ Multi-language merge (polyglot repos, `language` tag per node)
+- ✅ Manifest-only language detection (no false positives)
 - ✅ Flow stitching (recursive traversal)
-- ✅ MCP tools (5 complete)
-- ✅ Empirical validation (real API testing)
-- ✅ Multi-project proof (proprietary + public)
-- ✅ Automation (Docker + Actuator)
-- ✅ Documentation (ENTERPRISE_PROOF.md, SPRING_PETCLINIC_PROOF.md)
+- ✅ MCP tools (6 complete, all work across all languages)
+- ✅ Empirical validation (real API testing — Java + Scala)
+- ✅ Multi-project proof (Java proprietary + Java public + Scala proprietary)
+- ✅ Automation (Docker + Actuator for Java; Docker sidecar for Scala/TypeScript)
+- ✅ Documentation (ENTERPRISE_PROOF.md, SPRING_PETCLINIC_PROOF.md, ENTERPRISE_SCALA_PROOF.md, ENTERPRISE_PYTHON_PROOF.md)
 
 ### What's Ready for Production
 - One-command validation pipeline

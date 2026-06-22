@@ -69,6 +69,7 @@ const NESTJS_STEREOTYPES = {
 };
 
 const PATH_STEREOTYPES = [
+  // NestJS / TypeScript conventions
   [/\.controller\.(ts|tsx)$/, "controller"],
   [/\.service\.(ts|tsx)$/, "service"],
   [/\.repository\.(ts|tsx)$/, "repository"],
@@ -82,6 +83,17 @@ const PATH_STEREOTYPES = [
   [/components\//, "component"],
   [/pages\//, "page"],
   [/context\//, "context"],
+  // JavaScript / frontend conventions
+  [/\.(jsx)$/, "component"],
+  [/routes?\//i, "route"],
+  [/controllers?\//i, "controller"],
+  [/middleware\//i, "middleware"],
+  [/models?\//i, "model"],
+  [/services?\//i, "service"],
+  [/store\//i, "store"],
+  [/reducers?\//i, "reducer"],
+  [/actions?\//i, "action"],
+  [/api\//i, "endpoint"],
 ];
 
 function getStereotypes(decoratorNames, filePath) {
@@ -206,6 +218,7 @@ function extractFile(sourceFile, root) {
       implements: implExprs.map((i) => i.getExpression().getText()),
       imports,
       stereotypes,
+      language: "typescript",
     });
 
     // Inheritance edges
@@ -411,6 +424,7 @@ function extractMethod(node, classFullName, cId, relPath, imports, classDecorato
     route,
     controller_route: null,
     full_route: null,
+    language: "typescript",
   });
 
   // Call sites
@@ -557,6 +571,69 @@ function resolveCallEdges(records) {
   return extra;
 }
 
+// ── JS/Frontend source root detection ────────────────────────────────────────
+
+function readPackageJson(root) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  } catch { return {}; }
+}
+
+function detectFramework(pkg) {
+  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  if (deps["next"]) return "nextjs";
+  if (deps["@angular/core"]) return "angular";
+  if (deps["vue"]) return "vue";
+  if (deps["react"]) return "react";
+  if (deps["express"] || deps["fastify"] || deps["koa"] || deps["hapi"]) return "node";
+  return "unknown";
+}
+
+const FRAMEWORK_SOURCE_ROOTS = {
+  nextjs:  ["src", "app", "pages", "components", "lib", "hooks", "utils"],
+  react:   ["src", "components", "lib", "hooks", "utils", "pages"],
+  angular: ["src"],
+  vue:     ["src"],
+  node:    ["src", "lib", "routes", "controllers", "middleware", "api", "server"],
+  unknown: ["src", "lib", "app"],
+};
+
+function detectSourceRoots(root, framework) {
+  const candidates = FRAMEWORK_SOURCE_ROOTS[framework] || FRAMEWORK_SOURCE_ROOTS.unknown;
+  const roots = candidates
+    .map(c => path.join(root, c))
+    .filter(p => { try { return fs.statSync(p).isDirectory(); } catch { return false; } });
+
+  // Fallback: if no known source roots exist, check if root itself has source files
+  // Only accept root-level indexing for small repos (< 200 JS/TS files at root)
+  if (roots.length === 0) {
+    const rootFiles = fs.readdirSync(root)
+      .filter(f => /\.(js|ts|jsx|tsx|mjs)$/.test(f)).length;
+    if (rootFiles < 200) roots.push(root);
+  }
+
+  return roots;
+}
+
+const SKIP_FILE_PATTERNS = [
+  /\.min\.(js|ts)$/,
+  /\.bundle\.(js|ts)$/,
+  /\.(generated|gen)\.(js|ts|jsx|tsx)$/,
+  /\.d\.ts$/,
+  /__generated__/,
+  /\.stories\.(js|ts|jsx|tsx)$/,
+];
+
+function isSourceFile(filePath) {
+  if (SKIP_FILE_PATTERNS.some(p => p.test(filePath))) return false;
+  try {
+    // Files over 500 lines are almost certainly compiled bundles, not source
+    const lines = fs.readFileSync(filePath, "utf8").split("\n").length;
+    if (lines > 500) return false;
+  } catch { return false; }
+  return true;
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 function findTsConfig(root) {
@@ -588,8 +665,19 @@ function main() {
   });
 
   if (!tsConfigPath) {
-    // No tsconfig — manually glob TS/TSX files excluding noise dirs
-    const EXCLUDE = new Set(["node_modules", "dist", ".next", "out", "build", "coverage", ".git"]);
+    // No tsconfig — detect framework and index only known source roots
+    const pkg = readPackageJson(repoRoot);
+    const framework = detectFramework(pkg);
+    const sourceRoots = detectSourceRoots(repoRoot, framework);
+
+    process.stderr.write(`[jidra-ts] Framework: ${framework}, source roots: ${sourceRoots.map(r => path.relative(repoRoot, r) || ".").join(", ")}\n`);
+
+    const EXCLUDE = new Set([
+      "node_modules", "dist", ".next", "out", "build", "coverage",
+      ".git", ".turbo", "vendor", "public", "__generated__", ".cache",
+      "storybook-static", ".vercel", ".output", ".nuxt", ".svelte-kit",
+    ]);
+
     function addDir(dir) {
       let entries;
       try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -597,12 +685,13 @@ function main() {
         if (EXCLUDE.has(e.name)) continue;
         const full = path.join(dir, e.name);
         if (e.isDirectory()) addDir(full);
-        else if (/\.(ts|tsx)$/.test(e.name) && !e.name.endsWith(".d.ts")) {
+        else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e.name) && isSourceFile(full)) {
           project.addSourceFileAtPath(full);
         }
       }
     }
-    addDir(repoRoot);
+
+    for (const root of sourceRoots) addDir(root);
   }
 
   const sourceFiles = project.getSourceFiles().filter((sf) => {

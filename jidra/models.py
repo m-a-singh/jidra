@@ -35,6 +35,7 @@ class ClassEntry:
     implements: list[str] = field(default_factory=list)
     imports: list[str] = field(default_factory=list)
     stereotypes: list[str] = field(default_factory=list)
+    language: str = "unknown"
 
 
 @dataclass
@@ -61,6 +62,7 @@ class MethodEntry:
     route: str | None = None
     controller_route: str | None = None
     full_route: str | None = None
+    language: str = "unknown"
 
 
 @dataclass
@@ -115,7 +117,9 @@ def class_id(full_name: str, file_path: str) -> str:
     return _stable_id(f"class::{full_name}::{file_path}")
 
 
-def method_signature(class_full_name: str, method_name: str, parameter_types: list[str]) -> str:
+def method_signature(
+    class_full_name: str, method_name: str, parameter_types: list[str]
+) -> str:
     return f"{class_full_name}#{method_name}({', '.join(parameter_types)})"
 
 

@@ -111,13 +111,15 @@ def _priority(call) -> int:
     text = f"{call.receiver_type_normalized or ''} {call.receiver or ''}".lower()
     if k == "internal":
         if any(
-            t in text for t in ("service", "repository", "controller", "component", "processor")
+            t in text
+            for t in ("service", "repository", "controller", "component", "processor")
         ):
             return 0
         return 1
     if k == "unresolved":
         if any(
-            t in text for t in ("service", "repository", "controller", "component", "processor")
+            t in text
+            for t in ("service", "repository", "controller", "component", "processor")
         ):
             return 2
         return 3
@@ -137,7 +139,8 @@ def build_flow(
         roots = [
             m
             for m in graph.methods
-            if m.is_endpoint and (m.full_route == selector_or_route or m.route == selector_or_route)
+            if m.is_endpoint
+            and (m.full_route == selector_or_route or m.route == selector_or_route)
         ]
     if not roots:
         return {"error": f"no_flow_root:{selector_or_route}"}
@@ -172,7 +175,8 @@ def build_flow(
         if depth >= max_depth:
             continue
         calls = sorted(
-            calls_by_caller.get(mid, []), key=lambda c: (_priority(c), c.line, c.column, c.id)
+            calls_by_caller.get(mid, []),
+            key=lambda c: (_priority(c), c.line, c.column, c.id),
         )
         for call in calls:
             category = _classify(call)
@@ -205,17 +209,28 @@ def build_flow(
                 cand_id = None
                 cand_sig = None
                 confidence = 1.0
-                if resolution == "ambiguous_type" and len(call.resolved_candidates) == 1 and target:
+                if (
+                    resolution == "ambiguous_type"
+                    and len(call.resolved_candidates) == 1
+                    and target
+                ):
                     resolution = "resolved_probable"
                     cand_id = target.id
                     cand_sig = target.signature
                     confidence = 0.75
                 include_in_main = (
-                    (mode == "compact" and category in {"business_internal", "probable_internal"})
+                    (
+                        mode == "compact"
+                        and category in {"business_internal", "probable_internal"}
+                    )
                     or (
                         mode == "full"
                         and category
-                        in {"business_internal", "probable_internal", "unresolved_business"}
+                        in {
+                            "business_internal",
+                            "probable_internal",
+                            "unresolved_business",
+                        }
                     )
                     or (mode == "debug")
                     or (include_observability and category == "observability")
@@ -272,9 +287,9 @@ def build_flow(
                     external_calls.append(item)
                 else:
                     unresolved_calls.append(item)
-                if (mode in {"full", "debug"} and category == "unresolved_business") or (
-                    include_observability and category == "observability"
-                ):
+                if (
+                    mode in {"full", "debug"} and category == "unresolved_business"
+                ) or (include_observability and category == "observability"):
                     flow.append(
                         {
                             "depth": depth + 1,
@@ -322,7 +337,9 @@ def render_flow_text(flow_result: dict) -> str:
             lines.append(f"     id: {step.get('id')}")
             lines.append(f"     resolution: {step.get('resolution')}")
             if step.get("source_lines"):
-                lines.append(f"     source_lines: {sorted(set(step.get('source_lines', [])))}")
+                lines.append(
+                    f"     source_lines: {sorted(set(step.get('source_lines', [])))}"
+                )
         else:
             lines.append("")
             lines.append(f"  -> {call}")

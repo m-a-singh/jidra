@@ -27,7 +27,9 @@ def graph_records(graph) -> list[dict]:
 
     for cls in graph.classes:
         payload = to_dict(cls)
-        source_set = "test" if "/src/test/" in cls.file_path.replace("\\", "/") else "main"
+        source_set = (
+            "test" if "/src/test/" in cls.file_path.replace("\\", "/") else "main"
+        )
         out.append(
             {
                 "schema_version": SCHEMA_VERSION,
@@ -52,7 +54,9 @@ def graph_records(graph) -> list[dict]:
         payload = to_dict(field)
         owner = class_by_id.get(field.class_id)
         qname = f"{owner.full_name}.{field.name}" if owner else field.name
-        source_set = "test" if "/src/test/" in field.file_path.replace("\\", "/") else "main"
+        source_set = (
+            "test" if "/src/test/" in field.file_path.replace("\\", "/") else "main"
+        )
         out.append(
             {
                 "schema_version": SCHEMA_VERSION,
@@ -69,10 +73,13 @@ def graph_records(graph) -> list[dict]:
         )
     for method in graph.methods:
         payload = to_dict(method)
-        source_set = "test" if "/src/test/" in method.file_path.replace("\\", "/") else "main"
+        source_set = (
+            "test" if "/src/test/" in method.file_path.replace("\\", "/") else "main"
+        )
         class_entry = class_by_id.get(method.class_id)
         params = [
-            {"name": n, "type": t} for n, t in zip(method.parameter_names, method.parameter_types)
+            {"name": n, "type": t}
+            for n, t in zip(method.parameter_names, method.parameter_types)
         ]
         call_items = [c for c in graph.callsites if c.caller_method_id == method.id]
         calls = []
@@ -113,7 +120,9 @@ def graph_records(graph) -> list[dict]:
                 "return_type": method.return_type,
                 "parameters": params,
                 "annotations": method.annotations,
-                "visibility": "public" if "public" in payload.get("modifiers", []) else "package",
+                "visibility": "public"
+                if "public" in payload.get("modifiers", [])
+                else "package",
                 "is_static": "static" in payload.get("modifiers", []),
                 "is_constructor": method.method_name
                 == (class_entry.name if class_entry else method.method_name),
@@ -133,7 +142,9 @@ def graph_records(graph) -> list[dict]:
         )
     for call in graph.callsites:
         payload = to_dict(call)
-        source_set = "test" if "/src/test/" in call.file_path.replace("\\", "/") else "main"
+        source_set = (
+            "test" if "/src/test/" in call.file_path.replace("\\", "/") else "main"
+        )
         out.append(
             {
                 "schema_version": SCHEMA_VERSION,
@@ -197,7 +208,9 @@ def _normalized_record_path(record: dict) -> str:
     return raw.replace("\\", "/")
 
 
-def split_graph_records_by_source(records: Iterable[dict]) -> tuple[list[dict], list[dict]]:
+def split_graph_records_by_source(
+    records: Iterable[dict],
+) -> tuple[list[dict], list[dict]]:
     prod: list[dict] = []
     test: list[dict] = []
 

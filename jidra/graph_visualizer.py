@@ -68,10 +68,14 @@ def build_graph_data(
 
                 # Find edges from this method
                 for edge in graph.resolved_call_edges:
-                    if edge.caller_method_id == method_id and edge.callee_method_id not in visited:
+                    if (
+                        edge.caller_method_id == method_id
+                        and edge.callee_method_id not in visited
+                    ):
                         queue.append((edge.callee_method_id, current_depth + 1))
                     elif (
-                        edge.callee_method_id == method_id and edge.caller_method_id not in visited
+                        edge.callee_method_id == method_id
+                        and edge.caller_method_id not in visited
                     ):
                         queue.append((edge.caller_method_id, current_depth + 1))
         else:
@@ -158,7 +162,8 @@ def build_graph_data(
 
     if verbose:
         print(
-            f"  • Generated {len(nodes)} nodes and {len(edges)} edges for visualization", flush=True
+            f"  • Generated {len(nodes)} nodes and {len(edges)} edges for visualization",
+            flush=True,
         )
 
     return result
@@ -190,10 +195,6 @@ def render_interactive_html(graph_data: dict) -> str:
 
     nodes_json = json.dumps(vis_nodes)
     edges_json = json.dumps(vis_edges)
-
-    # JSON is already safe; pass directly
-    nodes_json_escaped = nodes_json
-    edges_json_escaped = edges_json
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -247,8 +248,8 @@ def render_interactive_html(graph_data: dict) -> str:
     </div>
 
     <script type="text/javascript">
-        const nodes = new vis.DataSet({nodes_json_escaped});
-        const edges = new vis.DataSet({edges_json_escaped});
+        const nodes = new vis.DataSet({nodes_json});
+        const edges = new vis.DataSet({edges_json});
         const container = document.getElementById('network');
         const data = {{nodes: nodes, edges: edges}};
         const options = {{

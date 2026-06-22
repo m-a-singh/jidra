@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -57,6 +58,7 @@ class PyrightValidator:
         self.codebase_root = Path(codebase_root).resolve()
         self.timeout = timeout
         self.metrics = ValidationMetrics()
+        self._last_diagnostics: list[dict[str, Any]] = []
 
     def validate(self) -> ValidationMetrics:
         """
@@ -101,7 +103,9 @@ class PyrightValidator:
             self.metrics.failures += 1
             return self.metrics
         except FileNotFoundError:
-            logger.warning("Pyright not found (optional). Install with: pip install pyright")
+            logger.warning(
+                "Pyright not found (optional). Install with: pip install pyright"
+            )
             self.metrics.failures += 1
             return self.metrics
         except Exception as e:
@@ -117,13 +121,41 @@ class PyrightValidator:
         self.metrics.warning_count = summary.get("warningCount", 0)
         self.metrics.execution_time_sec = float(summary.get("timeInSec", 0))
 
-        # Extract unresolved imports
         diagnostics = data.get("generalDiagnostics", [])
+        self._last_diagnostics = diagnostics
+
         for diag in diagnostics:
             if "could not be resolved" in diag.get("message", "").lower():
                 self.metrics.unresolved_imports.append(
                     f"{diag.get('file', 'unknown')}: {diag.get('message', '')}"
                 )
+
+    def get_type_hints(self) -> dict[tuple[str, int], str]:
+        """
+        Extract inferred receiver types from Pyright diagnostics.
+
+        Parses messages like 'Cannot access attribute "foo" for class "Bar"'
+        to produce a {(abs_file_path, line): class_name} map. Used by the
+        call-resolution pre-pass to enrich call sites that the symbol table
+        could not type (receiver_type=None), converting Phase-2/3/4 guesses
+        into Phase-1 exact matches.
+
+        Returns {} when Pyright was unavailable or produced no diagnostics.
+        """
+        hints: dict[tuple[str, int], str] = {}
+        # Patterns Pyright emits that reveal the receiver type at a call site:
+        #   'Cannot access attribute "x" for class "Foo"'
+        #   'Cannot access member "x" for type "Foo"'
+        _pattern = re.compile(r'(?:for class|for type) "([A-Za-z_][A-Za-z0-9_]*)"')
+        for diag in self._last_diagnostics:
+            m = _pattern.search(diag.get("message", ""))
+            if not m:
+                continue
+            file_path = diag.get("file", "")
+            line = diag.get("range", {}).get("start", {}).get("line", -1)
+            if file_path and line >= 0:
+                hints[(file_path, line)] = m.group(1)
+        return hints
 
     def get_metrics(self) -> ValidationMetrics:
         """Return collected validation metrics."""

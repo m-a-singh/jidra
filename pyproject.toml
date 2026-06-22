@@ -16,7 +16,8 @@ dependencies = [
   "litellm>=1.82.0",
   "pyyaml>=6.0.0",
   "mcp>=1.27.0",
-  "watchdog>=4.0.0"
+  "watchdog>=4.0.0",
+  "protobuf>=4.25.0"
 ]
 
 [project.scripts]
@@ -33,4 +34,4 @@ test = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["jidra"]
+include = ["jidra", "jidra.*"]

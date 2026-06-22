@@ -5,9 +5,13 @@ Removes phantom edges to confirmed non-bean classes.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from .models import Graph
+
+ACTUATOR_CACHE_FILENAME = "actuator_beans.json"
 
 
 @dataclass
@@ -97,12 +101,16 @@ def validate_graph(
         )
 
     # Build maps
-    confirmed_class_ids = {cls.id for cls in graph.classes if cls.full_name in confirmed_beans}
+    confirmed_class_ids = {
+        cls.id for cls in graph.classes if cls.full_name in confirmed_beans
+    }
     confirmed_method_ids = {
         method.id for method in graph.methods if method.class_id in confirmed_class_ids
     }
 
-    unconfirmed_class_ids = {cls.id for cls in graph.classes if cls.id not in confirmed_class_ids}
+    unconfirmed_class_ids = {
+        cls.id for cls in graph.classes if cls.id not in confirmed_class_ids
+    }
 
     report.unconfirmed_classes = sorted(
         [cls.full_name for cls in graph.classes if cls.id in unconfirmed_class_ids]
@@ -134,7 +142,9 @@ def validate_graph(
 
     # Filter edges: keep only those pointing to confirmed methods
     filtered_edges = [
-        edge for edge in graph.resolved_call_edges if edge.callee_method_id in confirmed_method_ids
+        edge
+        for edge in graph.resolved_call_edges
+        if edge.callee_method_id in confirmed_method_ids
     ]
     report.edges_removed = len(graph.resolved_call_edges) - len(filtered_edges)
     report.removed_edges = [
@@ -156,30 +166,25 @@ def validate_graph(
         # else: all resolved candidates unconfirmed, remove
 
     # Upgrade unresolved callsites where receiver type matches a confirmed bean
-    # Create new callsites to avoid mutating original graph
     upgraded = 0
-    upgraded_callsites = []
     for callsite in filtered_callsites:
         if (
             callsite.resolution_status == "unresolved_receiver"
             and callsite.receiver_type_normalized
             and callsite.receiver_type_normalized in confirmed_beans
         ):
-            # Use dataclass replace() to create new instance without mutation
-            upgraded_callsites.append(replace(callsite, resolution_status="actuator_resolved"))
+            callsite.resolution_status = "actuator_resolved"
             upgraded += 1
-        else:
-            upgraded_callsites.append(callsite)
 
     report.callsites_upgraded = upgraded
-    filtered_callsites = upgraded_callsites
     report.edges_after = len(filtered_edges)
 
     if verbose:
         pct = round(100 * report.edges_removed / max(1, report.edges_before), 1)
         print(f"  • Removed {report.edges_removed} phantom edges ({pct}%)", flush=True)
         print(
-            f"  • Filtered {len(graph.callsites) - len(filtered_callsites)} callsites", flush=True
+            f"  • Filtered {len(graph.callsites) - len(filtered_callsites)} callsites",
+            flush=True,
         )
         if upgraded > 0:
             print(f"  • Upgraded {upgraded} callsites to actuator_resolved", flush=True)
@@ -195,3 +200,130 @@ def validate_graph(
     )
 
     return filtered_graph, report
+
+
+def save_actuator_cache(graph_dir: Path, beans_response: dict) -> None:
+    """Atomically save raw actuator response to cache file."""
+    graph_dir.mkdir(parents=True, exist_ok=True)
+    path = graph_dir / ACTUATOR_CACHE_FILENAME
+    temp_path = path.with_suffix(".tmp")
+    temp_path.write_text(json.dumps(beans_response, indent=2), encoding="utf-8")
+    temp_path.replace(path)
+
+
+def load_actuator_cache(graph_dir: Path) -> dict | None:
+    """Load cached actuator response or None if absent."""
+    path = graph_dir / ACTUATOR_CACHE_FILENAME
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, IOError):
+        return None
+
+
+def detect_beans_from_graph(graph: Graph) -> set[str]:
+    """Static bean inference from annotations in the graph.
+
+    Detects classes with @Service, @Repository, @Controller, @Component,
+    @Configuration, @Entity annotations and @Bean methods in @Configuration classes.
+    """
+    bean_classes = set()
+
+    bean_annotations = {
+        "Service",
+        "Repository",
+        "Controller",
+        "Component",
+        "Configuration",
+        "Entity",
+    }
+
+    for cls in graph.classes:
+        # Check for bean annotations
+        for annotation in cls.annotations:
+            ann_name = annotation.split(".")[-1] if "." in annotation else annotation
+            if ann_name in bean_annotations:
+                bean_classes.add(cls.full_name)
+                break
+
+    # Find @Bean methods in @Configuration classes
+    config_classes = {
+        cls.full_name
+        for cls in graph.classes
+        if any(
+            "Configuration" in (a.split(".")[-1] if "." in a else a)
+            for a in cls.annotations
+        )
+    }
+
+    for method in graph.methods:
+        if method.class_full_name in config_classes:
+            for annotation in method.annotations:
+                ann_name = (
+                    annotation.split(".")[-1] if "." in annotation else annotation
+                )
+                if ann_name == "Bean":
+                    # Return type is the bean class
+                    if method.return_type and method.return_type != "void":
+                        bean_classes.add(method.return_type)
+
+    return bean_classes
+
+
+def load_confirmed_beans_for_reindex(
+    graph_dir: Path, graph: Graph
+) -> tuple[set[str], str]:
+    """Load confirmed beans with priority fallback.
+
+    Priority:
+    1. actuator_beans.json cached response → source="cached_actuator"
+    2. detect_beans_from_graph() → source="static_annotation"
+    3. Empty set → source="none"
+
+    Returns: (confirmed_beans, source)
+    """
+    # Try cached actuator response first
+    cached = load_actuator_cache(graph_dir)
+    if cached:
+        confirmed = parse_actuator_beans(cached)
+        if confirmed:
+            return confirmed, "cached_actuator"
+
+    # Fallback to static detection
+    detected = detect_beans_from_graph(graph)
+    if detected:
+        return detected, "static_annotation"
+
+    return set(), "none"
+
+
+def _changed_files_affect_beans(mini_graph: Graph) -> bool:
+    """Check if changed files have bean-relevant annotations.
+
+    Returns True if any changed file contains classes with bean annotations
+    or @Bean methods, which would invalidate the actuator cache.
+    """
+    bean_annotations = {
+        "Service",
+        "Repository",
+        "Controller",
+        "Component",
+        "Configuration",
+        "Entity",
+        "Bean",
+    }
+
+    for cls in mini_graph.classes:
+        for annotation in cls.annotations:
+            ann_name = annotation.split(".")[-1] if "." in annotation else annotation
+            if ann_name in bean_annotations:
+                return True
+
+    for method in mini_graph.methods:
+        for annotation in method.annotations:
+            ann_name = annotation.split(".")[-1] if "." in annotation else annotation
+            if ann_name == "Bean":
+                return True
+
+    return False
