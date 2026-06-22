@@ -913,6 +913,17 @@ def _resolve_calls(graph: Graph) -> None:
         c.full_name for c in graph.classes
     }
 
+    # Interface/abstract-class -> concrete implementing class(es), keyed by the
+    # short name as captured on the `implements` clause (rarely an FQCN in source).
+    implementers_by_target_short: dict[str, list[str]] = {}
+    for edge in graph.inheritance_edges:
+        if edge.relation != "implements":
+            continue
+        key = edge.target_class.split(".")[-1]
+        implementers = implementers_by_target_short.setdefault(key, [])
+        if edge.source_class not in implementers:
+            implementers.append(edge.source_class)
+
     edges: list[ResolvedCallEdge] = []
 
     for call in graph.callsites:
@@ -989,10 +1000,33 @@ def _resolve_calls(graph: Graph) -> None:
                 reason = "receiver type matches multiple wildcard imports"
                 candidates = []
             elif normalized:
+                sole_implementers = implementers_by_target_short.get(
+                    normalized.split(".")[-1], []
+                )
+                sole_impl_matches: list[MethodEntry] = []
+                sole_implementer = None
+                if len(sole_implementers) == 1:
+                    impl_candidates = methods_by_full_class_and_name.get(
+                        (sole_implementers[0], call.callee_name), []
+                    )
+                    sole_impl_matches = _arity_filter(impl_candidates) or impl_candidates
+                    if len(sole_impl_matches) == 1:
+                        sole_implementer = sole_implementers[0]
+
                 full_matches = methods_by_full_class_and_name.get(
                     (normalized, call.callee_name), []
                 )
-                if full_matches:
+                if sole_implementer:
+                    # Prefer the concrete sole implementation over the
+                    # interface/abstract-class method declaration itself,
+                    # since the latter has no real body to point a reader at.
+                    candidates = sole_impl_matches
+                    status = "resolved_via_sole_implementation"
+                    reason = (
+                        f"receiver type {normalized} is an interface/abstract "
+                        f"class with a single implementer {sole_implementer}"
+                    )
+                elif full_matches:
                     arity_matches = _arity_filter(full_matches)
                     candidates = arity_matches if arity_matches else full_matches
 
