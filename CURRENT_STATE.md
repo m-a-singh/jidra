@@ -4,7 +4,7 @@
 
 **JIDRA is an Enterprise Multi-Language Context Backend for LLM Workflows.**
 
-Core function: Extract compiler-quality call graphs from Scala, Java, TypeScript, and Python codebases, reduce context by 68-95% while maintaining 100% business logic coverage, then expose that structured context to LLMs (Claude, Codex, Gemini).
+Core function: Extract compiler-quality call graphs from Scala, Java, TypeScript, Python, and Go codebases, reduce context by 68-95% while maintaining 100% business logic coverage, then expose that structured context to LLMs (Claude, Codex, Gemini).
 
 JIDRA is a Python CLI + MCP server that builds multi-language graphs (classes, methods, callsites, resolved call edges), then exposes graph-backed operations for trace, context, stitched flow, prompt construction, and optional LiteLLM-based diagnosis.
 
@@ -13,14 +13,15 @@ JIDRA is a Python CLI + MCP server that builds multi-language graphs (classes, m
 - **Java** (~85% resolution): tree-sitter AST + Spring Actuator runtime validation — 71-78% phantom edge removal
 - **TypeScript** (~80% resolution): ts-morph Docker sidecar + static analysis
 - **Python** (~68.5% resolution): AST + symbol table + Pyright validation
+- **Go** (best-effort resolution, not yet benchmarked): tree-sitter AST extraction (in-process, no Docker/compiler) + local symbol-table call resolution — no interface-satisfaction (structural typing) resolution
 
-Multi-language repos (e.g. Scala Lambda + TypeScript CDK + Python scripts) are auto-detected and merged into a single graph. Language detection is manifest-only (`build.sbt`, `package.json`, `pom.xml`, `pyproject.toml`) — no false positives from `node_modules` or vendored files.
+Multi-language repos (e.g. Scala Lambda + TypeScript CDK + Python scripts) are auto-detected and merged into a single graph. Language detection is manifest-only (`build.sbt`, `package.json`, `pom.xml`, `pyproject.toml`, `go.mod`) — no false positives from `node_modules` or vendored files.
 
 It is mostly deterministic up to graph/context/flow outputs; Spring Actuator validation adds Java runtime ground-truth; SemanticDB provides Scala compile-time ground-truth; only `diagnose` adds LLM-generated reasoning.
 
 ## 2) Current Architecture
 - `jidra/cli.py`: Main CLI entrypoint. Handles `index`, `trace`, `context`, `trace-route`, `flow`, `prompt`, `diagnose`, `mcp`.
-- `jidra/extractor.py`: Multi-language routing — dispatches to Java, Scala, TypeScript, or Python extractor; merges graphs for polyglot repos.
+- `jidra/extractor.py`: Multi-language routing — dispatches to Java, Scala, TypeScript, Python, or Go extractor; merges graphs for polyglot repos.
 - `jidra/scala_extractor.py`: Scala SemanticDB extraction — runs sbt sidecar, reads `.semanticdb` proto files, two-pass definition + call-site extraction.
 - `jidra/scala_filters.py`: Scala file iteration + excluded dirs (`.bloop`, `.metals`, `target`, `.scala-build`).
 - `jidra/scala_proto/`: Generated protobuf bindings for scalameta SemanticDB (committed, no grpcio-tools at runtime).
