@@ -79,6 +79,8 @@ def detect_languages(root: Path) -> list[str]:
         langs.append("scala")
     if (root / "package.json").exists() or _rglob_outside_noise(root, "package.json"):
         langs.append("typescript")
+    if (root / "go.mod").exists() or _rglob_outside_noise(root, "go.mod"):
+        langs.append("go")
     if (
         (root / "pom.xml").exists()
         or (root / "build.gradle").exists()
