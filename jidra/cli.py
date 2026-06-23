@@ -1033,7 +1033,7 @@ def _load_cli_config(config_path: str | None = None) -> dict:
         return {}
 
 
-_SOURCE_FILE_EXTENSIONS = (".java", ".py", ".ts", ".tsx", ".scala")
+_SOURCE_FILE_EXTENSIONS = (".java", ".py", ".ts", ".tsx", ".scala", ".go")
 
 
 def _gather_source_files(codebase_path: Path) -> list[Path]:
@@ -1628,6 +1628,7 @@ def _up() -> None:
     has_java = "java" in langs
     has_typescript = "typescript" in langs
     has_python = "python" in langs
+    has_go = "go" in langs
 
     print(f"   Detected languages: {', '.join(langs)}")
 
@@ -1751,6 +1752,8 @@ def _up() -> None:
             ext_map += [".py"]
         if has_typescript:
             ext_map += [".ts", ".tsx", ".js", ".jsx"]
+        if has_go:
+            ext_map += [".go"]
         watch_ext = tuple(ext_map)
         watch_ext_str = " / ".join(f"*{e}" for e in watch_ext)
         print("[3/3] WATCHING FOR CHANGES\n")
