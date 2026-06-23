@@ -17,3 +17,4 @@ jidra/scala_proto/__pycache__
 .jidra_test/graph.jsonl
 .jidra_test/graph_test.jsonl
 CLAUDE.md
+__pycache__

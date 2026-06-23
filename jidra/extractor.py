@@ -332,6 +332,17 @@ LOMBOK_CLASS_ANNOTATIONS = {
     "RequiredArgsConstructor",
 }
 
+LOMBOK_LOGGER_ANNOTATIONS = {
+    "Slf4j": "org.slf4j.Logger",
+    "Log4j": "org.apache.logging.log4j.Logger",
+    "Log4j2": "org.apache.logging.log4j.Logger",
+    "CommonsLog": "org.apache.commons.logging.Log",
+    "Log": "java.util.logging.Logger",
+    "XSlf4j": "org.slf4j.ext.XLogger",
+    "JBossLog": "org.jboss.logging.Logger",
+    "Flogger": "com.google.common.flogger.FluentLogger",
+}
+
 
 def _lombok_getter_name(field_name: str, type_name: str) -> str:
     if type_name == "boolean":
@@ -343,6 +354,23 @@ def _lombok_getter_name(field_name: str, type_name: str) -> str:
 
 def _lombok_setter_name(field_name: str) -> str:
     return "set" + field_name[:1].upper() + field_name[1:]
+
+
+def _synthesize_lombok_logger_field(cls: ClassEntry) -> FieldEntry | None:
+    """Synthesize the `log` field that Lombok @Slf4j/@Log4j2/etc. generate at compile time."""
+    names = {_annotation_name(a) for a in cls.annotations}
+    for ann_name, logger_type in LOMBOK_LOGGER_ANNOTATIONS.items():
+        if ann_name in names:
+            return FieldEntry(
+                id=field_id(cls.full_name, "log", cls.file_path, cls.start_line),
+                class_id=cls.id,
+                name="log",
+                type_name=logger_type,
+                modifiers=["private", "static", "final"],
+                file_path=cls.file_path,
+                line=cls.start_line,
+            )
+    return None
 
 
 def _synthesize_lombok_artifacts(
@@ -610,6 +638,12 @@ def _extract_local_variable_types(body_node: Node, source: bytes) -> dict[str, s
                                 _text(ident, source),
                                 _strip_generic(_first_type_text(p, source, "unknown")),
                             )
+            else:
+                # Single-param lambda without parens: `x -> x.foo()` — tree-sitter
+                # puts the identifier directly as first child of lambda_expression.
+                first = node.children[0] if node.children else None
+                if first and first.type == "identifier":
+                    out.setdefault(_text(first, source), "unknown")
     return out
 
 
@@ -682,6 +716,8 @@ def _infer_receiver_type_raw(
 ) -> tuple[str | None, str | None]:
     if receiver_text is None:
         return cls.full_name, "same_class"
+    if receiver_text == "this":
+        return cls.full_name, "this"
     return symbols.lookup(receiver_text)
 
 
@@ -960,6 +996,9 @@ def _extract_file(file_path: Path, parser=None) -> Graph:
             )
 
         class_fields = _extract_fields(class_node, source, cls)
+        logger_field = _synthesize_lombok_logger_field(cls)
+        if logger_field:
+            class_fields.append(logger_field)
         fields.extend(class_fields)
 
         class_methods, class_calls = _extract_methods(
@@ -1048,26 +1087,100 @@ def _find_method_in_hierarchy(
     methods_by_full_class_and_name: dict[tuple[str, str], list[MethodEntry]],
     class_by_full_name: dict[str, ClassEntry],
     all_class_full_names: set[str],
+    methods_by_full_class: dict[str, list[MethodEntry]] | None = None,
 ) -> tuple[list[MethodEntry], str | None]:
-    """Walk the extends chain to find a method not declared on the direct receiver type."""
+    """BFS over extends + implements to find a method not declared on the direct receiver type."""
     visited: set[str] = set()
-    current: str | None = normalized_class
-    while current and current not in visited:
+    queue: list[str] = [normalized_class]
+    while queue:
+        current = queue.pop(0)
+        if current in visited:
+            continue
         visited.add(current)
         matches = methods_by_full_class_and_name.get((current, callee_name), [])
         if matches:
             return matches, current
         cls = class_by_full_name.get(current)
-        if not cls or not cls.extends:
-            break
-        parent = cls.extends
-        if "." not in parent and cls.package_name:
-            candidate = f"{cls.package_name}.{parent}"
-            if candidate in all_class_full_names:
-                current = candidate
-                continue
-        current = parent if parent in all_class_full_names else None
+        if not cls:
+            continue
+        parents: list[str] = []
+        if cls.extends:
+            parents.append(cls.extends)
+        parents.extend(cls.implements)
+        for raw_parent in parents:
+            if "." in raw_parent:
+                candidate = raw_parent
+            elif cls.package_name:
+                candidate = f"{cls.package_name}.{raw_parent}"
+                if candidate not in all_class_full_names:
+                    if methods_by_full_class is not None:
+                        normalized, _, _ = _normalize_type(
+                            raw_parent, cls, methods_by_full_class, all_class_full_names
+                        )
+                        candidate = normalized or raw_parent
+                    else:
+                        candidate = raw_parent
+            else:
+                candidate = raw_parent
+            if candidate in all_class_full_names and candidate not in visited:
+                queue.append(candidate)
     return [], None
+
+
+def _resolve_dotted_receiver(
+    receiver_text: str,
+    caller_method: MethodEntry,
+    caller_class: ClassEntry,
+    fields_by_class: dict[str, dict[str, str]],
+    class_by_full_name: dict[str, ClassEntry],
+    all_class_full_names: set[str],
+    methods_by_full_class: dict[str, list[MethodEntry]],
+) -> tuple[str | None, str | None]:
+    """Resolve a dotted receiver expression like `this.repo`, `svc.helper`, or `a.b.c`.
+
+    Walks the chain segment by segment using field type information from the
+    indexed codebase. Returns (resolved_type, source_label) or (None, None).
+    """
+    parts = receiver_text.split(".")
+    if len(parts) < 2:
+        return None, None
+
+    first = parts[0]
+    params_map = dict(zip(caller_method.parameter_names, caller_method.parameter_types))
+    local_types = caller_method.local_variable_types or {}
+
+    if first == "this":
+        current_type: str | None = caller_class.full_name
+    else:
+        raw = (
+            local_types.get(first)
+            or params_map.get(first)
+            or fields_by_class.get(caller_class.full_name, {}).get(first)
+        )
+        if not raw:
+            return None, None
+        current_type, _, _ = _normalize_type(
+            raw, caller_class, methods_by_full_class, all_class_full_names
+        )
+
+    if current_type is None:
+        return None, None
+
+    for part in parts[1:]:
+        owner = class_by_full_name.get(current_type)
+        if owner is None:
+            # External type — still return current_type so it becomes external_library.
+            return current_type, "dotted_chain_external"
+        raw_field_type = fields_by_class.get(current_type, {}).get(part)
+        if not raw_field_type:
+            return None, None
+        current_type, _, _ = _normalize_type(
+            raw_field_type, owner, methods_by_full_class, all_class_full_names
+        )
+        if current_type is None:
+            return None, None
+
+    return current_type, "dotted_field_chain"
 
 
 def _resolve_calls(graph: Graph) -> None:
@@ -1107,6 +1220,12 @@ def _resolve_calls(graph: Graph) -> None:
     all_class_full_names = set(methods_by_full_class.keys()) | {
         c.full_name for c in graph.classes
     }
+
+    fields_by_class: dict[str, dict[str, str]] = {}
+    for f in graph.fields:
+        owner = class_by_id.get(f.class_id)
+        if owner:
+            fields_by_class.setdefault(owner.full_name, {})[f.name] = f.type_name
 
     # Interface/abstract-class -> concrete implementing class(es), keyed by the
     # short name as captured on the `implements` clause (rarely an FQCN in source).
@@ -1173,6 +1292,7 @@ def _resolve_calls(graph: Graph) -> None:
                     methods_by_full_class_and_name,
                     class_by_full_name,
                     all_class_full_names,
+                    methods_by_full_class,
                 )
                 inherited_arity = _arity_filter(inherited)
                 if inherited_arity:
@@ -1253,6 +1373,7 @@ def _resolve_calls(graph: Graph) -> None:
                         methods_by_full_class_and_name,
                         class_by_full_name,
                         all_class_full_names,
+                        methods_by_full_class,
                     )
                     if inherited:
                         arity_matches = _arity_filter(inherited)
@@ -1280,6 +1401,30 @@ def _resolve_calls(graph: Graph) -> None:
                         else:
                             status = "external_library"
                             reason = "receiver class not present in indexed codebase"
+            elif (
+                call.receiver
+                and "." in call.receiver
+                and not call.receiver.rstrip().endswith(")")
+            ):
+                # Dotted field chain: `this.service.repo`, `svc.helper`, etc.
+                dotted_type, dotted_source = _resolve_dotted_receiver(
+                    call.receiver,
+                    caller_method,
+                    caller_class,
+                    fields_by_class,
+                    class_by_full_name,
+                    all_class_full_names,
+                    methods_by_full_class,
+                )
+                if dotted_type:
+                    call.receiver_type_raw = dotted_type
+                    call.receiver_resolution_source = dotted_source
+                    call.receiver_type = dotted_type
+                    _resolve_one(call)
+                    return
+                else:
+                    status = "unresolved_receiver"
+                    reason = "could not infer or normalize receiver type"
             else:
                 status = "unresolved_receiver"
                 reason = "could not infer or normalize receiver type"

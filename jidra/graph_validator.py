@@ -73,12 +73,15 @@ def validate_graph(
     """
     Validate graph against confirmed beans and optionally filter it.
 
-    Filtering logic:
-    1. Identify confirmed_class_ids from ClassEntry.full_name
-    2. Identify confirmed_method_ids from MethodEntry.class_id
-    3. Remove ResolvedCallEdge where callee_method_id not in confirmed_method_ids
-    4. Remove CallSite where all resolved_candidates point to non-confirmed methods
-    5. Upgrade unresolved CallSites where receiver_type matches a confirmed bean
+    An edge is only considered phantom if its callee is a Spring-managed class
+    (has a bean annotation) that is NOT present in confirmed_beans. Edges to
+    plain Java classes (DTOs, domain objects, utils, etc.) are always kept —
+    those are real call-site relationships, not Spring DI injection points.
+
+    When a real actuator response is available confirmed_beans is the full
+    runtime bean set and the distinction above is irrelevant (every Spring bean
+    is confirmed or not). When using the static-annotation heuristic fallback,
+    this distinction prevents over-filtering.
 
     Args:
         graph: Input graph (not mutated).
@@ -100,13 +103,30 @@ def validate_graph(
             flush=True,
         )
 
-    # Build maps
+    # Classes confirmed present at runtime.
     confirmed_class_ids = {
         cls.id for cls in graph.classes if cls.full_name in confirmed_beans
     }
     confirmed_method_ids = {
         method.id for method in graph.methods if method.class_id in confirmed_class_ids
     }
+
+    # Spring-managed classes: only these can produce phantom edges when absent.
+    # Plain Java classes (no bean annotation) are always real call targets.
+    _SPRING_BEAN_ANNOTATIONS = {
+        "Service", "Repository", "Controller", "RestController",
+        "Component", "Configuration", "Entity", "Bean",
+        "EventListener", "Scheduled", "Async",
+    }
+
+    def _ann_name(a: str) -> str:
+        name = a.split("(")[0].strip().lstrip("@")
+        return name.split(".")[-1] if "." in name else name
+
+    spring_managed_class_ids: set[str] = set()
+    for cls in graph.classes:
+        if any(_ann_name(a) in _SPRING_BEAN_ANNOTATIONS for a in cls.annotations):
+            spring_managed_class_ids.add(cls.id)
 
     unconfirmed_class_ids = {
         cls.id for cls in graph.classes if cls.id not in confirmed_class_ids
@@ -122,48 +142,54 @@ def validate_graph(
             flush=True,
         )
 
+    # Build callee-class lookup for edges.
+    method_to_class_id = {m.id: m.class_id for m in graph.methods}
+
+    def _is_phantom_edge(callee_method_id: str) -> bool:
+        """An edge is phantom only if callee is Spring-managed but not confirmed."""
+        if callee_method_id in confirmed_method_ids:
+            return False
+        callee_cls_id = method_to_class_id.get(callee_method_id)
+        # If callee class is Spring-managed and not confirmed → phantom DI edge.
+        # If callee class is plain Java (not Spring-managed) → always real.
+        return callee_cls_id in spring_managed_class_ids
+
     # Counts before filtering
     report.edges_before = len(graph.resolved_call_edges)
 
     if no_filter:
         # Annotate-only mode: keep all edges, just report what *would* be removed
         edges_to_remove = [
-            edge
-            for edge in graph.resolved_call_edges
-            if edge.callee_method_id not in confirmed_method_ids
+            edge for edge in graph.resolved_call_edges if _is_phantom_edge(edge.callee_method_id)
         ]
         report.edges_removed = len(edges_to_remove)
         report.removed_edges = [
             (edge.caller_method_id, edge.callee_method_id) for edge in edges_to_remove
         ]
-        # Return original graph, but with report of what would be removed
         report.edges_after = report.edges_before
         return graph, report
 
-    # Filter edges: keep only those pointing to confirmed methods
+    # Filter edges: remove only phantom Spring-DI edges.
     filtered_edges = [
-        edge
-        for edge in graph.resolved_call_edges
-        if edge.callee_method_id in confirmed_method_ids
+        edge for edge in graph.resolved_call_edges if not _is_phantom_edge(edge.callee_method_id)
     ]
     report.edges_removed = len(graph.resolved_call_edges) - len(filtered_edges)
     report.removed_edges = [
         (edge.caller_method_id, edge.callee_method_id)
         for edge in graph.resolved_call_edges
-        if edge.callee_method_id not in confirmed_method_ids
+        if _is_phantom_edge(edge.callee_method_id)
     ]
 
-    # Filter callsites: remove those where all resolved candidates are unconfirmed
+    # Filter callsites: only remove those where every candidate is a phantom Spring-DI edge.
     filtered_callsites = []
     for callsite in graph.callsites:
-        # Keep if: unresolved, has no resolved_candidates, or at least one confirmed
         if not callsite.resolved_candidates:
-            # Unresolved callsite, keep it for debugging
             filtered_callsites.append(callsite)
-        elif any(mid in confirmed_method_ids for mid in callsite.resolved_candidates):
-            # At least one candidate is confirmed, keep it
+        elif any(
+            not _is_phantom_edge(mid) for mid in callsite.resolved_candidates
+        ):
             filtered_callsites.append(callsite)
-        # else: all resolved candidates unconfirmed, remove
+        # else: every candidate is a phantom Spring bean — drop
 
     # Upgrade unresolved callsites where receiver type matches a confirmed bean
     upgraded = 0
