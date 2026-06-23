@@ -267,6 +267,51 @@ func SpeakAllInSlice(animals []Animal) {
     assert len(resolved_speak_edges) == 2
 
 
+def test_build_go_graph_range_over_function_call_type_inference(tmp_path):
+    """`for _, v := range getAnimals()` infers v's type from the callee's
+    own return type, not just from a previously-typed local variable."""
+    pkg_dir = tmp_path / "zoo"
+    pkg_dir.mkdir()
+    (pkg_dir / "zoo.go").write_text(
+        """package zoo
+
+type Animal struct {
+	Name string
+}
+
+func (a *Animal) Speak() string {
+	return a.Name
+}
+
+func GetAnimals() []Animal {
+	return nil
+}
+
+func SpeakAllFromCall() {
+	for _, a := range GetAnimals() {
+		a.Speak()
+	}
+}
+"""
+    )
+
+    graph = build_go_graph(tmp_path)
+
+    speak = next(m for m in graph.methods if m.method_name == "Speak")
+    speak_all = next(m for m in graph.methods if m.method_name == "SpeakAllFromCall")
+
+    speak_callsites = {
+        cs.id
+        for cs in graph.callsites
+        if cs.caller_method_id == speak_all.id and cs.callee_name == "Speak"
+    }
+    assert speak_callsites
+    assert any(
+        e.callsite_id in speak_callsites and e.callee_method_id == speak.id
+        for e in graph.resolved_call_edges
+    )
+
+
 def test_build_go_graph_for_files_incremental(tmp_path):
     """Incremental extraction should produce structurally correct, unresolved
     graphs (matching the existing Java/Python incremental contract) that can
