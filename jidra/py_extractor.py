@@ -179,18 +179,26 @@ class ASTExtractor(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
         """Extract top-level function."""
+        prev_class = self.current_class
         if self.current_class is None:
             # Wrap in synthetic module class
             self._ensure_module_class()
             self._extract_method(node, self.current_class)
         self.generic_visit(node)
+        self.current_class = (
+            prev_class  # Restore so sibling functions are also extracted
+        )
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         """Extract async function."""
+        prev_class = self.current_class
         if self.current_class is None:
             self._ensure_module_class()
             self._extract_method(node, self.current_class)
         self.generic_visit(node)
+        self.current_class = (
+            prev_class  # Restore so sibling functions are also extracted
+        )
 
     def _extract_field(self, node: ast.AnnAssign, class_entry: ClassEntry):
         """Extract field from annotated assignment."""

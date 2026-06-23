@@ -27,6 +27,8 @@ TS_NOISY_RECEIVER_PREFIXES = (
     "rxjs.",
     "lodash.",
     "util.",
+    "Observable.",
+    "Promise.",
 )
 
 _NOISY_RECEIVER_PREFIXES_BY_LANGUAGE = {
@@ -363,7 +365,15 @@ def _truncate_method_source(source: str, keep: int) -> str:
     head_budget = max(0, keep - reserve)
     head = source[:head_budget]
 
-    omitted = max(0, len(lines) - len(head.splitlines()) - len(tail_lines))
+    head_lines = head.splitlines()
+    # If the cut landed mid-line, the trailing partial line isn't fully shown,
+    # so it shouldn't count toward the head's "shown" line tally.
+    if head_lines and head_budget < len(source) and not head.endswith("\n"):
+        head_line_count = len(head_lines) - 1
+    else:
+        head_line_count = len(head_lines)
+
+    omitted = max(0, len(lines) - head_line_count - len(tail_lines))
     if omitted == 0:
         return source
 

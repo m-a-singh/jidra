@@ -1364,6 +1364,16 @@ def _process(
     except Exception as e:
         raise SystemExit(f"Indexing failed: {e}")
 
+    # Generate raw visualization immediately after static indexing (before actuator filtering).
+    try:
+        raw_graph_data = build_graph_data(graph, verbose=False)
+        raw_html = render_interactive_html(raw_graph_data)
+        raw_html_path = output_dir / "graph_visualization_raw.html"
+        raw_html_path.write_text(raw_html, encoding="utf-8")
+        print(f"     ✓ Raw visualization: {raw_html_path.name}")
+    except Exception as _viz_err:
+        print(f"     ! Raw visualization skipped: {_viz_err}")
+
     # ===== STEP 2: VALIDATE (Java only — filter phantom edges with Spring Actuator) =====
     if not has_java:
         # No actuator for non-Java repos — the static graph is the final graph
@@ -1391,21 +1401,26 @@ def _process(
                 beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
                 confirmed_beans = parse_actuator_beans(beans_response)
             elif codebase:
-                docker_context = (
-                    Path(repo_root).resolve() if repo_root else codebase_path
-                )
-                with run_docker_and_fetch_beans(
-                    str(docker_context),
-                    port=port,
-                    timeout=timeout,
-                    skip_build=skip_build,
-                    build_dir=build_dir,
-                ) as beans_response:
-                    confirmed_beans = parse_actuator_beans(beans_response)
-                    # Cache actuator response for future incremental reindex
-                    from .graph_validator import save_actuator_cache
+                # Docker-based actuator validation disabled for testing —
+                # falling back to static annotation-based bean detection.
+                # docker_context = (
+                #     Path(repo_root).resolve() if repo_root else codebase_path
+                # )
+                # with run_docker_and_fetch_beans(
+                #     str(docker_context),
+                #     port=port,
+                #     timeout=timeout,
+                #     skip_build=skip_build,
+                #     build_dir=build_dir,
+                # ) as beans_response:
+                #     confirmed_beans = parse_actuator_beans(beans_response)
+                #     # Cache actuator response for future incremental reindex
+                #     from .graph_validator import save_actuator_cache
+                #
+                #     save_actuator_cache(output_dir, beans_response)
+                from .graph_validator import detect_beans_from_graph
 
-                    save_actuator_cache(output_dir, beans_response)
+                confirmed_beans = detect_beans_from_graph(graph)
             else:
                 raise SystemExit("Either --actuator-url or --codebase is required")
         except ActuatorError as e:

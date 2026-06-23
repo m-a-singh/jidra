@@ -51,6 +51,22 @@ def iter_ts_files(root: Path) -> list[Path]:
     return sorted(files)
 
 
+_NOISE_DIRS = {
+    "node_modules",
+    ".venv",
+    "venv",
+    ".tox",
+    ".eggs",
+    "site-packages",
+    "__pycache__",
+}
+
+
+def _rglob_outside_noise(root: Path, pattern: str) -> list[Path]:
+    """rglob that skips common dependency/build directories."""
+    return [p for p in root.rglob(pattern) if not _NOISE_DIRS.intersection(p.parts)][:1]
+
+
 def detect_languages(root: Path) -> list[str]:
     """Detect all source languages present in a multi-language repo."""
     langs = []
@@ -58,18 +74,18 @@ def detect_languages(root: Path) -> list[str]:
     if (
         (root / "build.sbt").exists()
         or (root / "project" / "build.properties").exists()
-        or list(root.rglob("build.sbt"))[:1]
+        or _rglob_outside_noise(root, "build.sbt")
     ):
         langs.append("scala")
-    if (root / "package.json").exists() or list(root.rglob("package.json"))[:1]:
+    if (root / "package.json").exists() or _rglob_outside_noise(root, "package.json"):
         langs.append("typescript")
     if (
         (root / "pom.xml").exists()
         or (root / "build.gradle").exists()
         or (root / "build.gradle.kts").exists()
-        or list(root.rglob("pom.xml"))[:1]
-        or list(root.rglob("build.gradle"))[:1]
-        or list(root.rglob("build.gradle.kts"))[:1]
+        or _rglob_outside_noise(root, "pom.xml")
+        or _rglob_outside_noise(root, "build.gradle")
+        or _rglob_outside_noise(root, "build.gradle.kts")
     ):
         langs.append("java")
     if (
@@ -80,9 +96,9 @@ def detect_languages(root: Path) -> list[str]:
         or (root / ".venv").exists()
         or (root / "venv").exists()
         or (root / "requirements.txt").exists()
-        or list(root.rglob("pyproject.toml"))[:1]
-        or list(root.rglob("setup.py"))[:1]
-        or list(root.rglob("requirements.txt"))[:1]
+        or _rglob_outside_noise(root, "pyproject.toml")
+        or _rglob_outside_noise(root, "setup.py")
+        or _rglob_outside_noise(root, "requirements.txt")
     ):
         langs.append("python")
     return langs

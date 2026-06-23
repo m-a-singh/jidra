@@ -282,9 +282,9 @@ def split_graph_records_by_source(
                 in_prod = caller in method_in_prod or callsite_id in callsite_in_prod
                 in_test = caller in method_in_test or callsite_id in callsite_in_test
 
-        if in_prod and not in_test:
-            prod.append(record)
-        elif in_test and not in_prod:
+        if in_test and not in_prod:
             test.append(record)
+        else:
+            prod.append(record)
 
     return prod, test
