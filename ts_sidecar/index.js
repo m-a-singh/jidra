@@ -14,9 +14,15 @@ const fs = require("fs");
 
 const repoRoot = process.argv[2];
 if (!repoRoot) {
-  process.stderr.write("Usage: node index.js <repo_root>\n");
+  process.stderr.write("Usage: node index.js <repo_root> [file1,file2,...]\n");
   process.exit(1);
 }
+
+// Optional: comma-separated repo-relative paths to restrict extraction to.
+// The full Project is still loaded for cross-file type resolution.
+const fileFilter = process.argv[3]
+  ? new Set(process.argv[3].split(",").map(f => path.resolve(repoRoot, f)))
+  : null;
 
 // ── ID helpers (mirror models.py stable_id) ──────────────────────────────────
 
@@ -540,6 +546,72 @@ function extractCallSites(node, callerMethodId, relPath, records) {
       // skip malformed call expression
     }
   }
+
+  // JSX component usage — <MyComponent /> is not a CallExpression but is a real call edge
+  let jsxElements;
+  try {
+    jsxElements = [
+      ...node.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
+      ...node.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
+    ];
+  } catch {
+    jsxElements = [];
+  }
+
+  for (const el of jsxElements) {
+    try {
+      const tagNode = el.getTagNameNode();
+      const calleeName = tagNode.getText();
+      // Only track user-defined components (PascalCase) — skip HTML elements (div, span, etc.)
+      if (!calleeName || !/^[A-Z]/.test(calleeName)) continue;
+
+      const pos = el.getStart();
+      const sf = el.getSourceFile();
+      const lc = sf.getLineAndColumnAtPos(pos);
+      const csId = callsiteId(callerMethodId, lc.line, lc.column, calleeName);
+
+      let resolvedCandidates = [];
+      let resolutionStatus = "unresolved";
+      try {
+        const sym = tagNode.getSymbol();
+        if (sym) {
+          const decls = sym.getDeclarations();
+          for (const decl of decls) {
+            if (decl.getSourceFile().getFilePath().includes("node_modules")) continue;
+            const declName = sym.getName();
+            const parent = decl.getParent();
+            let parentName = "";
+            try { parentName = parent.getName ? parent.getName() : ""; } catch {}
+            resolvedCandidates.push(parentName ? `${parentName}#${declName}` : declName);
+          }
+          if (resolvedCandidates.length > 0) resolutionStatus = "resolved";
+        }
+      } catch {}
+
+      records.push({
+        _type: "callsite",
+        id: csId,
+        caller_method_id: callerMethodId,
+        callee_name: calleeName,
+        receiver: null,
+        argument_count: 0,
+        file_path: relPath,
+        line: lc.line,
+        column: lc.column,
+        text: el.getText().slice(0, 120),
+        receiver_type_raw: null,
+        receiver_type_normalized: null,
+        receiver_resolution_source: null,
+        receiver_type: null,
+        resolved_candidates: resolvedCandidates,
+        resolution_status: resolutionStatus,
+        resolution_reason: resolutionStatus === "resolved" ? "compiler_symbol" : "no_symbol",
+        candidate_count: resolvedCandidates.length,
+      });
+    } catch {
+      // skip malformed JSX element
+    }
+  }
 }
 
 // ── Resolve call edges after all files processed ──────────────────────────────
@@ -627,9 +699,15 @@ const SKIP_FILE_PATTERNS = [
 function isSourceFile(filePath) {
   if (SKIP_FILE_PATTERNS.some(p => p.test(filePath))) return false;
   try {
-    // Files over 500 lines are almost certainly compiled bundles, not source
-    const lines = fs.readFileSync(filePath, "utf8").split("\n").length;
-    if (lines > 500) return false;
+    const content = fs.readFileSync(filePath, "utf8");
+    const lines = content.split("\n");
+    // Minified bundles have very long lines; source files rarely exceed 500 chars/line on average
+    if (lines.length > 0) {
+      const avgLineLen = content.length / lines.length;
+      if (avgLineLen > 500) return false;
+    }
+    // Hard cap at 10 000 lines — true source files virtually never reach this
+    if (lines.length > 10000) return false;
   } catch { return false; }
   return true;
 }
@@ -696,10 +774,14 @@ function main() {
 
   const sourceFiles = project.getSourceFiles().filter((sf) => {
     const fp = sf.getFilePath();
-    return !fp.includes("node_modules") && !fp.endsWith(".d.ts");
+    if (fp.includes("node_modules") || fp.endsWith(".d.ts")) return false;
+    if (fileFilter && !fileFilter.has(fp)) return false;
+    return true;
   });
 
-  process.stderr.write(`[jidra-ts] Indexing ${sourceFiles.length} files from ${repoRoot}\n`);
+  process.stderr.write(
+    `[jidra-ts] Indexing ${sourceFiles.length} files from ${repoRoot}${fileFilter ? " (incremental)" : ""}\n`
+  );
 
   for (const sf of sourceFiles) {
     try {

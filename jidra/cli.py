@@ -1364,6 +1364,16 @@ def _process(
     except Exception as e:
         raise SystemExit(f"Indexing failed: {e}")
 
+    # Generate raw visualization immediately after static indexing (before actuator filtering).
+    try:
+        raw_graph_data = build_graph_data(graph, verbose=False)
+        raw_html = render_interactive_html(raw_graph_data)
+        raw_html_path = output_dir / "graph_visualization_raw.html"
+        raw_html_path.write_text(raw_html, encoding="utf-8")
+        print(f"     ✓ Raw visualization: {raw_html_path.name}")
+    except Exception as _viz_err:
+        print(f"     ! Raw visualization skipped: {_viz_err}")
+
     # ===== STEP 2: VALIDATE (Java only — filter phantom edges with Spring Actuator) =====
     if not has_java:
         # No actuator for non-Java repos — the static graph is the final graph
