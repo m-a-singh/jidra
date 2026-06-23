@@ -1,6 +1,6 @@
 # JIDRA MCP Layer
 
-JIDRA includes a minimal MCP server so agents can call core graph-backed methods as tools. Works identically across all supported languages: **Java**, **TypeScript**, and **Python**.
+JIDRA includes a minimal MCP server so agents can call core graph-backed methods as tools. Works identically across all supported languages: **Java**, **Scala**, **TypeScript**, **Python**, and **Go**.
 
 ## Install
 

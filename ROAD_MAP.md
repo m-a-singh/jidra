@@ -4,7 +4,7 @@
 
 **JIDRA = Java/Scala/TypeScript/Python Integrated Graph Reduction & Analysis**
 
-JIDRA is an Enterprise Multi-Language Context Backend for LLM workflows. It transforms raw source code into structured, validated, noise-free context that reduces LLM token costs by 68-95% (depending on language) while maintaining 100% business logic coverage. Supports **Java** (85% resolution), **TypeScript** (80% resolution), and **Python** (68.5% resolution).
+JIDRA is an Enterprise Multi-Language Context Backend for LLM workflows. It transforms raw source code into structured, validated, noise-free context that reduces LLM token costs by 68-95% (depending on language) while maintaining 100% business logic coverage. Supports **Scala** (90% resolution), **Java** (85% resolution), **TypeScript** (80% resolution), **Python** (68.5% resolution), and **Go** (best-effort, not yet benchmarked).
 
 **See [PIVOT_RATIONALE.md](./PIVOT_RATIONALE.md) for the complete strategic pivot from "Multi-Service Agent" to "Context Backend."**
 
@@ -24,7 +24,7 @@ JIDRA is an Enterprise Multi-Language Context Backend for LLM workflows. It tran
 - ✅ 68-95% token reduction (measured, proven across languages)
 - ✅ 100% business logic coverage (0% false negatives)
 - ✅ Universal LLM compatibility (Claude, Codex, Gemini)
-- ✅ Multi-language: Scala (~90%), Java (~85%), TypeScript (~80%), Python (~68.5%)
+- ✅ Multi-language: Scala (~90%), Java (~85%), TypeScript (~80%), Python (~68.5%), Go (best-effort)
 
 ### Current Product Shape (v1.0 - READY)
 ```text
@@ -32,6 +32,7 @@ Java repo   → tree-sitter AST → Spring Actuator validation → 71-78% phanto
 Scala repo  → SemanticDB (sbt compile) → compiler-resolved edges → ~90% resolution
 TS repo     → ts-morph Docker sidecar → static analysis → ~80% resolution
 Python repo → AST + symbol table → Pyright validation → ~68.5% resolution
+Go repo     → tree-sitter AST (in-process) → local symbol-table call resolution → best-effort (no interface-satisfaction resolution)
 
 All languages:
   → Graph merge (multi-language repos handled automatically)
@@ -509,6 +510,6 @@ Next immediate focus:
 
 ## One-Line Product Thesis
 
-**JIDRA is the structured context backend for Enterprise polyglot codebases (Scala, Java, TypeScript, Python) that reduces LLM token costs by 68-95% while maintaining 100% business logic coverage and zero false negatives.**
+**JIDRA is the structured context backend for Enterprise polyglot codebases (Scala, Java, TypeScript, Python, Go) that reduces LLM token costs by 68-95% while maintaining 100% business logic coverage and zero false negatives.**
 
 Competitors: None (no other tool combines static analysis + runtime validation + LLM optimization)
