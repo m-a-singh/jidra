@@ -10,7 +10,30 @@ from .cli import (
     _is_error_doc_noise_call,
     _extract_focused_map_sections,
     _no_stack_frame_error_payload,
+    compute_graph_health,
 )
+
+
+def _log_session_call(
+    codebase_path: str | None, tool_name: str, method_id: str | None = None
+) -> None:
+    """Best-effort session call log. Never raises — logging must not break tool responses."""
+    try:
+        import json
+        from datetime import datetime, timezone
+
+        root = Path(codebase_path) if codebase_path else Path.cwd()
+        log_dir = root / ".jidra"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "tool_name": tool_name,
+            "method_id": method_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        with (log_dir / "session_log.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=True) + "\n")
+    except Exception:
+        pass
 
 
 def _maybe_add_stale_hint(result: dict, graph_dir: Path) -> dict:
@@ -60,6 +83,13 @@ def jidra_reindex_impl(
         else Path(resolved_graph).parent
     )
     return _maybe_add_stale_hint(result, graph_dir)
+
+
+def graph_health(graph_path: str | None = None) -> dict:
+    """Resolved/unresolved/external callsite breakdown for the local code graph."""
+    resolved_graph = graph_path or DEFAULT_MAIN_GRAPH
+    engine = JidraEngine(resolved_graph)
+    return compute_graph_health(engine.graph)
 
 
 def analyze_stack_trace(
@@ -246,6 +276,7 @@ def run_mcp_server(
         max_chars: int = 12000,
     ) -> dict:
         """Query a method or class from the local code graph. Returns the method source, call edges, callers, and class hierarchy."""
+        _log_session_call(codebase_path, "jidra_get_method_context", method)
         resolved_graph = graph_path or default_path
         graph_dir = (
             Path(resolved_graph)
@@ -264,6 +295,7 @@ def run_mcp_server(
         top_n: int = 4,
     ) -> dict:
         """Get ranked downstream call graph for a method from the local code graph."""
+        _log_session_call(codebase_path, "jidra_get_flow", method)
         resolved_graph = graph_path or default_path
         graph_dir = (
             Path(resolved_graph)
@@ -282,6 +314,7 @@ def run_mcp_server(
         top_n: int = 4,
     ) -> dict:
         """Get downstream call graph for a method from the local code graph."""
+        _log_session_call(codebase_path, "jidra_get_agent_flow", method)
         resolved_graph = graph_path or default_path
         graph_dir = (
             Path(resolved_graph)
@@ -300,6 +333,7 @@ def run_mcp_server(
         """TRIGGER: any request to see the implementation of a specific method or function. Call this BEFORE opening a file.
         Returns the source of just that method — no need to find or read the whole file.
         If selector returns suggestions, pick the best match and retry immediately."""
+        _log_session_call(codebase_path, "jidra_get_method_source", method)
         resolved_graph = graph_path or default_path
         graph_dir = (
             Path(resolved_graph)
@@ -318,6 +352,7 @@ def run_mcp_server(
         max_depth: int = 6,
     ) -> dict:
         """Find the call chain between two methods in the local code graph."""
+        _log_session_call(codebase_path, "jidra_get_call_chain", from_method)
         resolved_graph = graph_path or default_path
         graph_dir = (
             Path(resolved_graph)
@@ -339,6 +374,7 @@ def run_mcp_server(
         include_utility: bool = False,
     ) -> dict:
         """Analyze a stack trace against the local code graph to find debug locations."""
+        _log_session_call(codebase_path, "jidra_analyze_stack_trace")
         return analyze_stack_trace(
             stack_trace=stack_trace,
             graph_path=graph_path or default_path,
@@ -348,11 +384,20 @@ def run_mcp_server(
         )
 
     @mcp.tool()
+    def jidra_graph_health(
+        graph_path: str | None = None,
+    ) -> dict:
+        """Resolved/unresolved/external callsite breakdown for the local code graph."""
+        _log_session_call(codebase_path, "jidra_graph_health")
+        return graph_health(graph_path=graph_path or default_path)
+
+    @mcp.tool()
     def jidra_check_staleness(
         graph_path: str | None = None,
         codebase: str | None = None,
     ) -> dict:
         """Check if the local code graph is stale compared to source files."""
+        _log_session_call(codebase_path, "jidra_check_staleness")
         return check_staleness(graph_path=graph_path, codebase=codebase)
 
     @mcp.tool()
@@ -362,6 +407,7 @@ def run_mcp_server(
         changed_files: list[str] | None = None,
     ) -> dict:
         """Update the local code graph after file changes."""
+        _log_session_call(codebase_path, "jidra_reindex")
         return jidra_reindex_impl(
             graph_path=graph_path, codebase=codebase, changed_files=changed_files
         )

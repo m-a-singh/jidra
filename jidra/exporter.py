@@ -12,9 +12,15 @@ SCHEMA_VERSION = "1.0"
 def export_jsonl(path: Path, records: Iterable[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = list(records)
-    with path.open("w", encoding="utf-8") as fh:
-        for record in rows:
-            fh.write(json.dumps(record, ensure_ascii=True) + "\n")
+    body = "".join(json.dumps(record, ensure_ascii=True) + "\n" for record in rows)
+
+    if path.suffix == ".zst":
+        import zstandard
+
+        path.write_bytes(zstandard.ZstdCompressor().compress(body.encode("utf-8")))
+        return
+
+    path.write_text(body, encoding="utf-8")
 
 
 def graph_records(graph) -> list[dict]:
