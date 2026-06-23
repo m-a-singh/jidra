@@ -120,9 +120,7 @@ def validate_graph(
         "RestController",
         "Component",
         "Configuration",
-        "Entity",
         "Bean",
-        "EventListener",
         "Scheduled",
         "Async",
     }
