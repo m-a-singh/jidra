@@ -314,8 +314,14 @@ def _synthesize_spring_repository_methods(cls: ClassEntry) -> list[MethodEntry]:
         return []
     return [
         _make_synthetic_method(
-            cls.full_name, cls.id, cls.file_path, cls.start_line,
-            name, param_types, return_type, cls.language,
+            cls.full_name,
+            cls.id,
+            cls.file_path,
+            cls.start_line,
+            name,
+            param_types,
+            return_type,
+            cls.language,
         )
         for name, param_types, return_type in SPRING_DATA_REPOSITORY_METHODS
     ]
@@ -398,8 +404,13 @@ def _synthesize_lombok_artifacts(
         for f in instance_fields:
             methods.append(
                 _make_synthetic_method(
-                    cls.full_name, cls.id, cls.file_path, cls.start_line,
-                    _lombok_getter_name(f.name, f.type_name), [], f.type_name,
+                    cls.full_name,
+                    cls.id,
+                    cls.file_path,
+                    cls.start_line,
+                    _lombok_getter_name(f.name, f.type_name),
+                    [],
+                    f.type_name,
                     cls.language,
                 )
             )
@@ -410,8 +421,13 @@ def _synthesize_lombok_artifacts(
                 continue
             methods.append(
                 _make_synthetic_method(
-                    cls.full_name, cls.id, cls.file_path, cls.start_line,
-                    _lombok_setter_name(f.name), [f.type_name], "void",
+                    cls.full_name,
+                    cls.id,
+                    cls.file_path,
+                    cls.start_line,
+                    _lombok_setter_name(f.name),
+                    [f.type_name],
+                    "void",
                     cls.language,
                 )
             )
@@ -434,21 +450,39 @@ def _synthesize_lombok_artifacts(
         )
         methods.append(
             _make_synthetic_method(
-                cls.full_name, cls.id, cls.file_path, cls.start_line,
-                "builder", [], builder_full_name, cls.language,
+                cls.full_name,
+                cls.id,
+                cls.file_path,
+                cls.start_line,
+                "builder",
+                [],
+                builder_full_name,
+                cls.language,
             )
         )
         for f in instance_fields:
             methods.append(
                 _make_synthetic_method(
-                    builder_full_name, builder_id, cls.file_path, cls.start_line,
-                    f.name, [f.type_name], builder_full_name, cls.language,
+                    builder_full_name,
+                    builder_id,
+                    cls.file_path,
+                    cls.start_line,
+                    f.name,
+                    [f.type_name],
+                    builder_full_name,
+                    cls.language,
                 )
             )
         methods.append(
             _make_synthetic_method(
-                builder_full_name, builder_id, cls.file_path, cls.start_line,
-                "build", [], cls.full_name, cls.language,
+                builder_full_name,
+                builder_id,
+                cls.file_path,
+                cls.start_line,
+                "build",
+                [],
+                cls.full_name,
+                cls.language,
             )
         )
 
@@ -1331,7 +1365,9 @@ def _resolve_calls(graph: Graph) -> None:
                     impl_candidates = methods_by_full_class_and_name.get(
                         (sole_implementers[0], call.callee_name), []
                     )
-                    sole_impl_matches = _arity_filter(impl_candidates) or impl_candidates
+                    sole_impl_matches = (
+                        _arity_filter(impl_candidates) or impl_candidates
+                    )
                     if len(sole_impl_matches) == 1:
                         sole_implementer = sole_implementers[0]
 

@@ -185,7 +185,9 @@ class ASTExtractor(ast.NodeVisitor):
             self._ensure_module_class()
             self._extract_method(node, self.current_class)
         self.generic_visit(node)
-        self.current_class = prev_class  # Restore so sibling functions are also extracted
+        self.current_class = (
+            prev_class  # Restore so sibling functions are also extracted
+        )
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         """Extract async function."""
@@ -194,7 +196,9 @@ class ASTExtractor(ast.NodeVisitor):
             self._ensure_module_class()
             self._extract_method(node, self.current_class)
         self.generic_visit(node)
-        self.current_class = prev_class  # Restore so sibling functions are also extracted
+        self.current_class = (
+            prev_class  # Restore so sibling functions are also extracted
+        )
 
     def _extract_field(self, node: ast.AnnAssign, class_entry: ClassEntry):
         """Extract field from annotated assignment."""
