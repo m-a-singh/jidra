@@ -12,6 +12,7 @@ See [PIVOT_RATIONALE.md](./PIVOT_RATIONALE.md) for detailed strategic context.
 - ✅ **Java**: tree-sitter AST + Spring Actuator validation, 71-78% phantom edge removal
 - ✅ **TypeScript**: ts-morph Docker sidecar, ~80% resolution
 - ✅ **Python**: AST + symbol table + Pyright, ~68.5% resolution
+- ✅ **Go**: tree-sitter AST (in-process) + local symbol-table call resolution, best-effort (not yet benchmarked; no interface-satisfaction resolution)
 - ✅ Multi-language merge: polyglot repos handled automatically, `language` tag on every node
 - ✅ Manifest-only language detection (no false positives from `node_modules` / vendored files)
 - ✅ Interactive HTML visualization with 3 export formats
@@ -140,8 +141,8 @@ Average: 87.4% reduction, all output quality equivalent ✅
 ## 6) Current Status: PRODUCTION READY ✅
 
 ### Completion Checklist
-- ✅ Graph extraction — Scala (SemanticDB), Java (AST), TypeScript (ts-morph), Python (AST+symbol table)
-- ✅ Graph validation — Java (Spring Actuator), Scala (compiler-resolved, no validation step needed)
+- ✅ Graph extraction — Scala (SemanticDB), Java (AST), TypeScript (ts-morph), Python (AST+symbol table), Go (tree-sitter AST)
+- ✅ Graph validation — Java (Spring Actuator), Scala (compiler-resolved, no validation step needed), Go/TS/Python (static analysis)
 - ✅ Context generation (68-95% reduction across languages)
 - ✅ Multi-language merge (polyglot repos, `language` tag per node)
 - ✅ Manifest-only language detection (no false positives)

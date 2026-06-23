@@ -2,7 +2,7 @@
 
 **JIDRA = Java/Scala/TypeScript/Python Integrated Graph Reduction & Analysis**
 
-JIDRA is a structured context backend that reduces LLM input tokens by **68-95%** for code-native queries by giving Claude a pre-analyzed call graph instead of raw source files. Multi-language support: **Scala** (~90% resolution), **Java** (~85% resolution), **TypeScript** (~80% resolution), **Python** (~68.5% resolution).
+JIDRA is a structured context backend that reduces LLM input tokens by **68-95%** for code-native queries by giving Claude a pre-analyzed call graph instead of raw source files. Multi-language support: **Scala** (~90% resolution), **Java** (~85% resolution), **TypeScript** (~80% resolution), **Python** (~68.5% resolution), **Go** (tree-sitter-based, best-effort resolution).
 
 ### What This Means
 
@@ -27,9 +27,9 @@ This project is intentionally focused and graph-driven.
 
 ## Pitch (TL;DR)
 
-- **Multi-language** → Scala, Java, TypeScript, Python (auto-detected)
+- **Multi-language** → Scala, Java, TypeScript, Python, Go (auto-detected)
 - **Index once** → Get a deterministic call graph (AST-based, language-optimized)
-- **Reduce noise** → Remove phantom edges (Java: runtime validation, TS/Python/Scala: static analysis)
+- **Reduce noise** → Remove phantom edges (Java: runtime validation, TS/Python/Scala/Go: static analysis)
 - **Generate context** → 68-95% smaller prompt-ready context for Claude/Codex/Gemini
 - **Trace execution** → See likely business flow with uncertainty markers
 - **Reduce LLM cost** → Proven token reduction on code-native workflows (measured on real projects)
@@ -46,8 +46,8 @@ Same cost today at Sonnet pricing because output tokens dominate — but 606k fe
 
 ## What JIDRA Does
 
-- **Indexes** Scala, Java, TypeScript, and Python source into deterministic call graphs
-- **Validates** with language-specific strategies (Spring Actuator for Java, compiler-resolved for Scala, static analysis for TS/Python)
+- **Indexes** Scala, Java, TypeScript, Python, and Go source into deterministic call graphs
+- **Validates** with language-specific strategies (Spring Actuator for Java, compiler-resolved for Scala, static analysis for TS/Python/Go)
 - **Generates** noise-free context (68-95% smaller depending on language)
 - **Traces** method/function execution with uncertainty markers
 - **Exports** as JSON, MCP tools, or interactive HTML
@@ -99,6 +99,8 @@ jidra/
     ├── py_filters.py          # Python language detection
     ├── py_extractor.py        # Python extraction (AST + symbol table)
     ├── py_type_provider.py    # Python type validation (Pyright)
+    ├── go_filters.py          # Go file iteration + excluded dirs
+    ├── go_extractor.py        # Go extraction (tree-sitter, in-process)
     ├── filters.py             # Java file iteration
     └── cache.py
 ```
@@ -417,8 +419,9 @@ Builds graph JSONL from source code (auto-detects language):
 - **Java**: tree-sitter-based AST extraction + call resolution, ~85% resolution
 - **TypeScript**: ts-morph-based extraction (Docker sidecar), ~80% resolution
 - **Python**: libcst/AST-based extraction + symbol table type inference, ~68.5% resolution
+- **Go**: tree-sitter-based AST extraction (in-process, no Docker/compiler) + local symbol-table call resolution, best-effort — no interface-satisfaction (structural typing) resolution
 
-Language detection is automatic via manifest files (`build.sbt`, `pom.xml`, `package.json`, `pyproject.toml`, etc.). Multiple languages in the same repo are detected and merged into a single graph automatically.
+Language detection is automatic via manifest files (`build.sbt`, `pom.xml`, `package.json`, `pyproject.toml`, `go.mod`, etc.). Multiple languages in the same repo are detected and merged into a single graph automatically.
 
 ## `trace`
 
