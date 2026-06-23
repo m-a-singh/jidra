@@ -51,24 +51,31 @@ def iter_ts_files(root: Path) -> list[Path]:
     return sorted(files)
 
 
-_NOISE_DIRS = {"node_modules", ".venv", "venv", ".tox", ".eggs", "site-packages", "__pycache__"}
+_NOISE_DIRS = {
+    "node_modules",
+    ".venv",
+    "venv",
+    ".tox",
+    ".eggs",
+    "site-packages",
+    "__pycache__",
+}
 
 
 def _rglob_outside_noise(root: Path, pattern: str) -> list[Path]:
     """rglob that skips common dependency/build directories."""
-    return [
-        p for p in root.rglob(pattern)
-        if not _NOISE_DIRS.intersection(p.parts)
-    ][:1]
+    return [p for p in root.rglob(pattern) if not _NOISE_DIRS.intersection(p.parts)][:1]
 
 
 def detect_languages(root: Path) -> list[str]:
     """Detect all source languages present in a multi-language repo."""
     langs = []
     # Scala before Java — build.sbt is the definitive Scala signal
-    if (root / "build.sbt").exists() or (
-        root / "project" / "build.properties"
-    ).exists() or _rglob_outside_noise(root, "build.sbt"):
+    if (
+        (root / "build.sbt").exists()
+        or (root / "project" / "build.properties").exists()
+        or _rglob_outside_noise(root, "build.sbt")
+    ):
         langs.append("scala")
     if (root / "package.json").exists() or _rglob_outside_noise(root, "package.json"):
         langs.append("typescript")
