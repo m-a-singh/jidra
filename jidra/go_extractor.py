@@ -509,10 +509,26 @@ def _infer_var_types(
         for c in range_clause.children:
             if c.type not in ("expression_list", ":=", "=", "range"):
                 ranged_expr = c
-        if ranged_expr is None or ranged_expr.type != "identifier":
+        if ranged_expr is None:
             continue
 
-        range_type = local_types.get(_text(ranged_expr, source))
+        if ranged_expr.type == "identifier":
+            range_type = local_types.get(_text(ranged_expr, source))
+        elif ranged_expr.type == "call_expression":
+            # `for _, a := range getAnimals()` - the element type comes from
+            # the called function's own return type, already collected into
+            # func_return_types from the same package's top-level functions.
+            callee = ranged_expr.children[0] if ranged_expr.children else None
+            range_type = (
+                func_return_types.get(_text(callee, source))
+                if callee is not None and callee.type == "identifier"
+                else None
+            )
+        else:
+            # Struct-field ranges (`range s.Animals`) and other expression
+            # shapes aren't typed here - would need field-type lookup that
+            # isn't plumbed into this function. Falls through to unresolved.
+            range_type = None
         if not range_type:
             continue
         key_type, value_type = _range_key_value_types(range_type)
