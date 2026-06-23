@@ -21,8 +21,6 @@ Savings:         $9.10/query  →  $4,550/year at 500 queries
 
 JIDRA connects to Claude Code as an MCP server — one command to set up:
 
-![JIDRA MCP connected in Claude Code](docs/assets/mcp_connected.png)
-
 This project is intentionally focused and graph-driven.
 
 ## Pitch (TL;DR)
