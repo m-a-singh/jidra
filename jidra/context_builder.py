@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 
 NOISY_RECEIVER_PREFIXES = (
     "java.",
@@ -11,6 +13,27 @@ NOISY_RECEIVER_PREFIXES = (
     "reactor.util.",
     "io.micrometer.",
 )
+
+PY_NOISY_RECEIVER_PREFIXES = (
+    "logging.",
+    "typing.",
+    "collections.abc.",
+    "functools.",
+    "itertools.",
+)
+
+TS_NOISY_RECEIVER_PREFIXES = (
+    "console.",
+    "rxjs.",
+    "lodash.",
+    "util.",
+)
+
+_NOISY_RECEIVER_PREFIXES_BY_LANGUAGE = {
+    "java": NOISY_RECEIVER_PREFIXES,
+    "python": PY_NOISY_RECEIVER_PREFIXES,
+    "typescript": TS_NOISY_RECEIVER_PREFIXES,
+}
 
 NOISY_RECEIVER_TYPES = {
     "String",
@@ -118,7 +141,7 @@ def _simple_type_name(type_name):
     return base.split(".")[-1]
 
 
-def _is_noisy_callsite(callsite):
+def _is_noisy_callsite(callsite, language: str = "java"):
     receiver_type = (
         getattr(callsite, "receiver_type_normalized", None)
         or getattr(callsite, "receiver_type", None)
@@ -126,18 +149,27 @@ def _is_noisy_callsite(callsite):
     )
     callee_name = getattr(callsite, "callee_name", "")
     status = getattr(callsite, "resolution_status", "")
+    receiver = str(getattr(callsite, "receiver", "") or "")
 
     if callee_name in NOISY_METHOD_NAMES:
         return True
+
+    prefixes = _NOISY_RECEIVER_PREFIXES_BY_LANGUAGE.get(
+        language, NOISY_RECEIVER_PREFIXES
+    )
 
     if receiver_type:
         simple = _simple_type_name(receiver_type)
         if simple in NOISY_RECEIVER_TYPES:
             return True
-        if any(
-            str(receiver_type).startswith(prefix) for prefix in NOISY_RECEIVER_PREFIXES
-        ):
+        if any(str(receiver_type).startswith(prefix) for prefix in prefixes):
             return True
+
+    if receiver and any(
+        receiver == prefix.rstrip(".") or receiver.startswith(prefix)
+        for prefix in prefixes
+    ):
+        return True
 
     if status == "external_library":
         return True
@@ -145,8 +177,17 @@ def _is_noisy_callsite(callsite):
     return False
 
 
-def _filter_context_calls(callsites):
-    return [c for c in callsites if not _is_noisy_callsite(c)]
+def _filter_context_calls(callsites, language: str = "java"):
+    return [c for c in callsites if not _is_noisy_callsite(c, language=language)]
+
+
+def _language_for_file_path(file_path: str) -> str:
+    ext = Path(file_path or "").suffix.lower()
+    if ext == ".py":
+        return "python"
+    if ext in (".ts", ".tsx"):
+        return "typescript"
+    return "java"
 
 
 def _resolved_priority(item: dict) -> int:
@@ -271,13 +312,17 @@ def _is_noisy_unresolved_lambda_call(call: str, reason: str, receiver) -> bool:
     return False
 
 
-def build_method_context(graph, method_id: str, max_chars: int = 12000) -> dict:
+def build_method_context(
+    graph, method_id: str, max_chars: int = 12000, language: str | None = None
+) -> dict:
     method = next((m for m in graph.methods if m.id == method_id), None)
     if not method:
         return {"error": f"method_not_found:{method_id}"}
+    if language is None:
+        language = _language_for_file_path(getattr(method, "file_path", ""))
     class_entry = next((c for c in graph.classes if c.id == method.class_id), None)
     callsites = [c for c in graph.callsites if c.caller_method_id == method_id]
-    callsites = _filter_context_calls(callsites)
+    callsites = _filter_context_calls(callsites, language=language)
     method_by_id = {m.id: m for m in graph.methods}
     resolved = _dedupe_and_sort_resolved(callsites, method_by_id)
     unresolved = _dedupe_and_group_unresolved(callsites)
@@ -304,5 +349,23 @@ def build_method_context(graph, method_id: str, max_chars: int = 12000) -> dict:
     text = str(ctx)
     if len(text) > max_chars:
         keep = max(300, max_chars // 3)
-        ctx["method_source"] = method.source[:keep]
+        ctx["method_source"] = _truncate_method_source(method.source or "", keep)
     return ctx
+
+
+def _truncate_method_source(source: str, keep: int) -> str:
+    lines = source.splitlines()
+    tail_lines = lines[-3:] if len(lines) > 3 else lines
+    tail_text = "\n".join(tail_lines)
+
+    marker_template = "\n... [{n} lines omitted] ...\n"
+    reserve = len(tail_text) + len(marker_template.format(n=len(lines)))
+    head_budget = max(0, keep - reserve)
+    head = source[:head_budget]
+
+    omitted = max(0, len(lines) - len(head.splitlines()) - len(tail_lines))
+    if omitted == 0:
+        return source
+
+    marker = marker_template.format(n=omitted)
+    return head + marker + tail_text

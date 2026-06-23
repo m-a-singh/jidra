@@ -32,3 +32,15 @@ def save_cache(root: Path, payload: dict) -> None:
 
 def compute_fingerprint(java_files: list[Path]) -> str:
     return _fingerprint(java_files)
+
+
+def _file_fingerprint(path: Path) -> str:
+    stat = path.stat()
+    h = hashlib.sha1()
+    h.update(str(stat.st_mtime_ns).encode("utf-8"))
+    h.update(str(stat.st_size).encode("utf-8"))
+    return h.hexdigest()
+
+
+def compute_file_manifest(files: list[Path]) -> dict[str, str]:
+    return {str(path): _file_fingerprint(path) for path in files}
