@@ -16,7 +16,7 @@ def compute_fingerprints(
     Returns: {abs_path_str: {"mtime_ns": int, "size": int}}
     """
     if extensions is None:
-        extensions = [".java", ".py", ".ts", ".scala"]
+        extensions = [".java", ".py", ".ts", ".scala", ".go"]
 
     fingerprints = {}
     for ext in extensions:

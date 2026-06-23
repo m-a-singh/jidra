@@ -1626,6 +1626,11 @@ def build_graph(
         scala_graph = build_scala_graph(codebase_root, on_progress=on_progress)
         graphs.append(scala_graph)
 
+    if "go" in langs:
+        from .go_extractor import build_go_graph
+
+        graphs.append(build_go_graph(codebase_root, on_progress=on_progress))
+
     if "java" in langs:
         java_graph = _build_java_graph(codebase_root, on_progress=on_progress)
         for cls in java_graph.classes:
@@ -1655,6 +1660,7 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
     py_files = {f for f in files if f.suffix == ".py" or ".py" in str(f)}
     ts_files = {f for f in files if f.suffix in {".ts", ".tsx"}}
     scala_files = {f for f in files if f.suffix == ".scala"}
+    go_files = {f for f in files if f.suffix == ".go"}
 
     # Extract Java files
     if java_files:
@@ -1712,6 +1718,16 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
 
             scala_graph = build_scala_graph_for_files(scala_files, codebase_root)
             graphs.append(scala_graph)
+        except (ImportError, AttributeError):
+            pass
+
+    # Extract Go files
+    if go_files:
+        try:
+            from .go_extractor import build_go_graph_for_files
+
+            go_graph = build_go_graph_for_files(go_files, codebase_root)
+            graphs.append(go_graph)
         except (ImportError, AttributeError):
             pass
 
