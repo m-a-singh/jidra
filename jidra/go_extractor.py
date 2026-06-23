@@ -5,8 +5,18 @@ Pipeline:
 1. tree-sitter parse per file
 2. Structural extraction (structs/interfaces/funcs/methods/fields/embeds)
 3. Global call resolution pass using a best-effort local symbol table
-   (receiver/param/short-var-decl type tracking), similar in spirit and
-   scope to the Python extractor's SymbolTable approach.
+   (receiver/param/short-var-decl/range-loop type tracking), similar in
+   spirit and scope to the Python extractor's SymbolTable approach.
+
+Known limitation: Go's primary polymorphism mechanism is implicit interface
+satisfaction (structural typing) rather than an explicit `implements`
+keyword. A call like `h.ServeHTTP(...)` on an `http.Handler`-typed parameter
+has no concrete type to resolve to in this extractor - it falls through to
+`resolution_status="unresolved"`, same as a method on an unrecognized
+receiver type. This is the Go analogue of Spring's phantom-edge problem and
+is not solved here; resolving it would require either runtime information
+or a full structural type-inference pass across the codebase, both out of
+scope for this extractor.
 """
 
 from __future__ import annotations
@@ -430,6 +440,33 @@ def _infer_expr_type(
     return None
 
 
+def _range_key_value_types(range_type: str) -> tuple[str | None, str | None]:
+    """Infer (key_type, value_type) for `for k, v := range x` from x's Go type text.
+
+    Handles map[K]V and slice/array []T / [N]T, which cover the common cases
+    where the ranged value is later used as a method-call receiver. Channel,
+    string, and integer range forms are left unresolved (rare as call receivers).
+    """
+    range_type = range_type.strip()
+    if range_type.startswith("map["):
+        depth = 0
+        for i, ch in enumerate(range_type):
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    return range_type[4:i].strip(), range_type[i + 1 :].strip()
+        return None, None
+    if range_type.startswith("[]"):
+        return "int", range_type[2:].strip()
+    if range_type.startswith("["):
+        close = range_type.find("]")
+        if close != -1:
+            return "int", range_type[close + 1 :].strip()
+    return None, None
+
+
 def _infer_var_types(
     block_node,
     source: bytes,
@@ -459,6 +496,31 @@ def _infer_var_types(
             t = _strip_pointer(_text(type_node, source))
             for ident in idents:
                 local_types[_text(ident, source)] = t
+
+    for range_clause in _collect(block_node, "range_clause"):
+        expr_lists = _children_by_type(range_clause, "expression_list")
+        if not expr_lists:
+            continue
+        lhs_idents = _children_by_type(expr_lists[0], "identifier")
+        if not lhs_idents:
+            continue
+
+        ranged_expr = None
+        for c in range_clause.children:
+            if c.type not in ("expression_list", ":=", "=", "range"):
+                ranged_expr = c
+        if ranged_expr is None or ranged_expr.type != "identifier":
+            continue
+
+        range_type = local_types.get(_text(ranged_expr, source))
+        if not range_type:
+            continue
+        key_type, value_type = _range_key_value_types(range_type)
+
+        if len(lhs_idents) >= 2 and value_type:
+            local_types[_text(lhs_idents[1], source)] = _strip_pointer(value_type)
+        if len(lhs_idents) >= 1 and key_type:
+            local_types[_text(lhs_idents[0], source)] = key_type
 
     return local_types
 
