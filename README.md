@@ -1,6 +1,6 @@
 # JIDRA: Enterprise Codebase Context Backend for LLM Workflows
 
-**JIDRA = Java/Scala/TypeScript/Python Integrated Graph Reduction & Analysis**
+**JIDRA = Java/Scala/TypeScript/Python/Go Integrated Graph Reduction & Analysis**
 
 JIDRA is a structured context backend that reduces LLM input tokens by **68-95%** for code-native queries by giving Claude a pre-analyzed call graph instead of raw source files. Multi-language support: **Scala** (~90% resolution), **Java** (~85% resolution), **TypeScript** (~80% resolution), **Python** (~68.5% resolution), **Go** (tree-sitter-based, best-effort resolution).
 
