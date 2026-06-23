@@ -271,7 +271,7 @@ Annual Savings (1000 queries): $105.98
 *Optional: requires ANTHROPIC_API_KEY*
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
+export ANTHROPIC_API_KEY="sk-..."
 python -m jidra.cli cost-roi \
   --method SearchController.search \
   --codebase /path/to/java-repo \
