@@ -698,7 +698,9 @@ def _parse_file(file_path: Path, parser) -> _FileMeta:
     return _FileMeta(file_path, root, source, package_name, package_scope)
 
 
-def _extract_types(meta: _FileMeta) -> tuple[
+def _extract_types(
+    meta: _FileMeta,
+) -> tuple[
     list[ClassEntry],
     list[FieldEntry],
     list[InheritanceEdge],
