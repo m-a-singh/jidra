@@ -221,8 +221,12 @@ def _class_stereotypes(
     names = {_annotation_name(a) for a in annotations}
     if "RestController" in names or "Controller" in names:
         out.append("controller")
+    if "RestController" in names:
+        out.append("rest_controller")
     if "Service" in names:
         out.append("service")
+        if "Transactional" in names:
+            out.append("transactional_service")
     if "Repository" in names:
         out.append("repository")
     if "Component" in names:
@@ -529,6 +533,79 @@ def _endpoint_meta(
             "//", "/"
         )
     return is_endpoint, http_method, route, controller_route, full_route
+
+
+def detect_frameworks(codebase_root: Path) -> set[str]:
+    """Scan manifest files to detect which frameworks a codebase uses.
+
+    Best-effort and side-effect free — used for discovery/reporting. The
+    per-language extractors classify roles from annotations/decorators directly,
+    so this is advisory rather than gating.
+    """
+    import json as _json
+
+    frameworks: set[str] = set()
+    root = Path(codebase_root)
+
+    pkg = root / "package.json"
+    if pkg.exists():
+        try:
+            data = _json.loads(pkg.read_text(encoding="utf-8"))
+            deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
+            if "react" in deps:
+                frameworks.add("react")
+            if "vue" in deps:
+                frameworks.add("vue")
+            if "@angular/core" in deps:
+                frameworks.add("angular")
+            if "@nestjs/core" in deps:
+                frameworks.add("nestjs")
+        except (ValueError, OSError):
+            pass
+
+    pom = root / "pom.xml"
+    if pom.exists():
+        try:
+            text = pom.read_text(encoding="utf-8", errors="ignore")
+            if "spring-boot" in text:
+                frameworks.add("spring-boot")
+            if "spring-web" in text or "springframework" in text:
+                frameworks.add("spring")
+        except OSError:
+            pass
+
+    for manifest in ("requirements.txt", "pyproject.toml"):
+        path = root / manifest
+        if not path.exists():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore").lower()
+        except OSError:
+            continue
+        if "django" in text:
+            frameworks.add("django")
+        if "fastapi" in text:
+            frameworks.add("fastapi")
+        if "flask" in text:
+            frameworks.add("flask")
+
+    return frameworks
+
+
+def _java_framework_role(
+    method_annotations: list[str], is_endpoint: bool
+) -> str | None:
+    """Map Spring method-level annotations to a semantic framework role."""
+    if is_endpoint:
+        return "http_handler"
+    names = {_annotation_name(a) for a in method_annotations}
+    if "EventListener" in names:
+        return "event_listener"
+    if "Scheduled" in names:
+        return "scheduled_task"
+    if "Async" in names:
+        return "async_task"
+    return None
 
 
 def _extract_extends_implements(
@@ -925,6 +1002,7 @@ def _extract_methods(
                 route=route,
                 controller_route=controller_route,
                 full_route=full_route,
+                framework_role=_java_framework_role(method_annotations, is_endpoint),
             )
         )
 
@@ -1587,6 +1665,7 @@ def build_graph(
     on_progress=None,
     changed_files: set[Path] | None = None,
     previous_graph: Graph | None = None,
+    ts_backend: str = "auto",
 ) -> Graph:
     if changed_files is not None and previous_graph is not None:
         changed_paths_str = {str(p) for p in changed_files}
@@ -1636,7 +1715,11 @@ def build_graph(
     if "typescript" in langs:
         from .ts_extractor import build_ts_graph
 
-        graphs.append(build_ts_graph(codebase_root, on_progress=on_progress))
+        # "tsmorph" selects the Docker sidecar; auto/treesitter stay in-process.
+        backend = "tsmorph" if ts_backend == "tsmorph" else ts_backend
+        graphs.append(
+            build_ts_graph(codebase_root, on_progress=on_progress, backend=backend)
+        )
 
     if "python" in langs:
         from .py_extractor import build_py_graph

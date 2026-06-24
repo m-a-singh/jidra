@@ -72,7 +72,14 @@ const NESTJS_STEREOTYPES = {
   Guard: "guard",
   Interceptor: "interceptor",
   Pipe: "pipe",
+  // Angular class decorators (Phase 4)
+  Component: "angular_component",
+  NgModule: "angular_module",
+  Directive: "angular_directive",
 };
+
+// React hook naming convention: a function whose name is use<Capital>...
+const REACT_HOOK_RE = /^use[A-Z]/;
 
 const PATH_STEREOTYPES = [
   // NestJS / TypeScript conventions
@@ -138,6 +145,28 @@ function getDecoratorNames(node) {
   } catch {
     return [];
   }
+}
+
+function hasJsxReturn(node) {
+  try {
+    return (
+      node.getDescendantsOfKind(SyntaxKind.JsxElement).length > 0 ||
+      node.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement).length > 0 ||
+      node.getDescendantsOfKind(SyntaxKind.JsxFragment).length > 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Map a function to a semantic framework role (Phase 4). React/Angular focused;
+// the equivalent rules live in the in-process tree-sitter backend (Phase 7).
+function detectFrameworkRole(methodName, node, decoratorNames, isEndpoint) {
+  if (isEndpoint) return "http_handler";
+  if (decoratorNames.includes("Component")) return "component";
+  if (REACT_HOOK_RE.test(methodName)) return "hook";
+  if (hasJsxReturn(node)) return "component";
+  return null;
 }
 
 // ── Namespace from file path (replaces Java package) ─────────────────────────
@@ -406,6 +435,13 @@ function extractMethod(node, classFullName, cId, relPath, imports, classDecorato
     annotations: allDecorators,
   };
 
+  const frameworkRole = detectFrameworkRole(
+    methodName,
+    node,
+    decoratorNames,
+    isEndpoint
+  );
+
   records.push({
     _type: "method",
     id: mId,
@@ -431,6 +467,7 @@ function extractMethod(node, classFullName, cId, relPath, imports, classDecorato
     controller_route: null,
     full_route: null,
     language: "typescript",
+    framework_role: frameworkRole,
   });
 
   // Call sites

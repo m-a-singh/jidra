@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
@@ -15,7 +16,12 @@ from .models import (
     ResolvedCallEdge,
 )
 
-SCHEMA_VERSION = "2.0"
+SCHEMA_VERSION = "2.1"
+
+# Older schema versions whose on-disk layout this code can upgrade in place via
+# `_run_migrations` (additive columns / virtual tables only). A DB stamped with
+# one of these is migrated and re-stamped to SCHEMA_VERSION instead of raising.
+_MIGRATABLE_FROM = {"2.0"}
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS classes (
@@ -66,6 +72,7 @@ CREATE TABLE IF NOT EXISTS methods (
     controller_route TEXT,
     full_route TEXT,
     language TEXT,
+    framework_role TEXT,
     PRIMARY KEY (id, variant, module_id)
 );
 CREATE INDEX IF NOT EXISTS idx_methods_scope ON methods (variant, module_id, file_path);
@@ -144,6 +151,44 @@ CREATE TABLE IF NOT EXISTS schema_meta (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- Full-text search index over methods (Phase 1). Self-contained (not
+-- external-content) so the sync triggers stay simple and corruption-proof; the
+-- cost is a duplicated copy of `source`. `rowid` mirrors methods.rowid so search
+-- results can join straight back to the methods table. id/language/variant are
+-- UNINDEXED — stored for retrieval/filtering but not tokenized.
+CREATE VIRTUAL TABLE IF NOT EXISTS methods_fts USING fts5(
+    id UNINDEXED,
+    method_name,
+    signature,
+    class_full_name,
+    source,
+    language UNINDEXED,
+    variant UNINDEXED
+);
+
+CREATE TRIGGER IF NOT EXISTS methods_fts_insert AFTER INSERT ON methods BEGIN
+    INSERT INTO methods_fts(
+        rowid, id, method_name, signature, class_full_name, source, language, variant
+    ) VALUES (
+        new.rowid, new.id, new.method_name, new.signature, new.class_full_name,
+        new.source, new.language, new.variant
+    );
+END;
+
+CREATE TRIGGER IF NOT EXISTS methods_fts_delete AFTER DELETE ON methods BEGIN
+    DELETE FROM methods_fts WHERE rowid = old.rowid;
+END;
+
+CREATE TRIGGER IF NOT EXISTS methods_fts_update AFTER UPDATE ON methods BEGIN
+    DELETE FROM methods_fts WHERE rowid = old.rowid;
+    INSERT INTO methods_fts(
+        rowid, id, method_name, signature, class_full_name, source, language, variant
+    ) VALUES (
+        new.rowid, new.id, new.method_name, new.signature, new.class_full_name,
+        new.source, new.language, new.variant
+    );
+END;
 """
 
 
@@ -179,20 +224,62 @@ def resolve_graph_db_path(output: Path) -> Path:
 def connect(path: Path) -> sqlite3.Connection:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path))
+    # check_same_thread=False so a cached engine's connection (used for FTS
+    # search) can be queried from the daemon's per-connection handler threads.
+    # The engine serializes those queries with its own lock; reindex uses a
+    # separate connection.
+    conn = sqlite3.connect(str(path), check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA_SQL)
     conn.commit()
+    _run_migrations(conn)
     _check_schema_version(conn)
     return conn
+
+
+def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    cur = conn.execute(f"PRAGMA table_info({table})")
+    return any(r[1] == column for r in cur.fetchall())
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """Idempotent, additive upgrades applied on every `connect()`.
+
+    Runs after `executescript` (which creates any missing tables/triggers via
+    IF NOT EXISTS) and before `_check_schema_version`. Safe to run on both fresh
+    and pre-existing databases. Keep every step guarded so re-running is a no-op.
+    """
+    # Phase 4: framework_role column on methods. Appended last to match where a
+    # fresh `_SCHEMA_SQL` build also places it, so the positional INSERT lines up.
+    if not _column_exists(conn, "methods", "framework_role"):
+        conn.execute("ALTER TABLE methods ADD COLUMN framework_role TEXT")
+        conn.commit()
+
+    # Phase 1: backfill the FTS index for DBs created before it existed. The
+    # sync triggers only cover rows written after the trigger was created, so an
+    # upgraded DB needs a one-time bulk load of its existing methods.
+    fts_count = conn.execute("SELECT count(*) FROM methods_fts").fetchone()[0]
+    if fts_count == 0:
+        method_count = conn.execute("SELECT count(*) FROM methods").fetchone()[0]
+        if method_count > 0:
+            conn.execute(
+                "INSERT INTO methods_fts("
+                "rowid, id, method_name, signature, class_full_name, "
+                "source, language, variant) "
+                "SELECT rowid, id, method_name, signature, class_full_name, "
+                "source, language, variant FROM methods"
+            )
+            conn.commit()
 
 
 def _check_schema_version(conn: sqlite3.Connection) -> None:
     """Stamp a fresh DB with the current SCHEMA_VERSION; raise on a stale one.
 
     A stale version means the on-disk table layout predates this code's
-    expectations (e.g. a future column rename/add) — reading it silently
-    would risk wrong or missing data rather than a clear error.
+    expectations. Versions listed in `_MIGRATABLE_FROM` are upgraded in place by
+    `_run_migrations` (already run by the time we get here) and re-stamped;
+    anything else (e.g. a newer/unknown layout) raises rather than risk reading
+    wrong or missing data.
     """
     cur = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'")
     row = cur.fetchone()
@@ -203,12 +290,20 @@ def _check_schema_version(conn: sqlite3.Connection) -> None:
         )
         conn.commit()
         return
-    if row[0] != SCHEMA_VERSION:
-        raise SchemaVersionMismatch(
-            f"graph.db schema_version={row[0]!r} does not match expected "
-            f"{SCHEMA_VERSION!r}. Delete the database and re-run `jidra index` "
-            f"to rebuild it with the current schema."
+    if row[0] == SCHEMA_VERSION:
+        return
+    if row[0] in _MIGRATABLE_FROM:
+        conn.execute(
+            "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
+            (SCHEMA_VERSION,),
         )
+        conn.commit()
+        return
+    raise SchemaVersionMismatch(
+        f"graph.db schema_version={row[0]!r} does not match expected "
+        f"{SCHEMA_VERSION!r}. Delete the database and re-run `jidra index` "
+        f"to rebuild it with the current schema."
+    )
 
 
 def infer_variant_split(file_path: str) -> str:
@@ -278,6 +373,7 @@ def _method_row(m: MethodEntry, variant: str, module_id: str | None) -> tuple:
         m.controller_route,
         m.full_route,
         m.language,
+        m.framework_role,
     )
 
 
@@ -376,7 +472,7 @@ def _insert_graph(
         [_class_row(c, variant_of(c.file_path), module_id) for c in graph.classes],
     )
     conn.executemany(
-        "INSERT INTO methods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO methods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [_method_row(m, variant_of(m.file_path), module_id) for m in graph.methods],
     )
     conn.executemany(
@@ -499,6 +595,7 @@ def _row_to_method(row: sqlite3.Row) -> MethodEntry:
         controller_route=row["controller_route"],
         full_route=row["full_route"],
         language=row["language"] or "unknown",
+        framework_role=row["framework_role"],
     )
 
 
@@ -682,6 +779,59 @@ def load_graph(
         inheritance_edges=inheritance_edges,
         resolved_call_edges=resolved_call_edges,
     )
+
+
+def _fts_query(text: str) -> str:
+    """Turn free text into a safe FTS5 MATCH expression.
+
+    Each alphanumeric token is double-quoted (so FTS5 treats it as a literal,
+    neutralizing operators like `-`, `*`, `:` in identifiers) with a trailing
+    prefix `*`, and the tokens are OR-ed so partial overlaps still rank.
+    """
+    tokens = re.findall(r"[A-Za-z0-9_]+", text)
+    if not tokens:
+        return ""
+    return " OR ".join(f'"{t}"*' for t in tokens)
+
+
+def search_methods(
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    limit: int = 20,
+    language: str | None = None,
+    variant: str = "main",
+) -> list[dict]:
+    """FTS5 keyword search over method name/signature/class/source.
+
+    Returns raw candidate rows ordered by bm25 relevance (best first). Callers
+    that want richer ranking (e.g. `engine.explore`) re-score these. Returns an
+    empty list when the query has no usable tokens or the FTS table is absent.
+    """
+    match = _fts_query(query)
+    if not match:
+        return []
+    conn.row_factory = sqlite3.Row
+    sql = (
+        "SELECT m.id AS id, m.method_name AS method_name, m.signature AS signature, "
+        "m.class_full_name AS class_full_name, m.file_path AS file_path, "
+        "m.language AS language, bm25(methods_fts) AS score "
+        "FROM methods_fts JOIN methods m ON m.rowid = methods_fts.rowid "
+        "WHERE methods_fts MATCH ? AND methods_fts.variant = ?"
+    )
+    params: list[Any] = [match, variant]
+    if language:
+        sql += " AND m.language = ?"
+        params.append(language)
+    sql += " ORDER BY score LIMIT ?"
+    params.append(limit)
+    try:
+        cur = conn.execute(sql, params)
+    except sqlite3.OperationalError:
+        # FTS table missing (e.g. very old DB the migration didn't touch) —
+        # let the caller fall back to an in-memory scan.
+        return []
+    return [dict(r) for r in cur.fetchall()]
 
 
 def load_graph_for_files(
@@ -1028,7 +1178,7 @@ def insert_methods(
     module_id: str | None = None,
 ) -> None:
     conn.executemany(
-        "INSERT INTO methods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO methods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [_method_row(m, variant, module_id) for m in methods],
     )
 

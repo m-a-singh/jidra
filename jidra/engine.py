@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import threading
 from collections import deque
 from pathlib import Path
 
@@ -15,6 +17,115 @@ from .selector import (
 # Default graph path used when no explicit graph is provided.
 # Keep this relative so the project is portable and doesn't leak a developer machine path.
 DEFAULT_MAIN_GRAPH = str(Path(__file__).resolve().parent / "output" / "graph.db")
+
+
+# Output-size budget tiers keyed on the number of methods in the graph (a proxy
+# for repo size). A toy project and an enterprise monorepo should not get the
+# same response shape — small graphs get fuller answers, large graphs get
+# tighter, windowed output. Each entry is (exclusive_upper_bound, budget); the
+# final None bound is the catch-all for the largest graphs.
+_BUDGET_TIERS: list[tuple[int | None, dict]] = [
+    (
+        200,
+        {
+            "tier": "XS",
+            "max_chars": 6_000,
+            "max_source_lines": 60,
+            "top_n": 6,
+            "depth": 5,
+        },
+    ),
+    (
+        1_000,
+        {
+            "tier": "S",
+            "max_chars": 10_000,
+            "max_source_lines": 50,
+            "top_n": 5,
+            "depth": 4,
+        },
+    ),
+    (
+        5_000,
+        {
+            "tier": "M",
+            "max_chars": 14_000,
+            "max_source_lines": 40,
+            "top_n": 4,
+            "depth": 4,
+        },
+    ),
+    (
+        20_000,
+        {
+            "tier": "L",
+            "max_chars": 18_000,
+            "max_source_lines": 30,
+            "top_n": 4,
+            "depth": 3,
+        },
+    ),
+    (
+        None,
+        {
+            "tier": "XL",
+            "max_chars": 22_000,
+            "max_source_lines": 20,
+            "top_n": 3,
+            "depth": 3,
+        },
+    ),
+]
+
+
+# Split CamelCase / snake_case identifiers into their constituent words so a
+# query like "AuthToken" or "validate_token" matches the same methods.
+_CAMEL_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
+# Path markers that demote generated/mock code in explore ranking.
+_GENERATED_MARKERS = (".pb.", "_generated", "/generated/", "mock_", "/mocks/")
+
+
+def _tokenize_query(text: str) -> set[str]:
+    tokens: set[str] = set()
+    for part in re.split(r"[^A-Za-z0-9]+", text or ""):
+        if not part:
+            continue
+        tokens.add(part.lower())
+        for sub in _CAMEL_RE.findall(part):
+            if sub:
+                tokens.add(sub.lower())
+    return tokens
+
+
+def _score_hit(row: dict, tokens: set[str]) -> float:
+    """Heuristic relevance for explore ranking (higher = better).
+
+    Mirrors CodeGraph: exact name +50, name substring +25, signature match +20,
+    a base +10 for matching source (FTS already guarantees a hit), test penalty
+    -15, generated/mock penalty -20. bm25 (lower = better) is folded in as a
+    small tiebreaker.
+    """
+    name = (row.get("method_name") or "").lower()
+    sig = (row.get("signature") or "").lower()
+    path = (row.get("file_path") or "").lower()
+    score = 10.0  # base: this row matched the FTS source/name/signature index
+    for tok in tokens:
+        if tok == name:
+            score += 50.0
+        elif tok in name:
+            score += 25.0
+        if tok in sig:
+            score += 20.0
+    if (
+        "/test/" in path
+        or "/tests/" in path
+        or path.endswith(("test.java", "tests.java"))
+    ):
+        score -= 15.0
+    if any(marker in path for marker in _GENERATED_MARKERS):
+        score -= 20.0
+    score += -float(row.get("score", 0.0))  # bm25 tiebreaker
+    return score
 
 
 def _summarize_uncertain_edges(edges: list[dict], limit: int = 8) -> dict:
@@ -54,8 +165,13 @@ def _summarize_stopped_paths(paths: list[dict]) -> dict:
 class JidraEngine:
     def __init__(self, graph_path: str, variant: str = "validated"):
         self.graph_path = str(Path(graph_path).resolve())
-        conn = graph_store.connect(Path(self.graph_path))
-        self.graph = graph_store.load_graph(conn, variant=variant)
+        # Keep the connection alive so FTS-backed search (Phase 1) can query the
+        # DB directly instead of scanning the in-memory graph. A lock serializes
+        # access since the daemon (Phase 5) shares one cached engine across
+        # handler threads.
+        self.conn = graph_store.connect(Path(self.graph_path))
+        self._conn_lock = threading.Lock()
+        self.graph = graph_store.load_graph(self.conn, variant=variant)
 
     def _resolve_single_method(self, selector: str) -> dict:
         candidates = _resolve_method_selector(self.graph, selector)
@@ -70,7 +186,33 @@ class JidraEngine:
             return {"error": _method_ambiguous_error(selector, candidates)}
         return {"method": candidates[0]}
 
-    def get_method_context(self, method: str, max_chars: int = 12000) -> dict:
+    def _get_budget(self) -> dict:
+        """Pick the output budget for this graph's size (see _BUDGET_TIERS)."""
+        n = len(self.graph.methods)
+        for threshold, budget in _BUDGET_TIERS:
+            if threshold is None or n < threshold:
+                return budget
+        return _BUDGET_TIERS[-1][1]
+
+    def _budget_meta(self) -> dict:
+        budget = self._get_budget()
+        return {
+            "budget_tier": budget["tier"],
+            "graph_size": {"methods": len(self.graph.methods)},
+        }
+
+    def _with_budget(self, result: dict) -> dict:
+        """Annotate a tool response with the budget tier so callers can see why
+        (and how much) output was truncated."""
+        if isinstance(result, dict):
+            result.setdefault("budget_tier", self._budget_meta()["budget_tier"])
+            result.setdefault("graph_size", self._budget_meta()["graph_size"])
+        return result
+
+    def get_method_context(self, method: str, max_chars: int | None = None) -> dict:
+        budget = self._get_budget()
+        if max_chars is None:
+            max_chars = budget["max_chars"]
         resolved = self._resolve_single_method(method)
         if "error" in resolved:
             # Auto-retry with top suggestion if available and high-confidence
@@ -85,10 +227,20 @@ class JidraEngine:
         selected = resolved["method"]
         if not hasattr(selected, "id"):
             return {"error": "invalid_method_selector_result"}
-        return build_method_context(self.graph, selected.id, max_chars=max_chars)
+        result = build_method_context(
+            self.graph,
+            selected.id,
+            max_chars=max_chars,
+            max_source_lines=budget["max_source_lines"],
+        )
+        return self._with_budget(result)
 
-    def get_flow(self, method: str, depth: int = 4, top_n: int = 4) -> dict:
+    def get_flow(
+        self, method: str, depth: int | None = None, top_n: int | None = None
+    ) -> dict:
         _ = top_n
+        if depth is None:
+            depth = self._get_budget()["depth"]
         resolved = self._resolve_single_method(method)
         if "error" in resolved:
             suggestions = resolved.get("suggestions", [])
@@ -102,9 +254,16 @@ class JidraEngine:
         selected = resolved["method"]
         if not hasattr(selected, "id"):
             return {"error": "invalid_method_selector_result"}
-        return stitch_flow(self.graph, selected, max_depth=depth)
+        return self._with_budget(stitch_flow(self.graph, selected, max_depth=depth))
 
-    def get_agent_flow(self, method: str, depth: int = 4, top_n: int = 4) -> dict:
+    def get_agent_flow(
+        self, method: str, depth: int | None = None, top_n: int | None = None
+    ) -> dict:
+        budget = self._get_budget()
+        if depth is None:
+            depth = budget["depth"]
+        if top_n is None:
+            top_n = budget["top_n"]
         flow = self.get_flow(method, depth=depth, top_n=top_n)
         if flow.get("error"):
             return flow
@@ -147,22 +306,25 @@ class JidraEngine:
                 }
             )
         summary = flow.get("summary", {}) if isinstance(flow, dict) else {}
-        return {
-            "entry": agent_view.get("entry", flow.get("entry", {})),
-            "top_nodes": top_nodes,
-            "top_edges": top_edges,
-            "important_unresolved_calls": agent_view.get(
-                "important_unresolved_calls", flow.get("important_unresolved_calls", [])
-            ),
-            "uncertain_edge_summary": _summarize_uncertain_edges(uncertain_edges),
-            "stopped_path_summary": _summarize_stopped_paths(stopped_paths),
-            "summary": summary,
-            "notes": [
-                "This is a compact agent view.",
-                "Use jidra_get_flow for the full graph.",
-                "Use jidra_get_method_source to fetch source for a selected method.",
-            ],
-        }
+        return self._with_budget(
+            {
+                "entry": agent_view.get("entry", flow.get("entry", {})),
+                "top_nodes": top_nodes,
+                "top_edges": top_edges,
+                "important_unresolved_calls": agent_view.get(
+                    "important_unresolved_calls",
+                    flow.get("important_unresolved_calls", []),
+                ),
+                "uncertain_edge_summary": _summarize_uncertain_edges(uncertain_edges),
+                "stopped_path_summary": _summarize_stopped_paths(stopped_paths),
+                "summary": summary,
+                "notes": [
+                    "This is a compact agent view.",
+                    "Use jidra_get_flow for the full graph.",
+                    "Use jidra_get_method_source to fetch source for a selected method.",
+                ],
+            }
+        )
 
     def get_method_source(self, method: str) -> dict:
         resolved = self._resolve_single_method(method)
@@ -348,6 +510,373 @@ class JidraEngine:
 
         result["edges"] = edges_out
         return result
+
+    def _search_fallback(
+        self, query: str, *, limit: int, language: str | None = None
+    ) -> list[dict]:
+        """In-memory substring scan used when the FTS index is unavailable or
+        returns nothing (e.g. a very old DB the migration couldn't index)."""
+        tokens = _tokenize_query(query)
+        if not tokens:
+            return []
+        hits: list[tuple[int, dict]] = []
+        for m in self.graph.methods:
+            if language and m.language != language:
+                continue
+            haystack = f"{m.method_name} {m.signature} {m.source or ''}".lower()
+            matched = sum(1 for tok in tokens if tok in haystack)
+            if not matched:
+                continue
+            hits.append(
+                (
+                    matched,
+                    {
+                        "id": m.id,
+                        "method_name": m.method_name,
+                        "signature": m.signature,
+                        "class_full_name": m.class_full_name,
+                        "file_path": m.file_path,
+                        "language": m.language,
+                        "score": 0.0,
+                    },
+                )
+            )
+        hits.sort(key=lambda h: h[0], reverse=True)
+        return [row for _matched, row in hits[:limit]]
+
+    def search(self, query: str, limit: int = 20, language: str | None = None) -> dict:
+        """FTS5 keyword search over method names, signatures, and source."""
+        with self._conn_lock:
+            rows = graph_store.search_methods(
+                self.conn, query, limit=limit, language=language
+            )
+        if not rows:
+            rows = self._search_fallback(query, limit=limit, language=language)
+        results = [
+            {
+                "method_id": r["id"],
+                "method_name": r["method_name"],
+                "signature": r["signature"],
+                "class_full_name": r["class_full_name"],
+                "file_path": r["file_path"],
+                "language": r["language"],
+                "score": round(-float(r.get("score", 0.0)), 6),
+            }
+            for r in rows
+        ]
+        return {"query": query, "count": len(results), "results": results}
+
+    def explore(self, query: str, top_n: int = 10) -> dict:
+        """Natural-language exploration: tokenize the query, retrieve FTS
+        candidates, re-rank with kind/path heuristics, and attach class context."""
+        tokens = _tokenize_query(query)
+        fetch = max(top_n * 4, 40)
+        with self._conn_lock:
+            candidates = graph_store.search_methods(self.conn, query, limit=fetch)
+        if not candidates:
+            candidates = self._search_fallback(query, limit=fetch)
+        method_by_id = {m.id: m for m in self.graph.methods}
+        class_by_full = {c.full_name: c for c in self.graph.classes}
+
+        scored = sorted(
+            ((_score_hit(r, tokens), r) for r in candidates),
+            key=lambda pair: pair[0],
+            reverse=True,
+        )
+        results: list[dict] = []
+        for score, r in scored[:top_n]:
+            entry: dict = {
+                "method_id": r["id"],
+                "method_name": r["method_name"],
+                "signature": r["signature"],
+                "class_full_name": r["class_full_name"],
+                "file_path": r["file_path"],
+                "language": r["language"],
+                "score": round(score, 2),
+            }
+            method = method_by_id.get(r["id"])
+            if method is not None and method.is_endpoint:
+                entry["endpoint"] = {
+                    "http_method": method.http_method,
+                    "route": method.full_route or method.route,
+                }
+            cls = class_by_full.get(r["class_full_name"])
+            if cls is not None and cls.stereotypes:
+                entry["class_stereotypes"] = cls.stereotypes
+            results.append(entry)
+        return {
+            "query": query,
+            "tokens": sorted(tokens),
+            "count": len(results),
+            "results": results,
+            "hint": "Call jidra_get_method_context on a result's method_id to drill in.",
+        }
+
+    def _methods_in_file(self, file_path: str) -> list:
+        """Methods whose file matches `file_path`, tolerating absolute vs.
+        repo-relative paths (one being a path-suffix of the other)."""
+        target = _norm_path(file_path)
+        return [m for m in self.graph.methods if _path_matches(m.file_path, target)]
+
+    def _classes_in_file(self, file_path: str) -> list:
+        target = _norm_path(file_path)
+        return [c for c in self.graph.classes if _path_matches(c.file_path, target)]
+
+    def get_file_dependents(self, file_path: str) -> dict:
+        """Reverse dependencies: which files would break if this file changes.
+
+        Walks resolved call edges whose callee lives in `file_path` back to the
+        caller's file, ranked by number of call sites (most-coupled first)."""
+        local = self._methods_in_file(file_path)
+        local_ids = {m.id for m in local}
+        method_by_id = {m.id: m for m in self.graph.methods}
+        if not local:
+            return {
+                "file": file_path,
+                "dependents": [],
+                "total_dependent_files": 0,
+                "total_call_sites": 0,
+                "note": "No methods found for that file_path in the graph.",
+            }
+        by_file: dict[str, dict] = {}
+        total_calls = 0
+        for edge in self.graph.resolved_call_edges:
+            if edge.callee_method_id not in local_ids:
+                continue
+            caller = method_by_id.get(edge.caller_method_id)
+            if caller is None or caller.file_path in (None, ""):
+                continue
+            callee = method_by_id.get(edge.callee_method_id)
+            entry = by_file.setdefault(
+                caller.file_path, {"call_count": 0, "methods_called": set()}
+            )
+            entry["call_count"] += 1
+            if callee is not None:
+                entry["methods_called"].add(callee.method_name)
+            total_calls += 1
+        dependents = sorted(
+            (
+                {
+                    "file": fp,
+                    "call_count": data["call_count"],
+                    "methods_called": sorted(data["methods_called"]),
+                }
+                for fp, data in by_file.items()
+            ),
+            key=lambda d: d["call_count"],
+            reverse=True,
+        )
+        return {
+            "file": file_path,
+            "dependents": dependents,
+            "total_dependent_files": len(dependents),
+            "total_call_sites": total_calls,
+        }
+
+    def get_file_dependencies(self, file_path: str) -> dict:
+        """Forward dependencies: which files this file depends on.
+
+        Combines outgoing resolved call edges (call-level) with inheritance
+        edges from classes defined in this file (extends/implements targets)."""
+        local = self._methods_in_file(file_path)
+        local_ids = {m.id for m in local}
+        method_by_id = {m.id: m for m in self.graph.methods}
+        class_by_full = {c.full_name: c for c in self.graph.classes}
+        local_classes = self._classes_in_file(file_path)
+        if not local and not local_classes:
+            return {
+                "file": file_path,
+                "dependencies": [],
+                "inheritance": [],
+                "total_dependency_files": 0,
+                "total_call_sites": 0,
+                "note": "No methods or classes found for that file_path in the graph.",
+            }
+        self_files = {_norm_path(m.file_path) for m in local}
+        by_file: dict[str, dict] = {}
+        total_calls = 0
+        for edge in self.graph.resolved_call_edges:
+            if edge.caller_method_id not in local_ids:
+                continue
+            callee = method_by_id.get(edge.callee_method_id)
+            if callee is None or callee.file_path in (None, ""):
+                continue
+            if _norm_path(callee.file_path) in self_files:
+                continue  # skip intra-file calls
+            entry = by_file.setdefault(
+                callee.file_path, {"call_count": 0, "methods_called": set()}
+            )
+            entry["call_count"] += 1
+            entry["methods_called"].add(callee.method_name)
+            total_calls += 1
+        dependencies = sorted(
+            (
+                {
+                    "file": fp,
+                    "call_count": data["call_count"],
+                    "methods_called": sorted(data["methods_called"]),
+                }
+                for fp, data in by_file.items()
+            ),
+            key=lambda d: d["call_count"],
+            reverse=True,
+        )
+        local_class_ids = {c.id for c in local_classes}
+        inheritance: list[dict] = []
+        seen_inh: set[tuple[str, str]] = set()
+        for edge in self.graph.inheritance_edges:
+            if edge.source_class_id not in local_class_ids:
+                continue
+            target_cls = class_by_full.get(edge.target_class)
+            target_file = target_cls.file_path if target_cls else None
+            key = (edge.target_class, edge.relation)
+            if key in seen_inh:
+                continue
+            seen_inh.add(key)
+            inheritance.append(
+                {
+                    "file": target_file,
+                    "target_class": edge.target_class,
+                    "relation": edge.relation,
+                    "resolved": target_file is not None,
+                }
+            )
+        dep_files = {d["file"] for d in dependencies}
+        dep_files |= {i["file"] for i in inheritance if i["file"]}
+        return {
+            "file": file_path,
+            "dependencies": dependencies,
+            "inheritance": inheritance,
+            "total_dependency_files": len(dep_files),
+            "total_call_sites": total_calls,
+        }
+
+    def get_endpoints(self, framework: str | None = None) -> dict:
+        """All HTTP endpoints in the graph (Spring/NestJS/Flask/FastAPI/Django).
+
+        `framework` filters case-insensitively against the endpoint's framework
+        role or language (e.g. "flask", "fastapi", "django", "spring", "java",
+        "typescript")."""
+        fw = (framework or "").lower()
+        endpoints: list[dict] = []
+        for m in self.graph.methods:
+            if not (m.is_endpoint or m.framework_role in _ENDPOINT_ROLES):
+                continue
+            if (
+                fw
+                and fw not in (m.framework_role or "").lower()
+                and fw not in (m.language or "").lower()
+            ):
+                continue
+            endpoints.append(
+                {
+                    "method_id": m.id,
+                    "signature": m.signature,
+                    "class_full_name": m.class_full_name,
+                    "http_method": m.http_method,
+                    "route": m.full_route or m.route,
+                    "framework_role": m.framework_role,
+                    "language": m.language,
+                    "file_path": m.file_path,
+                }
+            )
+        endpoints.sort(key=lambda e: (e["route"] or "", e["http_method"] or ""))
+        return {
+            "framework_filter": framework,
+            "count": len(endpoints),
+            "endpoints": endpoints,
+        }
+
+    def get_components(self, kind: str | None = None) -> dict:
+        """UI/framework components and hooks. Pulls class-level component
+        stereotypes (Angular/Vue/React/NestJS) and method-level React
+        components/hooks. `kind` filters by substring (e.g. "react", "angular",
+        "hook", "component")."""
+        k = (kind or "").lower()
+        items: list[dict] = []
+        for c in self.graph.classes:
+            roles = [s for s in (c.stereotypes or []) if s in _COMPONENT_STEREOTYPES]
+            if not roles:
+                continue
+            if k and not any(k in r for r in roles):
+                continue
+            items.append(
+                {
+                    "source": "class",
+                    "name": c.full_name,
+                    "stereotypes": roles,
+                    "file_path": c.file_path,
+                    "language": c.language,
+                }
+            )
+        for m in self.graph.methods:
+            role = m.framework_role
+            if role not in ("component", "hook"):
+                continue
+            if k and k not in role and k != "react":
+                continue
+            items.append(
+                {
+                    "source": "method",
+                    "name": m.method_name,
+                    "framework_role": role,
+                    "file_path": m.file_path,
+                    "language": m.language,
+                }
+            )
+        return {"kind_filter": kind, "count": len(items), "components": items}
+
+    def get_framework_summary(self) -> dict:
+        """Discovery counts: framework roles, class stereotypes, languages."""
+        from collections import Counter
+
+        roles = Counter(
+            m.framework_role for m in self.graph.methods if m.framework_role
+        )
+        stereotypes: Counter = Counter()
+        for c in self.graph.classes:
+            stereotypes.update(c.stereotypes or [])
+        languages = Counter(m.language for m in self.graph.methods)
+        endpoint_total = sum(
+            1
+            for m in self.graph.methods
+            if m.is_endpoint or m.framework_role in _ENDPOINT_ROLES
+        )
+        return {
+            "endpoints_total": endpoint_total,
+            "framework_roles": dict(roles.most_common()),
+            "class_stereotypes": dict(stereotypes.most_common()),
+            "languages": dict(languages.most_common()),
+        }
+
+
+# Method-level framework roles that mark an HTTP endpoint across languages.
+_ENDPOINT_ROLES = {"http_handler", "flask_route", "fastapi_route", "django_handler"}
+# Class stereotypes that denote a UI/framework component.
+_COMPONENT_STEREOTYPES = {
+    "react_component",
+    "vue_component",
+    "angular_component",
+    "component",
+    "react_context",
+    "vue_store",
+    "vue_composable",
+}
+
+
+def _norm_path(path: str | None) -> str:
+    return (path or "").replace("\\", "/").strip()
+
+
+def _path_matches(stored: str | None, target_norm: str) -> bool:
+    """True if `stored` refers to the same file as the (normalized) target,
+    allowing either to be a path-suffix of the other (absolute vs. relative)."""
+    s = _norm_path(stored)
+    if not s or not target_norm:
+        return False
+    if s == target_norm:
+        return True
+    return s.endswith("/" + target_norm) or target_norm.endswith("/" + s)
 
 
 _engine_cache: dict[tuple[str, str], tuple["JidraEngine", float]] = {}

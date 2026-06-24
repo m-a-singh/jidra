@@ -686,6 +686,16 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Force full rebuild, bypassing the fingerprint cache",
     )
+    index_parser.add_argument(
+        "--ts-backend",
+        choices=("auto", "treesitter", "tsmorph"),
+        default="auto",
+        help=(
+            "TypeScript extraction backend. auto/treesitter: in-process "
+            "tree-sitter (no Docker, ~65%% resolution). tsmorph: Docker ts-morph "
+            "sidecar (higher resolution)."
+        ),
+    )
 
     trace_parser = subparsers.add_parser("trace", help="Trace a method call flow")
     trace_parser.add_argument(
@@ -828,6 +838,31 @@ def _parse_args() -> argparse.Namespace:
     mcp_parser.add_argument(
         "--codebase", help="Path to Java codebase (for reindex tool)"
     )
+
+    reindex_parser = subparsers.add_parser(
+        "reindex", help="Incrementally update graph.db after file changes"
+    )
+    reindex_parser.add_argument("--graph", help="Path to graph.db")
+    reindex_parser.add_argument(
+        "--codebase", help="Path to codebase root (defaults to graph's parent)"
+    )
+    reindex_parser.add_argument(
+        "--changed-files",
+        nargs="*",
+        default=None,
+        help="Hint: only these files changed (used by git hooks).",
+    )
+
+    hooks_parser = subparsers.add_parser(
+        "hooks", help="Install/uninstall git hooks that auto-reindex the graph"
+    )
+    hooks_parser.add_argument(
+        "action", choices=("install", "uninstall"), help="install or uninstall"
+    )
+    hooks_parser.add_argument(
+        "--repo", default=None, help="Repository root (defaults to CWD)"
+    )
+    hooks_parser.add_argument("--graph", help="Path to graph.db the hooks reindex")
 
     flow_doc_parser = subparsers.add_parser(
         "flow-doc", help="Generate recursive deterministic flow markdown"
@@ -1129,6 +1164,7 @@ def _index(
     on_progress=None,
     _quiet: bool = False,
     force: bool = False,
+    ts_backend: str = "auto",
 ) -> None:
     from .cache import (
         compute_file_manifest,
@@ -1206,6 +1242,7 @@ def _index(
         on_progress=on_progress,
         changed_files=changed_files,
         previous_graph=previous_graph,
+        ts_backend=ts_backend,
     )
 
     if changed_files is not None and previous_graph is not None and not _quiet:
@@ -1738,6 +1775,8 @@ def _up() -> None:
         "args": [
             "-m",
             "jidra.mcp_server",
+            "--mode",
+            "proxy",
             "--graph",
             str(graph_validated_path),
             "--codebase",
@@ -1749,6 +1788,13 @@ def _up() -> None:
             "jidra_get_flow",
             "jidra_get_agent_flow",
             "jidra_get_call_chain",
+            "jidra_search",
+            "jidra_explore",
+            "jidra_get_file_dependents",
+            "jidra_get_file_dependencies",
+            "jidra_get_endpoints",
+            "jidra_get_components",
+            "jidra_get_framework_summary",
             "jidra_analyze_stack_trace",
             "jidra_check_staleness",
             "jidra_reindex",
@@ -1776,6 +1822,8 @@ def _up() -> None:
             _python,
             "-m",
             "jidra.mcp_server",
+            "--mode",
+            "proxy",
             "--graph",
             str(graph_validated_path),
             "--codebase",
@@ -2004,7 +2052,12 @@ def main() -> None:
         return
 
     if args.command == "index":
-        _index(args.codebase, args.output, force=args.force)
+        _index(
+            args.codebase,
+            args.output,
+            force=args.force,
+            ts_backend=getattr(args, "ts_backend", "auto"),
+        )
         return
 
     if args.command == "validate":
@@ -2079,6 +2132,32 @@ def main() -> None:
             return
         except RuntimeError as exc:
             raise SystemExit(str(exc))
+
+    if args.command == "reindex":
+        from .reindexer import incremental_reindex
+
+        graph_path = _resolve_graph_db_path(args.graph)
+        codebase = (
+            Path(args.codebase).resolve() if args.codebase else graph_path.parent.parent
+        )
+        summary = incremental_reindex(
+            codebase, graph_path, hint_changed_files=args.changed_files
+        )
+        print(json.dumps(summary, indent=2, default=str))
+        return
+
+    if args.command == "hooks":
+        from .git_hooks import install_hooks, uninstall_hooks
+
+        repo = Path(args.repo).resolve() if args.repo else Path.cwd()
+        graph_path = _resolve_graph_db_path(args.graph)
+        if args.action == "install":
+            written = install_hooks(repo, graph_path)
+            print(f"✓ Installed JIDRA git hooks: {', '.join(written) or '(none)'}")
+        else:
+            removed = uninstall_hooks(repo)
+            print(f"✓ Removed JIDRA blocks from: {', '.join(removed) or '(none)'}")
+        return
 
     if args.command == "flow-doc":
         graph_path = _resolve_graph_db_path(args.graph)
