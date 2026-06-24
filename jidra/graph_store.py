@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS schema_meta (
 class SchemaVersionMismatch(RuntimeError):
     """Raised when an existing graph.db was built with an incompatible schema."""
 
+
 _ENTITY_TABLES = (
     "classes",
     "methods",

@@ -1534,7 +1534,9 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         graph.resolved_call_edges = sorted(edges, key=lambda e: e.id)
     else:
         kept = [
-            e for e in graph.resolved_call_edges if e.caller_method_id not in only_caller_ids
+            e
+            for e in graph.resolved_call_edges
+            if e.caller_method_id not in only_caller_ids
         ]
         graph.resolved_call_edges = sorted(kept + edges, key=lambda e: e.id)
 
