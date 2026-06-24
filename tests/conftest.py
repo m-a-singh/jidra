@@ -2,8 +2,7 @@ import pytest
 from pathlib import Path
 
 from jidra.models import Graph, MethodEntry, ClassEntry, CallSite, ResolvedCallEdge
-from jidra.graph_io import load_graph_jsonl
-from jidra.exporter import export_jsonl, graph_records
+from jidra import graph_store
 
 
 @pytest.fixture
@@ -138,14 +137,15 @@ def simple_test_graph():
 
 @pytest.fixture
 def test_graph_file(simple_test_graph, tmp_path):
-    """Write test graph to a temporary JSONL file and return its path."""
-    graph_file = tmp_path / "test_graph.jsonl"
-    records = graph_records(simple_test_graph)
-    export_jsonl(graph_file, records)
-    return str(graph_file)
+    """Write test graph to a temporary graph.db and return its path."""
+    db_path = tmp_path / "graph.db"
+    conn = graph_store.connect(db_path)
+    graph_store.save_full_graph(conn, simple_test_graph, variant="validated")
+    return str(db_path)
 
 
 @pytest.fixture
 def loaded_test_graph(test_graph_file):
-    """Load the test graph from file."""
-    return load_graph_jsonl(Path(test_graph_file))
+    """Load the test graph from the db."""
+    conn = graph_store.connect(Path(test_graph_file))
+    return graph_store.load_graph(conn, variant="validated")

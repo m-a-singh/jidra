@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .context_builder import build_method_context
 from .flow_stitcher import stitch_flow
-from .graph_io import load_graph_jsonl
+from . import graph_store
 from .selector import (
     _fuzzy_suggestions,
     _method_ambiguous_error,
@@ -14,7 +14,7 @@ from .selector import (
 
 # Default graph path used when no explicit graph is provided.
 # Keep this relative so the project is portable and doesn't leak a developer machine path.
-DEFAULT_MAIN_GRAPH = str(Path(__file__).resolve().parent / "output" / "graph.jsonl")
+DEFAULT_MAIN_GRAPH = str(Path(__file__).resolve().parent / "output" / "graph.db")
 
 
 def _summarize_uncertain_edges(edges: list[dict], limit: int = 8) -> dict:
@@ -52,9 +52,10 @@ def _summarize_stopped_paths(paths: list[dict]) -> dict:
 
 
 class JidraEngine:
-    def __init__(self, graph_path: str):
+    def __init__(self, graph_path: str, variant: str = "validated"):
         self.graph_path = str(Path(graph_path).resolve())
-        self.graph = load_graph_jsonl(Path(self.graph_path))
+        conn = graph_store.connect(Path(self.graph_path))
+        self.graph = graph_store.load_graph(conn, variant=variant)
 
     def _resolve_single_method(self, selector: str) -> dict:
         candidates = _resolve_method_selector(self.graph, selector)
