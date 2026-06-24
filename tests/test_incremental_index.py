@@ -298,7 +298,7 @@ public class UserRepository {
     )
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch = method_by_sig["com.example.UserService#fetch(String)"]
-    new_find = method_by_sig["com.example.UserRepository#find(String, boolean)"]
+    assert "com.example.UserRepository#find(String, boolean)" in method_by_sig
     assert "com.example.UserRepository#find(String)" not in method_by_sig
 
     edges = {
