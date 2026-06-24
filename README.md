@@ -46,10 +46,14 @@ Same cost today at Sonnet pricing because output tokens dominate — but 606k fe
 
 - **Indexes** Scala, Java, TypeScript, Python, and Go source into deterministic call graphs
 - **Validates** with language-specific strategies (Spring Actuator for Java, compiler-resolved for Scala, static analysis for TS/Python/Go)
-- **Generates** noise-free context (68-95% smaller depending on language)
+- **Searches** the graph by keyword or natural language (FTS5-backed `jidra_search` / `jidra_explore`)
+- **Surfaces** framework structure as first-class data — HTTP endpoints, React/Vue/Angular components & hooks (`jidra_get_endpoints`, `jidra_get_components`, `jidra_get_framework_summary`)
+- **Answers** impact-analysis questions — what breaks if I change this file (`jidra_get_file_dependents` / `_dependencies`)
+- **Generates** noise-free context (68-95% smaller depending on language), auto-scaled to repo size (budget tiers)
 - **Traces** method/function execution with uncertainty markers
+- **Stays fresh** automatically via git hooks + an in-daemon file watcher (no manual reindex)
 - **Exports** as JSON, MCP tools, or interactive HTML
-- **Integrates** with Claude/Codex/Gemini via MCP
+- **Integrates** with Claude/Codex/Gemini via MCP (shared-daemon proxy mode shares one in-memory graph across editor windows)
 - **Reduces** LLM token costs by 68-95% (proven on real projects)
 
 ## What JIDRA Does NOT Do (By Design)
@@ -88,7 +92,12 @@ jidra/
     ├── extractor.py
     ├── exporter.py
     ├── ts_filters.py          # Language detection (all languages) + TypeScript file iteration
-    ├── ts_extractor.py        # TypeScript extraction (Docker sidecar)
+    ├── ts_extractor.py        # TypeScript extraction (dispatches to tree-sitter or Docker sidecar)
+    ├── ts_treesitter.py       # In-process tree-sitter TypeScript backend (no Docker, default)
+    ├── daemon.py              # Shared-graph daemon (Unix socket RPC, watchdog, hot-reload)
+    ├── proxy.py               # Thin stdio<->socket MCP proxy that spawns the daemon
+    ├── watcher.py             # Debounced filesystem watcher -> incremental reindex
+    ├── git_hooks.py           # post-commit/merge/checkout hook installer
     ├── scala_filters.py       # Scala file iteration + excluded dirs
     ├── scala_extractor.py     # Scala extraction (SemanticDB two-pass)
     ├── scala_proto/           # Generated protobuf bindings for SemanticDB
@@ -201,6 +210,12 @@ versions. One file, three logical graphs:
 - **Inspectable with standard tools**: `sqlite3 graph.db ".tables"` /
   `SELECT * FROM methods WHERE variant='validated'` work directly — no custom JSONL
   parsing required to poke at the data.
+- **Full-text search index**: a `methods_fts` FTS5 virtual table (kept in sync by
+  triggers) backs `jidra_search` / `jidra_explore`. The `methods` table also carries a
+  `framework_role` column for endpoint/component queries.
+- **In-place migration**: the schema is versioned (`schema_version`); opening an older
+  `2.0` database transparently upgrades it to `2.1` (creates + backfills the FTS index,
+  adds `framework_role`) on first `connect()` — no rebuild required.
 
 `jidra up` writes `graph.db` (plus the validation report and visualization HTML) to
 JIDRA's own `jidra/output/<repo-slug>-<branch>/` directory rather than into the
@@ -433,17 +448,43 @@ python -m jidra.cli error-doc \
 ## `index`
 
 ```bash
-jidra index --codebase <path> --output <path-or-dir>
+jidra index --codebase <path> --output <path-or-dir> [--ts-backend auto|treesitter|tsmorph]
 ```
 
-Builds graph JSONL from source code (auto-detects language):
+Builds the graph (`graph.db`) from source code (auto-detects language):
 - **Scala**: SemanticDB-based extraction (Docker sidecar) — compiler-resolved call edges, ~90% resolution
 - **Java**: tree-sitter-based AST extraction + call resolution, ~85% resolution
-- **TypeScript**: ts-morph-based extraction (Docker sidecar), ~80% resolution
+- **TypeScript**: in-process **tree-sitter** extraction by default (no Docker), ~65% resolution. Pass `--ts-backend tsmorph` to use the Docker ts-morph sidecar instead (~80% resolution via the TypeScript compiler). `auto` (default) uses tree-sitter and falls back to the sidecar only if `tree-sitter-typescript` isn't installed.
 - **Python**: libcst/AST-based extraction + symbol table type inference, ~68.5% resolution
 - **Go**: tree-sitter-based AST extraction (in-process, no Docker/compiler) + local symbol-table call resolution, best-effort — no interface-satisfaction (structural typing) resolution
 
 Language detection is automatic via manifest files (`build.sbt`, `pom.xml`, `package.json`, `pyproject.toml`, `go.mod`, etc.). Multiple languages in the same repo are detected and merged into a single graph automatically.
+
+> **Note:** a directory that contains source files but **no manifest** (e.g. loose `.py`/`.ts` files with no `requirements.txt`/`pyproject.toml`/`package.json`) is not recognized as that language and will index to an empty graph. Add the appropriate manifest so the codebase is detected. This also affects auto-sync (below): the watcher/hooks will reindex but find nothing to extract.
+
+## `reindex`
+
+```bash
+jidra reindex [--graph <path>] [--codebase <path>] [--changed-files <f1> <f2> ...]
+```
+
+Incrementally updates an existing `graph.db` after files change (fingerprint-based; falls
+back to a full rebuild when needed). `--changed-files` is a hint used by the git hooks.
+This is the command the git hooks and the in-daemon file watcher call under the hood.
+
+## `hooks`
+
+```bash
+jidra hooks install   [--repo <path>] [--graph <path>]
+jidra hooks uninstall [--repo <path>]
+```
+
+Installs `post-commit` / `post-merge` / `post-checkout` git hooks that auto-`reindex` the
+graph when the working tree changes, so it never goes stale. Hook bodies are wrapped in
+delimited `# BEGIN JIDRA` / `# END JIDRA` blocks, so they compose with other hook managers
+(Husky, lefthook) and `uninstall` removes only JIDRA's block. When running the MCP server
+in `--mode proxy`, the shared daemon also runs a debounced filesystem watcher that hot-reloads
+the graph on save — so on most setups you get fresh graphs with no manual reindex at all.
 
 ## `trace`
 
