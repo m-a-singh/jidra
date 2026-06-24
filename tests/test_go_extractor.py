@@ -334,6 +334,32 @@ def test_build_go_graph_for_files_incremental(tmp_path):
     assert graph.resolved_call_edges == []
 
 
+def test_cross_file_method_resolution(tmp_path):
+    """Methods declared in a different file from their receiver type must appear in the graph."""
+    pkg = tmp_path / "svc"
+    pkg.mkdir()
+
+    # Type lives in types.go
+    (pkg / "types.go").write_text(
+        "package svc\n\ntype Service struct{ Name string }\n"
+    )
+    # Methods live in service.go — different file, same package
+    (pkg / "service.go").write_text(
+        "package svc\n\nfunc (s *Service) Run() string { return s.Name }\n"
+        "func (s *Service) Stop() {}\n"
+    )
+
+    graph = build_go_graph(tmp_path)
+
+    method_names = {m.method_name for m in graph.methods}
+    assert "Run" in method_names, "method in separate file from type should be extracted"
+    assert "Stop" in method_names
+
+    # Both methods should be owned by the Service class
+    run = next(m for m in graph.methods if m.method_name == "Run")
+    assert "Service" in run.class_full_name
+
+
 def test_build_go_graph_for_files_skips_missing_files(tmp_path):
     root = _write_fixture(tmp_path)
     missing = root / "animal" / "does_not_exist.go"

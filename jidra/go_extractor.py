@@ -677,39 +677,106 @@ def _resolve_calls(graph: Graph, pending: list[_PendingBody]) -> None:
     graph.resolved_call_edges = resolved_edges
 
 
-def _extract_file(file_path: Path, parser) -> tuple[Graph, list[_PendingBody]]:
+class _FileMeta:
+    """Parsed file data ready for the method-extraction pass."""
+
+    __slots__ = ("file_path", "root", "source", "package_name", "package_scope")
+
+    def __init__(self, file_path, root, source, package_name, package_scope):
+        self.file_path = file_path
+        self.root = root
+        self.source = source
+        self.package_name = package_name
+        self.package_scope = package_scope
+
+
+def _parse_file(file_path: Path, parser) -> _FileMeta:
     source = file_path.read_bytes()
     root = parser.parse(source).root_node
     package_name = _extract_package(root, source)
     package_scope = str(file_path.parent)
-    file_path_str = str(file_path)
+    return _FileMeta(file_path, root, source, package_name, package_scope)
 
-    classes, fields, inheritance_edges, class_by_name = _extract_classes_and_fields(
-        root, source, file_path_str, package_name
-    )
-    methods, extra_classes, pending = _extract_methods_and_functions(
-        root, source, file_path_str, package_name, package_scope, class_by_name
-    )
-    classes.extend(extra_classes)
 
-    graph = Graph(
+def _extract_types(meta: _FileMeta) -> tuple[
+    list[ClassEntry],
+    list[FieldEntry],
+    list[InheritanceEdge],
+    dict[str, ClassEntry],
+]:
+    return _extract_classes_and_fields(
+        meta.root, meta.source, str(meta.file_path), meta.package_name
+    )
+
+
+def _build_global_class_map(
+    file_metas: list[_FileMeta],
+) -> tuple[
+    list[ClassEntry],
+    list[FieldEntry],
+    list[InheritanceEdge],
+    dict[tuple[str, str], ClassEntry],
+]:
+    """Pass 1: collect every type across all files.
+
+    Returns a (package_scope, short_name) → ClassEntry map so that methods
+    declared in a different file from their receiver type are still resolved.
+    Within a package directory, short names are unique by Go spec, so this
+    lookup is unambiguous. Cross-package types (external imports) remain
+    unresolvable and fall through to "unresolved" as before.
+    """
+    all_classes: list[ClassEntry] = []
+    all_fields: list[FieldEntry] = []
+    all_edges: list[InheritanceEdge] = []
+    class_map: dict[tuple[str, str], ClassEntry] = {}
+
+    for meta in file_metas:
+        classes, fields, edges, local_map = _extract_types(meta)
+        all_classes.extend(classes)
+        all_fields.extend(fields)
+        all_edges.extend(edges)
+        for short_name, cls in local_map.items():
+            class_map[(meta.package_scope, short_name)] = cls
+
+    return all_classes, all_fields, all_edges, class_map
+
+
+def _extract_methods_for_file(
+    meta: _FileMeta,
+    class_map: dict[tuple[str, str], ClassEntry],
+) -> tuple[list[MethodEntry], list[ClassEntry], list[_PendingBody]]:
+    """Pass 2: extract methods using the global type map.
+
+    Falls back to the same-package-scope lookup so methods whose receiver type
+    lives in another file in the same directory are correctly attached.
+    """
+    scoped_class_by_name = {
+        short: cls
+        for (scope, short), cls in class_map.items()
+        if scope == meta.package_scope
+    }
+    return _extract_methods_and_functions(
+        meta.root,
+        meta.source,
+        str(meta.file_path),
+        meta.package_name,
+        meta.package_scope,
+        scoped_class_by_name,
+    )
+
+
+def _merge_unresolved(
+    classes: list[ClassEntry],
+    methods: list[MethodEntry],
+    fields: list[FieldEntry],
+    inheritance_edges: list[InheritanceEdge],
+) -> Graph:
+    return Graph(
         classes=classes,
         methods=methods,
         fields=fields,
         callsites=[],
         inheritance_edges=inheritance_edges,
-        resolved_call_edges=[],
-    )
-    return graph, pending
-
-
-def _merge_unresolved(graphs: list[Graph]) -> Graph:
-    return Graph(
-        classes=sum([g.classes for g in graphs], []),
-        methods=sum([g.methods for g in graphs], []),
-        fields=sum([g.fields for g in graphs], []),
-        callsites=[],
-        inheritance_edges=sum([g.inheritance_edges for g in graphs], []),
         resolved_call_edges=[],
     )
 
@@ -718,17 +785,24 @@ def build_go_graph(
     codebase_root: Path, on_progress: Callable[[int], None] | None = None
 ) -> Graph:
     parser = make_go_parser()
-    graphs: list[Graph] = []
+
+    # Pass 1: parse every file and collect all type declarations globally.
+    file_metas = [_parse_file(fp, parser) for fp in iter_go_files(codebase_root)]
+    all_classes, all_fields, all_edges, class_map = _build_global_class_map(file_metas)
+
+    if on_progress:
+        on_progress(len(all_classes))
+
+    # Pass 2: extract methods/functions using the cross-file type map.
+    all_methods: list[MethodEntry] = []
     all_pending: list[_PendingBody] = []
-
-    for file_path in iter_go_files(codebase_root):
-        file_graph, pending = _extract_file(file_path, parser)
-        graphs.append(file_graph)
+    for meta in file_metas:
+        methods, extra_classes, pending = _extract_methods_for_file(meta, class_map)
+        all_methods.extend(methods)
+        all_classes.extend(extra_classes)
         all_pending.extend(pending)
-        if on_progress:
-            on_progress(sum(len(g.classes) for g in graphs))
 
-    graph = _merge_unresolved(graphs)
+    graph = _merge_unresolved(all_classes, all_methods, all_fields, all_edges)
     _resolve_calls(graph, all_pending)
     return graph
 
@@ -737,17 +811,14 @@ def build_go_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
     """Build an unresolved Go graph for specific files (incremental reindex).
 
     Mirrors build_py_graph_for_files: resolution happens in the caller's merge step.
+    Note: since resolution is deferred, the cross-file type-map fix only applies
+    to full builds. Incremental builds may still miss methods whose receiver type
+    lives outside the changed file set; this is acceptable for a delta update.
     """
     parser = make_go_parser()
-    graphs: list[Graph] = []
+    file_metas = [_parse_file(fp, parser) for fp in files if fp.exists()]
 
-    for file_path in files:
-        if not file_path.exists():
-            continue
-        file_graph, _pending = _extract_file(file_path, parser)
-        graphs.append(file_graph)
-
-    if not graphs:
+    if not file_metas:
         return Graph(
             classes=[],
             methods=[],
@@ -756,4 +827,12 @@ def build_go_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
             inheritance_edges=[],
             resolved_call_edges=[],
         )
-    return _merge_unresolved(graphs)
+
+    all_classes, all_fields, all_edges, class_map = _build_global_class_map(file_metas)
+    all_methods: list[MethodEntry] = []
+    for meta in file_metas:
+        methods, extra_classes, _ = _extract_methods_for_file(meta, class_map)
+        all_methods.extend(methods)
+        all_classes.extend(extra_classes)
+
+    return _merge_unresolved(all_classes, all_methods, all_fields, all_edges)
