@@ -282,9 +282,7 @@ def _callsite_row(c: CallSite, variant: str, module_id: str | None) -> tuple:
     )
 
 
-def _inheritance_row(
-    e: InheritanceEdge, variant: str, module_id: str | None
-) -> tuple:
+def _inheritance_row(e: InheritanceEdge, variant: str, module_id: str | None) -> tuple:
     return (
         e.id,
         variant,
@@ -338,17 +336,11 @@ def _insert_graph(
 
     conn.executemany(
         "INSERT INTO classes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        [
-            _class_row(c, variant_of(c.file_path), module_id)
-            for c in graph.classes
-        ],
+        [_class_row(c, variant_of(c.file_path), module_id) for c in graph.classes],
     )
     conn.executemany(
         "INSERT INTO methods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        [
-            _method_row(m, variant_of(m.file_path), module_id)
-            for m in graph.methods
-        ],
+        [_method_row(m, variant_of(m.file_path), module_id) for m in graph.methods],
     )
     conn.executemany(
         "INSERT INTO fields VALUES (?,?,?,?,?,?,?,?,?)",
@@ -359,10 +351,7 @@ def _insert_graph(
     )
     conn.executemany(
         "INSERT INTO callsites VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        [
-            _callsite_row(c, variant_of(c.file_path), module_id)
-            for c in graph.callsites
-        ],
+        [_callsite_row(c, variant_of(c.file_path), module_id) for c in graph.callsites],
     )
     conn.executemany(
         "INSERT INTO inheritance_edges VALUES (?,?,?,?,?,?,?)",
