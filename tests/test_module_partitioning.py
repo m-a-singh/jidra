@@ -1,8 +1,7 @@
-import json
 from pathlib import Path
 
+from jidra import graph_store
 from jidra.extractor import build_graph_partitioned
-from jidra.graph_io import load_graph_jsonl
 
 
 def _write_java(path: Path, content: str) -> None:
@@ -21,12 +20,13 @@ def test_single_module_fallback_matches_current_behavior(tmp_path):
     result = build_graph_partitioned(codebase, output)
 
     assert result["multi_module"] is False
-    assert result["index_path"] is None
-    graph = load_graph_jsonl(output / "graph.jsonl")
+    assert result["modules"] == {}
+    conn = graph_store.connect(Path(result["db_path"]))
+    graph = graph_store.load_graph(conn, variant="main", module_id=None)
     assert any(c.full_name == "com.example.Foo" for c in graph.classes)
 
 
-def test_multi_module_fixture_produces_one_graph_per_module_plus_index(tmp_path):
+def test_multi_module_fixture_produces_one_db_with_module_ids(tmp_path):
     codebase = tmp_path / "repo"
     (codebase / "module-a").mkdir(parents=True)
     (codebase / "module-a" / "build.gradle").write_text("// a", encoding="utf-8")
@@ -48,11 +48,12 @@ def test_multi_module_fixture_produces_one_graph_per_module_plus_index(tmp_path)
     assert result["multi_module"] is True
     assert set(result["modules"].keys()) == {"module-a", "module-b"}
 
-    index = json.loads(Path(result["index_path"]).read_text(encoding="utf-8"))
-    assert set(index.keys()) == {"module-a", "module-b"}
+    conn = graph_store.connect(Path(result["db_path"]))
+    modules = graph_store.list_modules(conn)
+    assert {m["module_id"] for m in modules} == {"module-a", "module-b"}
 
-    graph_a = load_graph_jsonl(Path(index["module-a"]))
-    graph_b = load_graph_jsonl(Path(index["module-b"]))
+    graph_a = graph_store.load_graph(conn, variant="main", module_id="module-a")
+    graph_b = graph_store.load_graph(conn, variant="main", module_id="module-b")
     assert any(c.full_name == "com.a.Foo" for c in graph_a.classes)
     assert any(c.full_name == "com.b.Baz" for c in graph_b.classes)
     # Each module's graph should not contain the other module's classes.

@@ -16,11 +16,10 @@ from .actuator_client import (
 )
 from .context_builder import build_method_context
 from .engine import JidraEngine
-from .exporter import export_jsonl, graph_records, split_graph_records_by_source
 from .extractor import build_graph
 from .flow_doc_agent import FlowDocAgent
 from .flow_stitcher import stitch_flow
-from .graph_io import load_graph_jsonl, resolve_graph_paths
+from . import graph_store
 from .graph_validator import parse_actuator_beans, validate_graph
 from .graph_visualizer import build_graph_data, render_interactive_html
 from .selector import (
@@ -31,6 +30,54 @@ from .selector import (
 from .trace_engine import trace_method, trace_route
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
+
+
+def _git_branch(repo: Path) -> str | None:
+    """Current branch name, or None if `repo` isn't a git repo (or is detached)."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(repo),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    branch = result.stdout.strip()
+    return branch if branch and branch != "HEAD" else None
+
+
+def _repo_output_dir(repo: Path, suffix: str | None = None) -> Path:
+    """Per-repo output dir under jidra's own OUTPUT_DIR, so `jidra up` never
+    writes graph.db/reports/visualizations into the target repo.
+
+    Named `<repo-slug>-<branch>` when the target is a git repo on a named
+    branch; falls back to `<repo-slug>-<path-hash>` otherwise. `suffix` (e.g.
+    a random short hash) can be appended to force a new, non-colliding dir
+    when the caller wants to start fresh instead of reusing an existing one.
+    """
+    import hashlib
+
+    resolved = repo.resolve()
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", resolved.name).strip("-") or "repo"
+
+    branch = _git_branch(resolved)
+    if branch:
+        key = re.sub(r"[^A-Za-z0-9_-]+", "-", branch).strip("-") or "branch"
+    else:
+        key = hashlib.sha1(str(resolved).encode("utf-8")).hexdigest()[:8]
+
+    dir_name = f"{slug}-{key}"
+    if suffix:
+        dir_name = f"{dir_name}-{suffix}"
+    return OUTPUT_DIR / dir_name
+
+
 NON_BUSINESS_SIGNATURE_PARTS = (
     ".metrics.",
     ".datadog.",
@@ -62,10 +109,10 @@ STACK_RE = re.compile(
 )
 
 
-def _default_graph_for_type(graph_type: str) -> Path:
-    if graph_type == "test":
-        return OUTPUT_DIR / "graph_test.jsonl"
-    return OUTPUT_DIR / "graph.jsonl"
+def _resolve_graph_db_path(graph_arg: str | None) -> Path:
+    if graph_arg:
+        return graph_store.resolve_graph_db_path(Path(graph_arg).resolve())
+    return graph_store.resolve_graph_db_path(OUTPUT_DIR)
 
 
 def _safe_filename_part(value: str) -> str:
@@ -626,28 +673,23 @@ def _parse_args() -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     index_parser = subparsers.add_parser(
-        "index", help="Build graph JSONL from a Java or TypeScript codebase"
+        "index", help="Build graph.db from a Java or TypeScript codebase"
     )
     index_parser.add_argument(
         "--codebase", required=True, help="Path to repository root"
     )
     index_parser.add_argument(
-        "--output", required=True, help="Output graph file or output directory"
+        "--output", required=True, help="Output graph.db file or output directory"
     )
     index_parser.add_argument(
         "--force",
         action="store_true",
         help="Force full rebuild, bypassing the fingerprint cache",
     )
-    index_parser.add_argument(
-        "--compress",
-        action="store_true",
-        help="Write graph.jsonl.zst (zstd-compressed) instead of graph.jsonl",
-    )
 
     trace_parser = subparsers.add_parser("trace", help="Trace a method call flow")
     trace_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     trace_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     trace_parser.add_argument("--method", required=True, help="Method selector")
@@ -663,7 +705,7 @@ def _parse_args() -> argparse.Namespace:
 
     context_parser = subparsers.add_parser("context", help="Build method context")
     context_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     context_parser.add_argument(
         "--graph-type", choices=("main", "test"), default="main"
@@ -684,7 +726,7 @@ def _parse_args() -> argparse.Namespace:
         "trace-route", help="Trace flow from endpoint route"
     )
     route_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     route_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     route_parser.add_argument(
@@ -699,7 +741,7 @@ def _parse_args() -> argparse.Namespace:
         "flow", help="Stitch recursive business flow from entry method"
     )
     flow_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     flow_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     flow_parser.add_argument("--method", required=True, help="Method selector")
@@ -716,7 +758,7 @@ def _parse_args() -> argparse.Namespace:
         "prompt", help="Build prompt-ready method context text"
     )
     prompt_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     prompt_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     prompt_parser.add_argument("--method", required=True, help="Method selector")
@@ -744,7 +786,7 @@ def _parse_args() -> argparse.Namespace:
         "diagnose", help="Generate prompt and run LLM diagnosis"
     )
     diagnose_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     diagnose_parser.add_argument(
         "--graph-type", choices=("main", "test"), default="main"
@@ -780,7 +822,7 @@ def _parse_args() -> argparse.Namespace:
 
     mcp_parser = subparsers.add_parser("mcp", help="Run JIDRA MCP server over stdio")
     mcp_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     mcp_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
     mcp_parser.add_argument(
@@ -795,7 +837,7 @@ def _parse_args() -> argparse.Namespace:
     )
     flow_doc_parser.add_argument("--output", required=True, help="Output markdown path")
     flow_doc_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     flow_doc_parser.add_argument(
         "--graph-type", choices=("main", "test"), default="main"
@@ -830,7 +872,7 @@ def _parse_args() -> argparse.Namespace:
         "--output", required=True, help="Output markdown path"
     )
     error_doc_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     error_doc_parser.add_argument(
         "--graph-type", choices=("main", "test"), default="main"
@@ -849,7 +891,7 @@ def _parse_args() -> argparse.Namespace:
         help="Validate graph against running Spring Boot app actuator beans",
     )
     validate_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     validate_parser.add_argument(
         "--graph-type", choices=("main", "test"), default="main"
@@ -872,7 +914,7 @@ def _parse_args() -> argparse.Namespace:
     )
     validate_parser.add_argument(
         "--output",
-        help="Output directory for graph_validated.jsonl (default: same dir as --graph)",
+        help="Output directory/db for the validated variant (default: same db as --graph)",
     )
     validate_parser.add_argument(
         "--report",
@@ -898,7 +940,7 @@ def _parse_args() -> argparse.Namespace:
         help="Visualize call graph with interactive HTML",
     )
     graph_view_parser.add_argument(
-        "--graph", help="Path to graph JSONL (overrides --graph-type default path)"
+        "--graph", help="Path to graph.db (overrides --graph-type default path)"
     )
     graph_view_parser.add_argument(
         "--graph-type", choices=("main", "test"), default="main"
@@ -953,7 +995,7 @@ def _parse_args() -> argparse.Namespace:
     )
     cost_roi_parser.add_argument(
         "--graph",
-        help="Path to graph_validated.jsonl (defaults to jidra/output/graph_validated.jsonl)",
+        help="Path to graph.db, validated variant (defaults to jidra/output/graph.db)",
     )
     cost_roi_parser.add_argument(
         "--method",
@@ -1004,14 +1046,12 @@ def _resolve_single_method(graph, selector: str):
     return candidates[0]
 
 
-def _resolve_graph_path(graph_arg: str | None, graph_type: str) -> Path:
-    if graph_arg:
-        raw = Path(graph_arg).resolve()
-        if raw.is_dir() or raw.suffix.lower() != ".jsonl":
-            main, test, _ = resolve_graph_paths(raw)
-            return main if graph_type == "main" else test
-        return raw
-    return _default_graph_for_type(graph_type)
+def _load_graph_by_type(graph_arg: str | None, graph_type: str):
+    """Resolve the graph.db path and load the requested variant."""
+    db_path = _resolve_graph_db_path(graph_arg)
+    conn = graph_store.connect(db_path)
+    graph = graph_store.load_graph(conn, variant=graph_type)
+    return graph, db_path
 
 
 def _load_cli_config(config_path: str | None = None) -> dict:
@@ -1089,7 +1129,6 @@ def _index(
     on_progress=None,
     _quiet: bool = False,
     force: bool = False,
-    compress: bool = False,
 ) -> None:
     from .cache import (
         compute_file_manifest,
@@ -1097,17 +1136,12 @@ def _index(
         load_cache,
         save_cache,
     )
-    from .graph_io import load_graph_jsonl
     from .models import Graph as _Graph
 
     codebase_path = Path(codebase).resolve()
     output_path = Path(output).resolve()
-    main_path, test_path, _ = resolve_graph_paths(output_path)
-    if compress:
-        main_path = main_path.parent / (main_path.name + ".zst")
-        test_path = test_path.parent / (test_path.name + ".zst")
-    main_path.parent.mkdir(parents=True, exist_ok=True)
-    test_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path = graph_store.resolve_graph_db_path(output_path)
+    conn = graph_store.connect(db_path)
 
     source_files = _gather_source_files(codebase_path)
     fp = compute_fingerprint(source_files)
@@ -1115,12 +1149,11 @@ def _index(
 
     cached = None if force else load_cache(codebase_path)
 
-    if (
-        cached
-        and cached.get("fingerprint") == fp
-        and main_path.exists()
-        and test_path.exists()
-    ):
+    main_count = conn.execute(
+        "SELECT COUNT(*) FROM methods WHERE variant = 'main' AND module_id IS NULL"
+    ).fetchone()[0]
+
+    if cached and cached.get("fingerprint") == fp and main_count > 0:
         if not _quiet:
             print("Graph up to date, skipping rebuild.")
         return
@@ -1129,28 +1162,22 @@ def _index(
     changed_files: set[Path] | None = None
     previous_graph: _Graph | None = None
 
-    if old_manifest:
+    if old_manifest and main_count > 0:
         changed_paths = {
             Path(p) for p, h in manifest.items() if old_manifest.get(p) != h
         }
         deleted_paths = {p for p in old_manifest if p not in manifest}
 
-        prev_parts = []
-        for path in (main_path, test_path):
-            if not path.exists():
-                continue
-            try:
-                prev_parts.append(load_graph_jsonl(path))
-            except Exception:
-                pass
-
-        if prev_parts and (changed_paths or deleted_paths):
+        if changed_paths or deleted_paths:
+            main_graph = graph_store.load_graph(conn, variant="main", module_id=None)
+            test_graph = graph_store.load_graph(conn, variant="test", module_id=None)
             previous_graph = _Graph(
-                classes=sum((g.classes for g in prev_parts), []),
-                methods=sum((g.methods for g in prev_parts), []),
-                fields=sum((g.fields for g in prev_parts), []),
-                callsites=sum((g.callsites for g in prev_parts), []),
-                inheritance_edges=sum((g.inheritance_edges for g in prev_parts), []),
+                classes=main_graph.classes + test_graph.classes,
+                methods=main_graph.methods + test_graph.methods,
+                fields=main_graph.fields + test_graph.fields,
+                callsites=main_graph.callsites + test_graph.callsites,
+                inheritance_edges=main_graph.inheritance_edges
+                + test_graph.inheritance_edges,
                 resolved_call_edges=[],
             )
             if deleted_paths:
@@ -1184,24 +1211,23 @@ def _index(
     if changed_files is not None and previous_graph is not None and not _quiet:
         print(f"Re-parsed {len(changed_files)}/{len(source_files)} files")
 
-    records = graph_records(graph)
-    main_records, test_records = split_graph_records_by_source(records)
-
-    export_jsonl(main_path, main_records)
-    export_jsonl(test_path, test_records)
+    graph_store.save_full_graph(conn, graph)
 
     save_cache(codebase_path, {"fingerprint": fp, "manifest": manifest})
 
     health = compute_graph_health(graph)
 
     if not _quiet:
+        main_records = sum(
+            1 for m in graph.methods if graph_store.infer_variant_split(m.file_path) == "main"
+        )
+        test_records = len(graph.methods) - main_records
         print(
             json.dumps(
                 {
-                    "main_graph": str(main_path),
-                    "main_records": len(main_records),
-                    "test_graph": str(test_path),
-                    "test_records": len(test_records),
+                    "graph_db": str(db_path),
+                    "main_records": main_records,
+                    "test_records": test_records,
                 },
                 ensure_ascii=True,
                 indent=2,
@@ -1228,8 +1254,9 @@ def _validate(
     skip_build: bool,
     build_dir: str | None,
 ) -> None:
-    graph_path = _resolve_graph_path(graph_arg, graph_type)
-    graph = load_graph_jsonl(graph_path)
+    db_path = _resolve_graph_db_path(graph_arg)
+    conn = graph_store.connect(db_path)
+    graph = graph_store.load_graph(conn, variant=graph_type)
 
     try:
         if actuator_url:
@@ -1256,20 +1283,19 @@ def _validate(
     # Cache actuator response for future incremental reindex
     from .graph_validator import save_actuator_cache
 
-    graph_dir = Path(output).resolve() if output else graph_path.parent
+    graph_dir = Path(output).resolve() if output else db_path.parent
     save_actuator_cache(graph_dir, beans_response)
 
-    # Determine output path
-    if output:
-        output_path = Path(output).resolve()
-    else:
-        output_path = graph_path.parent / "graph_validated.jsonl"
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Export filtered graph
-    records = graph_records(filtered_graph)
-    export_jsonl(output_path, records)
+    # Determine destination db (defaults to the same db, "validated" variant)
+    output_db_path = (
+        graph_store.resolve_graph_db_path(Path(output).resolve())
+        if output
+        else db_path
+    )
+    output_conn = (
+        graph_store.connect(output_db_path) if output_db_path != db_path else conn
+    )
+    graph_store.save_full_graph(output_conn, filtered_graph, variant="validated")
 
     # Prepare report
     report_dict = {
@@ -1291,7 +1317,7 @@ def _validate(
         report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
         print(
             json.dumps(
-                {"graph": str(output_path), "report": str(report_path)}, indent=2
+                {"graph": str(output_db_path), "report": str(report_path)}, indent=2
             )
         )
     else:
@@ -1337,7 +1363,7 @@ def _process(
     print(f"     Scanning: {codebase_path}")
     _progress(0, total_steps, "Starting index...")
 
-    index_output = output_dir / "graph.jsonl"
+    db_path = graph_store.resolve_graph_db_path(output_dir)
     try:
 
         def on_class_parsed(class_count):
@@ -1349,11 +1375,12 @@ def _process(
 
         _index(
             str(codebase_path),
-            str(index_output),
+            str(output_dir),
             on_progress=on_class_parsed,
             _quiet=True,
         )
-        graph = load_graph_jsonl(index_output)
+        conn = graph_store.connect(db_path)
+        graph = graph_store.load_graph(conn, variant="main")
         print()  # newline after AST progress
         _progress(
             1,
@@ -1377,9 +1404,7 @@ def _process(
     # ===== STEP 2: VALIDATE (Java only — filter phantom edges with Spring Actuator) =====
     if not has_java:
         # No actuator for non-Java repos — the static graph is the final graph
-        validated_path = output_dir / "graph_validated.jsonl"
-        records = graph_records(graph)
-        export_jsonl(validated_path, records)
+        graph_store.save_full_graph(conn, graph, variant="validated")
         report_dict = {
             "total_classes": len(graph.classes),
             "edges_before": len(graph.resolved_call_edges),
@@ -1431,9 +1456,7 @@ def _process(
             graph, confirmed_beans, verbose=True
         )
 
-        validated_path = output_dir / "graph_validated.jsonl"
-        records = graph_records(filtered_graph)
-        export_jsonl(validated_path, records)
+        graph_store.save_full_graph(conn, filtered_graph, variant="validated")
 
         report_path = output_dir / "validation_report.json"
         report_dict = {
@@ -1481,9 +1504,8 @@ def _process(
     print("✓ PIPELINE COMPLETE")
     print("=" * 80)
     print(f"\nGenerated files in: {output_dir}")
-    print(f"  • {index_output.name}")
+    print(f"  • {db_path.name}")
     print(f"      {len(graph.classes)} classes, {len(graph.methods)} methods")
-    print(f"  • {validated_path.name}")
     edges_pct = 100 - report_dict.get("edges_removed_pct", 0.0)
     print(
         f"      {len(filtered_graph.resolved_call_edges)} edges ({edges_pct:.1f}% of original)"
@@ -1652,7 +1674,19 @@ def _up() -> None:
             "Either answer yes to writing the config, or omit watch mode."
         )
 
-    jidra_dir = repo / ".jidra"
+    jidra_dir = _repo_output_dir(repo)
+    if jidra_dir.exists():
+        print(f"\nFound existing JIDRA output for this repo at: {jidra_dir}")
+        choice = _prompt(
+            "Reuse it (incremental rebuild) or create a new one?",
+            "reuse",
+            allowed_values=["reuse", "new"],
+        )
+        if choice == "new":
+            import secrets
+
+            jidra_dir = _repo_output_dir(repo, suffix=secrets.token_hex(3))
+            print(f"Creating new output dir: {jidra_dir}")
 
     print("\n[1/2] BUILDING GRAPH")
     print(f"      Repository: {repo}")
@@ -1674,12 +1708,10 @@ def _up() -> None:
     except Exception as e:
         raise SystemExit(f"Graph build failed: {e}") from e
 
-    # Java repos get graph_validated.jsonl (phantom edges removed by Spring Actuator).
-    # All other languages use graph.jsonl directly — validation is static (Pyright/ts-morph).
-    if has_java:
-        graph_validated_path = jidra_dir / "graph_validated.jsonl"
-    else:
-        graph_validated_path = jidra_dir / "graph.jsonl"
+    # `_process()` always populates the "validated" variant in graph.db, regardless
+    # of language (Java gets Spring Actuator filtering; other languages get an
+    # unfiltered copy of the static graph).
+    graph_validated_path = graph_store.resolve_graph_db_path(jidra_dir)
     if not graph_validated_path.exists():
         raise SystemExit(f"Graph build failed: {graph_validated_path} not created")
 
@@ -1713,6 +1745,7 @@ def _up() -> None:
         ],
     }
 
+    manual_mcp_lines: list[str] = []
     if write_config:
         settings = {}
         if settings_path.exists():
@@ -1728,21 +1761,42 @@ def _up() -> None:
         )
         print(f"\n✓ MCP config written to: {settings_path}\n")
     else:
-        cmd = " ".join(
-            [
-                sys.executable,
-                "-m",
-                "jidra.mcp_server",
-                "--graph",
-                str(graph_validated_path),
-                "--codebase",
-                str(codebase_path),
-            ]
+        server_args = [
+            "--",
+            _python,
+            "-m",
+            "jidra.mcp_server",
+            "--graph",
+            str(graph_validated_path),
+            "--codebase",
+            str(codebase_path),
+        ]
+        system_prompt = (
+            "Use JIDRA for code context when available. "
+            "Fall back to built-in tools only if it fails."
         )
-        print("\nAdd the following to your MCP config manually:\n")
-        print("  Claude Code (.mcp.json):")
-        print(f"  {json.dumps({'mcpServers': {'jidra': mcp_entry}}, indent=4)}\n")
-        print(f"  Codex / other: command: {cmd}\n")
+        claude_cmd = " ".join(["claude", "mcp", "add", "--scope", "local", "jidra", *server_args])
+        codex_cmd = " ".join(["codex", "mcp", "add", "--scope", "local", "jidra", *server_args])
+        claude_rm_cmd = "claude mcp remove --scope local jidra"
+        codex_rm_cmd = "codex mcp remove --scope local jidra"
+        manual_mcp_lines = [
+            "No file written to the repo. Run one of these to register the MCP server:",
+            "",
+            "  Claude Code:",
+            f"    {claude_cmd}",
+            "",
+            f'  claude --system "{system_prompt}"',
+            "",
+            "  Codex:",
+            f"    {codex_cmd}",
+            "",
+            f'  codex --system "{system_prompt}"',
+            "",
+            "  To remove later:",
+            f"    {claude_rm_cmd}",
+            f"    {codex_rm_cmd}",
+            "",
+        ]
 
     if watch:
         ext_map = []
@@ -1759,8 +1813,10 @@ def _up() -> None:
         print("[3/3] WATCHING FOR CHANGES\n")
         print("JIDRA is ready!\n")
         print(f"   Graph:   {graph_validated_path}")
-        print(f"   Config:  {settings_path}")
-        print(f"\n   Open Claude Code in {repo} and JIDRA tools will be available.")
+        print(f"   Config:  {settings_path}\n")
+        for line in manual_mcp_lines:
+            print(f"   {line}" if line else "")
+        print(f"   Open Claude Code in {repo} and JIDRA tools will be available.")
         print(
             f"   Watching {codebase_path}/**/{watch_ext_str} for changes (full re-index on each)...\n"
         )
@@ -1823,6 +1879,8 @@ def _up() -> None:
         print("JIDRA is ready!\n")
         print(f"   Graph:   {graph_validated_path}")
         print(f"   Config:  {settings_path}\n")
+        for line in manual_mcp_lines:
+            print(f"   {line}" if line else "")
         print(f"   Open Claude Code in {repo} and JIDRA tools will be available.\n")
         print(f"{'=' * 80}\n")
 
@@ -1848,13 +1906,11 @@ def _cost_roi(
         format_method_proof,
     )
 
-    graph_path = (
-        Path(graph_arg).resolve() if graph_arg else OUTPUT_DIR / "graph_validated.jsonl"
-    )
+    graph_path = _resolve_graph_db_path(graph_arg)
     if not graph_path.exists():
         raise SystemExit(
             f"Graph not found: {graph_path}\n"
-            "Run `jidra process` first to build graph_validated.jsonl"
+            "Run `jidra process` first to build graph.db"
         )
 
     codebase_path = Path(codebase).resolve() if codebase else None
@@ -1934,7 +1990,7 @@ def main() -> None:
         return
 
     if args.command == "index":
-        _index(args.codebase, args.output, force=args.force, compress=args.compress)
+        _index(args.codebase, args.output, force=args.force)
         return
 
     if args.command == "validate":
@@ -1966,8 +2022,7 @@ def main() -> None:
         return
 
     if args.command == "graph-view":
-        graph_path = _resolve_graph_path(args.graph, args.graph_type)
-        graph = load_graph_jsonl(graph_path)
+        graph, graph_path = _load_graph_by_type(args.graph, args.graph_type)
 
         # Build graph data
         graph_data = build_graph_data(
@@ -2002,7 +2057,7 @@ def main() -> None:
         return
 
     if args.command == "mcp":
-        graph_path = _resolve_graph_path(args.graph, args.graph_type)
+        graph_path = _resolve_graph_db_path(args.graph)
         try:
             from .mcp_server import run_mcp_server
 
@@ -2012,8 +2067,8 @@ def main() -> None:
             raise SystemExit(str(exc))
 
     if args.command == "flow-doc":
-        graph_path = _resolve_graph_path(args.graph, args.graph_type)
-        engine = JidraEngine(str(graph_path))
+        graph_path = _resolve_graph_db_path(args.graph)
+        engine = JidraEngine(str(graph_path), variant=args.graph_type)
         agent = FlowDocAgent(
             engine,
             max_subflows=args.max_subflows,
@@ -2084,8 +2139,7 @@ def main() -> None:
         )
         return
     if args.command == "error-doc":
-        graph_path = _resolve_graph_path(args.graph, args.graph_type)
-        graph = load_graph_jsonl(graph_path)
+        graph, graph_path = _load_graph_by_type(args.graph, args.graph_type)
         stack_text = Path(args.stack_trace).resolve().read_text(encoding="utf-8")
         frames = _parse_stack_trace(stack_text)
         matched_rows, anchor = _match_stack_frames_to_methods(graph, frames)
@@ -2100,7 +2154,7 @@ def main() -> None:
         else:
             method_selector = anchor["matched_method_id"]
 
-        engine = JidraEngine(str(graph_path))
+        engine = JidraEngine(str(graph_path), variant=args.graph_type)
         agent = FlowDocAgent(
             engine,
             flow_depth=args.depth,
@@ -2261,8 +2315,7 @@ def main() -> None:
         )
         return
 
-    graph_path = _resolve_graph_path(args.graph, args.graph_type)
-    graph = load_graph_jsonl(graph_path)
+    graph, graph_path = _load_graph_by_type(args.graph, args.graph_type)
 
     if args.command == "trace":
         method = _resolve_single_method(graph, args.method)
