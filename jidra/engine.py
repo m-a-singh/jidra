@@ -348,3 +348,43 @@ class JidraEngine:
 
         result["edges"] = edges_out
         return result
+
+
+_engine_cache: dict[tuple[str, str], tuple["JidraEngine", float]] = {}
+
+
+def _db_fingerprint(db_path: Path) -> float:
+    """Latest mtime across the main db file and its WAL sidecar.
+
+    In WAL mode (which `graph_store.connect` always enables), writes land in
+    `<db>-wal` and the main file's mtime doesn't change until a checkpoint —
+    so the main file alone is not a reliable change signal.
+    """
+    best = -1.0
+    for path in (db_path, Path(str(db_path) + "-wal")):
+        try:
+            best = max(best, path.stat().st_mtime)
+        except OSError:
+            pass
+    return best
+
+
+def get_engine(graph_path: str, variant: str = "validated") -> "JidraEngine":
+    """Return a cached `JidraEngine` for `(graph_path, variant)`, reloading
+    only if the underlying graph.db has changed since it was cached.
+
+    `JidraEngine.__init__` materializes the entire graph into Python objects
+    — fine once, wasteful if repeated on every MCP tool call within the same
+    long-lived server session. This makes that load happen once per session
+    and only again after a real write (e.g. `jidra_reindex`), not per call.
+    """
+    resolved = str(Path(graph_path).resolve())
+    db_path = graph_store.resolve_graph_db_path(Path(resolved))
+    fingerprint = _db_fingerprint(db_path)
+    key = (resolved, variant)
+    cached = _engine_cache.get(key)
+    if cached is not None and cached[1] == fingerprint:
+        return cached[0]
+    engine = JidraEngine(resolved, variant=variant)
+    _engine_cache[key] = (engine, fingerprint)
+    return engine

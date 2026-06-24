@@ -148,11 +148,8 @@ def diff_graph_records(
                 line_shifted.append((old_m.id, new_m.start_line, delta))
 
             if old_m.source != new_m.source:
-                # Body changed, callsites may differ
-                if len(old_m.callsites or []) != len(new_m.callsites or []):
-                    callsite_changed_ids.append(new_m.id)
-                elif old_m.source != new_m.source:
-                    callsite_changed_ids.append(new_m.id)
+                # Body changed; callsites within it may have changed too.
+                callsite_changed_ids.append(new_m.id)
 
     # Detect removals
     for key, existing_methods in existing_by_sig_file.items():
@@ -275,7 +272,7 @@ def quick_stale_check(graph_dir: Path) -> bool:
         return False
 
 
-_REINDEX_VARIANT = "validated"
+_REINDEX_VARIANT = "main"
 
 
 def incremental_reindex(
@@ -329,6 +326,19 @@ def incremental_reindex(
         fps = compute_fingerprints(codebase_root)
         save_manifest(graph_dir, fps, last_indexed_at_ns)
         graph_store.save_full_graph(conn, full_graph, variant=_REINDEX_VARIANT)
+
+        from .graph_validator import load_confirmed_beans_for_reindex
+
+        confirmed_beans, bean_source = load_confirmed_beans_for_reindex(
+            graph_dir, full_graph
+        )
+        graph_store.mark_confirmed_beans(conn, confirmed_beans)
+        actuator_warning = (
+            "Using static bean detection fallback (no cached actuator response)"
+            if bean_source == "static_annotation"
+            else None
+        )
+
         elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
         return {
             "change_type": "full_rebuild",
@@ -336,7 +346,7 @@ def incremental_reindex(
             "added_methods": len(full_graph.methods),
             "removed_methods": 0,
             "elapsed_ms": elapsed_ms,
-            "actuator_cache_warning": None,
+            "actuator_cache_warning": actuator_warning,
         }
 
     if not manifest:
@@ -381,27 +391,37 @@ def incremental_reindex(
     # Diff records
     diff_result = diff_graph_records(mini_graph, existing_graph, changed_files_set)
     change_type = diff_result["change_type"]
+    # None for no_change/metadata_only (no re-resolution happens at all there);
+    # set by callsite_change/structural to the callers whose edges were
+    # actually recomputed — persistence below stays scoped to that set instead
+    # of rewriting the whole resolved_call_edges table.
+    only_caller_ids: set[str] | None = None
 
     # Dispatch by change_type
     if change_type == "no_change":
         result_graph = existing_graph
     elif change_type == "metadata_only":
-        # Patch start_line/end_line in-place; skip edge re-resolve
+        # Patch start_line/end_line in-place; skip edge re-resolve — a pure
+        # line shift never changes which methods call which.
         result_graph = _patch_metadata_only(
             existing_graph, mini_graph, diff_result["line_shifted_methods"]
         )
     elif change_type == "callsite_change":
         # Strip + re-resolve edges for affected methods only
-        result_graph = _update_callsite_edges(
+        result_graph, only_caller_ids = _update_callsite_edges(
             existing_graph, mini_graph, diff_result["callsite_changed_method_ids"]
         )
     else:  # structural
-        # Strip all records for changed_files, merge mini_graph, full re-resolve
-        result_graph = _do_structural_reindex(
+        # Strip records for changed_files, merge mini_graph, re-resolve the
+        # affected caller scope (see _do_structural_reindex for what that covers)
+        result_graph, only_caller_ids = _do_structural_reindex(
             existing_graph, mini_graph, changed_files_set
         )
 
-    # Bean filtering for Java (if applicable)
+    # Bean confirmation info loaded here (cheap — cache or static annotation
+    # scan) but applied via mark_confirmed_beans *after* persistence below, so
+    # it sees the up-to-date class set. resolved_call_edges stay unfiltered —
+    # main is always the raw graph; "validated" is derived at read time.
     from .graph_validator import load_confirmed_beans_for_reindex
 
     confirmed_beans, bean_source = load_confirmed_beans_for_reindex(
@@ -412,21 +432,6 @@ def incremental_reindex(
         actuator_warning = (
             "Using static bean detection fallback (no cached actuator response)"
         )
-
-    if confirmed_beans:
-        # Filter edges
-        confirmed_ids = {
-            c.id for c in result_graph.classes if c.full_name in confirmed_beans
-        }
-        result_graph.resolved_call_edges = [
-            e
-            for e in result_graph.resolved_call_edges
-            if any(
-                m.class_id in confirmed_ids
-                for m in result_graph.methods
-                if m.id == e.callee_method_id
-            )
-        ]
 
     # Persist via targeted SQL deletes/inserts scoped to what actually changed.
     last_indexed_at_ns = int(time.time_ns())
@@ -446,9 +451,7 @@ def incremental_reindex(
                     m.source,
                     variant=_REINDEX_VARIANT,
                 )
-        graph_store.replace_resolved_call_edges(
-            conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
-        )
+        # Edges are untouched by a pure line-shift — nothing to persist there.
     elif change_type == "callsite_change":
         changed_method_ids = diff_result["callsite_changed_method_ids"]
         graph_store.delete_callsites_by_caller(
@@ -469,8 +472,13 @@ def incremental_reindex(
             ],
             variant=_REINDEX_VARIANT,
         )
-        graph_store.replace_resolved_call_edges(
-            conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
+        scoped_edges = [
+            e
+            for e in result_graph.resolved_call_edges
+            if e.caller_method_id in only_caller_ids
+        ]
+        graph_store.replace_resolved_call_edges_for_callers(
+            conn, scoped_edges, only_caller_ids, variant=_REINDEX_VARIANT
         )
         conn.commit()
     elif change_type == "structural":
@@ -500,10 +508,18 @@ def incremental_reindex(
         graph_store.upsert_for_files(
             conn, fragment, changed_files_set, variant=_REINDEX_VARIANT
         )
-        graph_store.replace_resolved_call_edges(
-            conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
+        scoped_edges = [
+            e
+            for e in result_graph.resolved_call_edges
+            if e.caller_method_id in only_caller_ids
+        ]
+        graph_store.replace_resolved_call_edges_for_callers(
+            conn, scoped_edges, only_caller_ids, variant=_REINDEX_VARIANT
         )
     # no_change: nothing to persist
+
+    if change_type != "no_change":
+        graph_store.mark_confirmed_beans(conn, confirmed_beans)
 
     added_count = len(diff_result.get("added_method_ids", []))
     removed_count = len(diff_result.get("removed_method_ids", []))
@@ -554,7 +570,12 @@ def _update_callsite_edges(
     mini_graph,
     callsite_changed_ids: list[str],
 ):
-    """Re-resolve edges for methods with changed callsites."""
+    """Re-resolve edges for methods with changed callsites.
+
+    Only these methods' own callsites changed (their signature/name is
+    unchanged — `diff_graph_records` matched them by signature), so callers
+    elsewhere can't be affected; resolution is scoped to exactly this set.
+    """
     from .extractor import _resolve_calls
 
     # Replace methods in existing_graph with updated versions from mini_graph
@@ -576,9 +597,9 @@ def _update_callsite_edges(
             if c.caller_method_id == method_id:
                 existing_graph.callsites.append(c)
 
-    # Re-resolve calls for the full graph (edges will be rebuilt)
-    _resolve_calls(existing_graph)
-    return existing_graph
+    only_caller_ids = set(callsite_changed_ids)
+    _resolve_calls(existing_graph, only_caller_ids=only_caller_ids)
+    return existing_graph, only_caller_ids
 
 
 def _do_structural_reindex(
@@ -586,13 +607,28 @@ def _do_structural_reindex(
     mini_graph,
     changed_files_set: set[str],
 ):
-    """Strip all records for changed_files, merge mini_graph, full re-resolve."""
+    """Strip all records for changed_files, merge mini_graph, re-resolve.
+
+    Methods can be added/removed/renamed here, so a caller *outside* the
+    changed files can still need re-resolution (e.g. it calls a method whose
+    signature just changed). Re-resolution is scoped to: every callsite
+    physically in a changed file, plus every callsite anywhere whose
+    callee_name matches a method that was touched (added, removed, or
+    redefined) by this change — broad on purpose, to avoid missing a caller
+    elsewhere whose candidate set just shifted.
+    """
     from .extractor import _resolve_calls
 
     # Strip records for changed files
     removed_class_ids = {
         c.id for c in existing_graph.classes if c.file_path in changed_files_set
     }
+    touched_method_names = {
+        m.method_name
+        for m in existing_graph.methods
+        if m.file_path in changed_files_set
+    } | {m.method_name for m in mini_graph.methods}
+
     existing_graph.classes = [
         c for c in existing_graph.classes if c.file_path not in changed_files_set
     ]
@@ -618,8 +654,11 @@ def _do_structural_reindex(
     existing_graph.callsites.extend(mini_graph.callsites)
     existing_graph.inheritance_edges.extend(mini_graph.inheritance_edges)
 
-    # Clear and re-resolve all edges
-    existing_graph.resolved_call_edges = []
-    _resolve_calls(existing_graph)
+    only_caller_ids = {
+        c.caller_method_id
+        for c in existing_graph.callsites
+        if c.file_path in changed_files_set or c.callee_name in touched_method_names
+    }
+    _resolve_calls(existing_graph, only_caller_ids=only_caller_ids)
 
-    return existing_graph
+    return existing_graph, only_caller_ids

@@ -33,7 +33,7 @@ def test_compute_graph_health_empty_graph():
 def test_mcp_graph_health_matches_cli(tmp_path, simple_test_graph):
     graph_path = tmp_path / "graph.db"
     conn = graph_store.connect(graph_path)
-    graph_store.save_full_graph(conn, simple_test_graph, variant="validated")
+    graph_store.save_full_graph(conn, simple_test_graph)
 
     cli_health = compute_graph_health(simple_test_graph)
     mcp_health = graph_health(graph_path=str(graph_path))

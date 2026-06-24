@@ -2,7 +2,7 @@ import time
 from pathlib import Path
 
 import jidra.cli as cli
-from jidra import graph_store
+from jidra import graph_store, reindexer
 
 
 def _record_keys(graph) -> dict:
@@ -249,3 +249,110 @@ public class UserRepository {
         (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
     }
     assert (fetch.id, find.id) in edges
+
+
+def test_signature_change_invalidates_unchanged_caller_edge(tmp_path):
+    """Critical risk case for scoped incremental re-resolution: a method's
+    *arity* changes (structural change, not just a body edit), and the only
+    caller of that method lives in a file that was NOT touched. The stale
+    edge to the now-gone overload must be dropped, not left behind — proving
+    re-resolution scope was broadened to include that out-of-file caller
+    rather than narrowed to just the changed file."""
+    codebase = tmp_path / "repo"
+    files = _make_multi_file_codebase(codebase)
+    output = tmp_path / "out"
+
+    cli._index(str(codebase), str(output), _quiet=True)
+
+    graph = graph_store.load_graph(
+        graph_store.connect(output / "graph.db"), variant="main"
+    )
+    method_by_sig = {m.signature: m for m in graph.methods}
+    fetch = method_by_sig["com.example.UserService#fetch(String)"]
+    old_find = method_by_sig["com.example.UserRepository#find(String)"]
+
+    edges = {
+        (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
+    }
+    assert (fetch.id, old_find.id) in edges
+
+    # Change find(String) to find(String, boolean) — service.java (the only
+    # caller) is untouched, and still calls repo.find(id) with one argument.
+    time.sleep(0.01)
+    files["repository"].write_text(
+        """package com.example;
+
+public class UserRepository {
+    public String find(String id, boolean active) {
+        return id;
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    cli._index(str(codebase), str(output), _quiet=True)
+
+    graph = graph_store.load_graph(
+        graph_store.connect(output / "graph.db"), variant="main"
+    )
+    method_by_sig = {m.signature: m for m in graph.methods}
+    fetch = method_by_sig["com.example.UserService#fetch(String)"]
+    assert "com.example.UserRepository#find(String, boolean)" in method_by_sig
+    assert "com.example.UserRepository#find(String)" not in method_by_sig
+
+    edges = {
+        (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
+    }
+    # The stale edge to the removed overload must be gone — it must not
+    # silently linger in the DB just because fetch's own file/callsite list
+    # was untouched by this change.
+    assert (fetch.id, old_find.id) not in edges
+    assert old_find.id not in {m.id for m in graph.methods}
+
+
+def test_incremental_reindex_body_only_edit(tmp_path):
+    """Regression test for diff_graph_records crashing on a body-only edit.
+
+    Calls jidra.reindexer.incremental_reindex() directly (not cli._index(),
+    which has its own separate incremental path) so this exercises the real
+    callsite_changed_ids branch. Previously this raised AttributeError because
+    that branch read a nonexistent `MethodEntry.callsites` attribute."""
+    codebase = tmp_path / "repo"
+    files = _make_multi_file_codebase(codebase)
+    output = tmp_path / "out"
+
+    # reindexer.incremental_reindex() keeps its own file_manifest.json, distinct
+    # from cli._index()'s incremental path, so the initial index must also go
+    # through incremental_reindex() (first call has no manifest -> full_rebuild).
+    first = reindexer.incremental_reindex(codebase, output / "graph.db")
+    assert first["change_type"] == "full_rebuild"
+
+    # Body-only edit: same signature, same line count, different callsite
+    # (find -> findAll) inside an otherwise untouched file.
+    time.sleep(0.01)
+    files["service"].write_text(
+        """package com.example;
+
+public class UserService {
+    private UserRepository repo;
+
+    public String fetch(String id) {
+        return repo.findAll();
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    result = reindexer.incremental_reindex(codebase, output / "graph.db")
+
+    assert result["change_type"] == "callsite_change"
+
+    graph = graph_store.load_graph(
+        graph_store.connect(output / "graph.db"), variant="main"
+    )
+    method_by_sig = {m.signature: m for m in graph.methods}
+    fetch = method_by_sig["com.example.UserService#fetch(String)"]
+    callees = {c.callee_name for c in graph.callsites if c.caller_method_id == fetch.id}
+    assert callees == {"findAll"}

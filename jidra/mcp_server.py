@@ -1,7 +1,7 @@
 from __future__ import annotations
 import argparse
 from pathlib import Path
-from .engine import DEFAULT_MAIN_GRAPH, JidraEngine
+from .engine import DEFAULT_MAIN_GRAPH, get_engine
 from .flow_doc_agent import FlowDocAgent
 from .cli import (
     _parse_stack_trace,
@@ -88,7 +88,7 @@ def jidra_reindex_impl(
 def graph_health(graph_path: str | None = None) -> dict:
     """Resolved/unresolved/external callsite breakdown for the local code graph."""
     resolved_graph = graph_path or DEFAULT_MAIN_GRAPH
-    engine = JidraEngine(resolved_graph)
+    engine = get_engine(resolved_graph)
     return compute_graph_health(engine.graph)
 
 
@@ -105,7 +105,7 @@ def analyze_stack_trace(
         if Path(resolved_graph).is_dir()
         else Path(resolved_graph).parent
     )
-    engine = JidraEngine(resolved_graph)
+    engine = get_engine(resolved_graph)
     graph = engine.graph
 
     frames = _parse_stack_trace(stack_trace)
@@ -283,7 +283,7 @@ def run_mcp_server(
             if Path(resolved_graph).is_dir()
             else Path(resolved_graph).parent
         )
-        engine = JidraEngine(resolved_graph)
+        engine = get_engine(resolved_graph)
         result = engine.get_method_context(method=method, max_chars=max_chars)
         return _maybe_add_stale_hint(result, graph_dir)
 
@@ -302,7 +302,7 @@ def run_mcp_server(
             if Path(resolved_graph).is_dir()
             else Path(resolved_graph).parent
         )
-        engine = JidraEngine(resolved_graph)
+        engine = get_engine(resolved_graph)
         result = engine.get_flow(method=method, depth=depth, top_n=top_n)
         return _maybe_add_stale_hint(result, graph_dir)
 
@@ -321,7 +321,7 @@ def run_mcp_server(
             if Path(resolved_graph).is_dir()
             else Path(resolved_graph).parent
         )
-        engine = JidraEngine(resolved_graph)
+        engine = get_engine(resolved_graph)
         result = engine.get_agent_flow(method=method, depth=depth, top_n=top_n)
         return _maybe_add_stale_hint(result, graph_dir)
 
@@ -340,7 +340,7 @@ def run_mcp_server(
             if Path(resolved_graph).is_dir()
             else Path(resolved_graph).parent
         )
-        engine = JidraEngine(resolved_graph)
+        engine = get_engine(resolved_graph)
         result = engine.get_method_source(method=method)
         return _maybe_add_stale_hint(result, graph_dir)
 
@@ -359,7 +359,7 @@ def run_mcp_server(
             if Path(resolved_graph).is_dir()
             else Path(resolved_graph).parent
         )
-        engine = JidraEngine(resolved_graph)
+        engine = get_engine(resolved_graph)
         result = engine.get_call_chain(
             from_method=from_method, to_method=to_method, max_depth=max_depth
         )
