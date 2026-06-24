@@ -732,7 +732,15 @@ def _parse_and_extract_types(
     parser = make_go_parser()
     meta = _parse_file(file_path, parser)
     classes, fields, edges, local_map = _extract_types(meta)
-    return meta.file_path, meta.package_name, meta.package_scope, classes, fields, edges, local_map
+    return (
+        meta.file_path,
+        meta.package_name,
+        meta.package_scope,
+        classes,
+        fields,
+        edges,
+        local_map,
+    )
 
 
 def _build_global_class_map(
@@ -819,9 +827,15 @@ def build_go_graph(
     all_fields: list[FieldEntry] = []
     all_edges: list[InheritanceEdge] = []
     class_map: dict[tuple[str, str], ClassEntry] = {}
-    for file_path, package_name, package_scope, classes, fields, edges, local_map in parallel_map(
-        _parse_and_extract_types, file_paths
-    ):
+    for (
+        file_path,
+        package_name,
+        package_scope,
+        classes,
+        fields,
+        edges,
+        local_map,
+    ) in parallel_map(_parse_and_extract_types, file_paths):
         all_classes.extend(classes)
         all_fields.extend(fields)
         all_edges.extend(edges)

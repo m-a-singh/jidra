@@ -481,9 +481,7 @@ def incremental_reindex(
             methods=[
                 m for m in result_graph.methods if m.file_path in changed_files_set
             ],
-            fields=[
-                f for f in result_graph.fields if f.file_path in changed_files_set
-            ],
+            fields=[f for f in result_graph.fields if f.file_path in changed_files_set],
             callsites=[
                 c for c in result_graph.callsites if c.file_path in changed_files_set
             ],
@@ -491,7 +489,11 @@ def incremental_reindex(
                 e
                 for e in result_graph.inheritance_edges
                 if e.source_class_id
-                in {c.id for c in result_graph.classes if c.file_path in changed_files_set}
+                in {
+                    c.id
+                    for c in result_graph.classes
+                    if c.file_path in changed_files_set
+                }
             ],
             resolved_call_edges=[],
         )

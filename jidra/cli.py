@@ -1219,7 +1219,9 @@ def _index(
 
     if not _quiet:
         main_records = sum(
-            1 for m in graph.methods if graph_store.infer_variant_split(m.file_path) == "main"
+            1
+            for m in graph.methods
+            if graph_store.infer_variant_split(m.file_path) == "main"
         )
         test_records = len(graph.methods) - main_records
         print(
@@ -1288,9 +1290,7 @@ def _validate(
 
     # Determine destination db (defaults to the same db, "validated" variant)
     output_db_path = (
-        graph_store.resolve_graph_db_path(Path(output).resolve())
-        if output
-        else db_path
+        graph_store.resolve_graph_db_path(Path(output).resolve()) if output else db_path
     )
     output_conn = (
         graph_store.connect(output_db_path) if output_db_path != db_path else conn
@@ -1775,8 +1775,12 @@ def _up() -> None:
             "Use JIDRA for code context when available. "
             "Fall back to built-in tools only if it fails."
         )
-        claude_cmd = " ".join(["claude", "mcp", "add", "--scope", "local", "jidra", *server_args])
-        codex_cmd = " ".join(["codex", "mcp", "add", "--scope", "local", "jidra", *server_args])
+        claude_cmd = " ".join(
+            ["claude", "mcp", "add", "--scope", "local", "jidra", *server_args]
+        )
+        codex_cmd = " ".join(
+            ["codex", "mcp", "add", "--scope", "local", "jidra", *server_args]
+        )
         claude_rm_cmd = "claude mcp remove --scope local jidra"
         codex_rm_cmd = "codex mcp remove --scope local jidra"
         manual_mcp_lines = [
