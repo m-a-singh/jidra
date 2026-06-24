@@ -1218,7 +1218,17 @@ def _resolve_dotted_receiver(
     return current_type, "dotted_field_chain"
 
 
-def _resolve_calls(graph: Graph) -> None:
+def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> None:
+    """Resolve `graph.callsites` into `graph.resolved_call_edges`.
+
+    `only_caller_ids`, when given, scopes resolution + edge regeneration to
+    callsites owned by those caller methods only (used by incremental
+    reindex, where most of the graph's callers are untouched by the change).
+    Candidate lookups still index the *full* `graph.methods`/`graph.classes`
+    — a callee can live anywhere — only the set of callsites whose own
+    resolution gets recomputed (and whose edges get replaced) is narrowed.
+    Edges belonging to callers outside `only_caller_ids` are left as-is.
+    """
     class_by_id = {c.id: c for c in graph.classes}
     class_by_full_name = {c.full_name: c for c in graph.classes}
     method_by_id = {m.id: m for m in graph.methods}
@@ -1471,16 +1481,22 @@ def _resolve_calls(graph: Graph) -> None:
         call.resolution_status = status
         call.resolution_reason = reason
 
+    callsites_in_scope = (
+        graph.callsites
+        if only_caller_ids is None
+        else [c for c in graph.callsites if c.caller_method_id in only_caller_ids]
+    )
+
     # First pass: resolve everything as before. Then repeatedly retry only the
     # chain-receiver callsites that are still stuck, using newly-resolved inner
     # calls' return types — bounded so we don't loop forever on a malformed chain.
-    for call in graph.callsites:
+    for call in callsites_in_scope:
         _resolve_one(call)
 
     MAX_CHAIN_PASSES = 6
     for _ in range(MAX_CHAIN_PASSES):
         changed = False
-        for call in graph.callsites:
+        for call in callsites_in_scope:
             if call.resolution_status != "unresolved_receiver":
                 continue
             receiver = call.receiver
@@ -1503,7 +1519,7 @@ def _resolve_calls(graph: Graph) -> None:
             break
 
     edges: list[ResolvedCallEdge] = []
-    for call in graph.callsites:
+    for call in callsites_in_scope:
         for callee_id in call.resolved_candidates:
             edges.append(
                 ResolvedCallEdge(
@@ -1514,7 +1530,15 @@ def _resolve_calls(graph: Graph) -> None:
                 )
             )
 
-    graph.resolved_call_edges = sorted(edges, key=lambda e: e.id)
+    if only_caller_ids is None:
+        graph.resolved_call_edges = sorted(edges, key=lambda e: e.id)
+    else:
+        kept = [
+            e
+            for e in graph.resolved_call_edges
+            if e.caller_method_id not in only_caller_ids
+        ]
+        graph.resolved_call_edges = sorted(kept + edges, key=lambda e: e.id)
 
 
 def _build_java_graph(codebase_root: Path, on_progress=None) -> Graph:

@@ -15,7 +15,7 @@ from .models import (
     ResolvedCallEdge,
 )
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "2.0"
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS classes (
@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS classes (
     imports_json TEXT,
     stereotypes_json TEXT,
     language TEXT,
+    confirmed_bean INTEGER,
     PRIMARY KEY (id, variant, module_id)
 );
 CREATE INDEX IF NOT EXISTS idx_classes_scope ON classes (variant, module_id, file_path);
@@ -138,7 +139,17 @@ CREATE TABLE IF NOT EXISTS modules (
     module_dir TEXT,
     tool TEXT
 );
+
+CREATE TABLE IF NOT EXISTS schema_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
 """
+
+
+class SchemaVersionMismatch(RuntimeError):
+    """Raised when an existing graph.db was built with an incompatible schema."""
+
 
 _ENTITY_TABLES = (
     "classes",
@@ -172,7 +183,32 @@ def connect(path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA_SQL)
     conn.commit()
+    _check_schema_version(conn)
     return conn
+
+
+def _check_schema_version(conn: sqlite3.Connection) -> None:
+    """Stamp a fresh DB with the current SCHEMA_VERSION; raise on a stale one.
+
+    A stale version means the on-disk table layout predates this code's
+    expectations (e.g. a future column rename/add) — reading it silently
+    would risk wrong or missing data rather than a clear error.
+    """
+    cur = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'")
+    row = cur.fetchone()
+    if row is None:
+        conn.execute(
+            "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)",
+            (SCHEMA_VERSION,),
+        )
+        conn.commit()
+        return
+    if row[0] != SCHEMA_VERSION:
+        raise SchemaVersionMismatch(
+            f"graph.db schema_version={row[0]!r} does not match expected "
+            f"{SCHEMA_VERSION!r}. Delete the database and re-run `jidra index` "
+            f"to rebuild it with the current schema."
+        )
 
 
 def infer_variant_split(file_path: str) -> str:
@@ -211,6 +247,7 @@ def _class_row(cls: ClassEntry, variant: str, module_id: str | None) -> tuple:
         _dumps(cls.imports),
         _dumps(cls.stereotypes),
         cls.language,
+        None,  # confirmed_bean: NULL = never validated; stamped by mark_confirmed_beans
     )
 
 
@@ -335,7 +372,7 @@ def _insert_graph(
     method_file_by_id = {m.id: m.file_path for m in graph.methods}
 
     conn.executemany(
-        "INSERT INTO classes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO classes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [_class_row(c, variant_of(c.file_path), module_id) for c in graph.classes],
     )
     conn.executemany(
@@ -386,12 +423,21 @@ def save_full_graph(
 ) -> None:
     """Replace all rows for the given scope with the contents of `graph`.
 
-    If `variant` is given, every row is written with that fixed variant
-    (used for `validate` output, which writes a single `validated` variant).
+    If `variant` is given, every row is written with that fixed variant.
     If `variant` is None, rows are auto-classified into `main`/`test` per
     `infer_variant_split(file_path)` and both variants are replaced in one
     transaction (used by the indexer).
+
+    `variant="validated"` is rejected — there's no physical "validated" row
+    set to write. Use `mark_confirmed_beans` after writing `main` instead;
+    `load_graph(variant="validated")` derives the filtered view from that.
     """
+    if variant == "validated":
+        raise ValueError(
+            "save_full_graph: variant='validated' no longer exists as stored "
+            "rows — call mark_confirmed_beans(conn, confirmed_class_full_names) "
+            "after saving the 'main' graph instead."
+        )
     if variant is not None:
         for table in _ENTITY_TABLES:
             conn.execute(
@@ -509,12 +555,86 @@ def _row_to_resolved_call(row: sqlite3.Row) -> ResolvedCallEdge:
     )
 
 
+def mark_confirmed_beans(
+    conn: sqlite3.Connection,
+    confirmed_class_full_names: set[str],
+    *,
+    module_id: str | None = None,
+) -> None:
+    """Stamp `classes.confirmed_bean` for `variant='main'` classes in scope.
+
+    This is the entire output of a validation run — there is no separate
+    "validated" copy of the graph on disk. `load_graph(variant="validated")`
+    derives the bean-filtered view at read time from this flag plus the one
+    unfiltered `main` copy of callsites/resolved_call_edges, so re-running
+    validation (e.g. against a fresh actuator response) only ever needs to
+    flip these booleans, never to re-extract or re-resolve anything.
+    """
+    conn.execute(
+        "UPDATE classes SET confirmed_bean = 0 WHERE variant = 'main' AND module_id IS ?",
+        (module_id,),
+    )
+    if confirmed_class_full_names:
+        names = list(confirmed_class_full_names)
+        placeholders = ",".join("?" for _ in names)
+        conn.execute(
+            f"UPDATE classes SET confirmed_bean = 1 WHERE variant = 'main' "
+            f"AND module_id IS ? AND full_name IN ({placeholders})",
+            (module_id, *names),
+        )
+    conn.commit()
+
+
+def _confirmed_bean_state(
+    conn: sqlite3.Connection, *, module_id: str | None = None
+) -> tuple[bool, set[str]]:
+    """Returns (has_been_validated, confirmed_full_names) for the scope.
+
+    `confirmed_bean` is NULL until `mark_confirmed_beans` runs at least once
+    for a class — `has_been_validated` distinguishes "never validated, don't
+    filter at all" from "validated and genuinely zero confirmed beans, filter
+    everything Spring-managed." Both look like an empty confirmed-names set,
+    but they mean very different things for `load_graph(variant="validated")`.
+    """
+    cur = conn.execute(
+        "SELECT full_name, confirmed_bean FROM classes "
+        "WHERE variant = 'main' AND module_id IS ?",
+        (module_id,),
+    )
+    rows = cur.fetchall()
+    has_been_validated = any(r[1] is not None for r in rows)
+    confirmed = {r[0] for r in rows if r[1]}
+    return has_been_validated, confirmed
+
+
 def load_graph(
     conn: sqlite3.Connection,
     *,
     variant: str = "main",
     module_id: str | None = None,
 ) -> Graph:
+    if variant == "validated":
+        # No physical "validated" rows — derive the bean-filtered view from
+        # the unfiltered main graph + whatever's currently stamped on
+        # classes.confirmed_bean (see mark_confirmed_beans). If validation has
+        # never run for this scope, the validated view is just main —
+        # filtering with an empty confirmed-beans set would otherwise treat
+        # every Spring-managed class as a confirmed phantom and wrongly strip
+        # real edges.
+        main_graph = load_graph(conn, variant="main", module_id=module_id)
+        has_been_validated, confirmed_beans = _confirmed_bean_state(
+            conn, module_id=module_id
+        )
+        if not has_been_validated:
+            return main_graph
+
+        from .graph_validator import validate_graph
+
+        filtered_graph, _report = validate_graph(
+            main_graph, confirmed_beans, verbose=False
+        )
+        return filtered_graph
+
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
@@ -852,8 +972,15 @@ def upsert_for_files(
 
     `resolved_call_edges` are intentionally not part of `fragment` here — callers
     should recompute and persist those separately via `replace_resolved_call_edges`
-    once edge resolution has run against enough context.
+    once edge resolution has run against enough context. Passing a fragment with
+    edges already set is a caller bug (they'd be silently dropped), so it's
+    rejected rather than ignored.
     """
+    if fragment.resolved_call_edges:
+        raise ValueError(
+            "upsert_for_files: fragment.resolved_call_edges must be empty — "
+            "call replace_resolved_call_edges separately after re-resolution."
+        )
     delete_for_files(conn, file_paths, variant=variant, module_id=module_id)
     _insert_graph(conn, fragment, variant_of=lambda _fp: variant, module_id=module_id)
     conn.commit()
@@ -947,6 +1074,37 @@ def replace_resolved_call_edges(
     conn.execute(
         "DELETE FROM resolved_call_edges WHERE variant = ? AND module_id IS ?",
         (variant, module_id),
+    )
+    conn.executemany(
+        "INSERT INTO resolved_call_edges VALUES (?,?,?,?,?,?)",
+        [_resolved_call_row(e, variant, module_id) for e in edges],
+    )
+    conn.commit()
+
+
+def replace_resolved_call_edges_for_callers(
+    conn: sqlite3.Connection,
+    edges: list[ResolvedCallEdge],
+    caller_method_ids: Iterable[str],
+    *,
+    variant: str,
+    module_id: str | None = None,
+) -> None:
+    """Like `replace_resolved_call_edges`, but scoped to `caller_method_ids`.
+
+    Used by incremental reindex, where re-resolution only touches a subset of
+    callers — deletes/rewrites just their rows instead of the whole table.
+    `edges` must only contain edges whose `caller_method_id` is in
+    `caller_method_ids` (callers outside that set are left untouched).
+    """
+    ids = list(caller_method_ids)
+    if not ids:
+        return
+    placeholders = ",".join("?" for _ in ids)
+    conn.execute(
+        f"DELETE FROM resolved_call_edges WHERE variant = ? AND module_id IS ? "
+        f"AND caller_method_id IN ({placeholders})",
+        (variant, module_id, *ids),
     )
     conn.executemany(
         "INSERT INTO resolved_call_edges VALUES (?,?,?,?,?,?)",
