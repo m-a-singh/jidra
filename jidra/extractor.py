@@ -22,6 +22,7 @@ from .models import (
     method_signature,
     resolved_call_edge_id,
 )
+from .parallel import parallel_map
 from .parser import make_parser
 
 
@@ -1517,16 +1518,14 @@ def _resolve_calls(graph: Graph) -> None:
 
 
 def _build_java_graph(codebase_root: Path, on_progress=None) -> Graph:
-    parser = make_parser()
-
     all_classes: list[ClassEntry] = []
     all_methods: list[MethodEntry] = []
     all_fields: list[FieldEntry] = []
     all_calls: list[CallSite] = []
     all_inheritance_edges: list[InheritanceEdge] = []
 
-    for file_path in iter_java_files(codebase_root):
-        result = _extract_file(file_path, parser)
+    file_paths = list(iter_java_files(codebase_root))
+    for result in parallel_map(_extract_file, file_paths):
         all_classes.extend(result.classes)
         all_methods.extend(result.methods)
         all_fields.extend(result.fields)
@@ -1653,7 +1652,6 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
     """
 
     graphs: list[Graph] = []
-    parser = make_parser()
 
     # Filter files by language and extract per language
     java_files = {f for f in files if f.suffix == ".java" or ".java" in str(f)}
@@ -1670,10 +1668,8 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
         all_calls: list[CallSite] = []
         all_inheritance_edges: list[InheritanceEdge] = []
 
-        for file_path in java_files:
-            if not file_path.exists():
-                continue
-            result = _extract_file(file_path, parser)
+        existing_java_files = [f for f in java_files if f.exists()]
+        for result in parallel_map(_extract_file, existing_java_files):
             all_classes.extend(result.classes)
             all_methods.extend(result.methods)
             all_fields.extend(result.fields)
