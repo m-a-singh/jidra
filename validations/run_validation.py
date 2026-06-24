@@ -9,19 +9,19 @@ own codebase.
 Usage:
     # Pass methods inline
     ANTHROPIC_API_KEY=... python validations/run_validation.py \
-        --graph /path/to/.jidra/graph_validated.jsonl \
+        --graph /path/to/.jidra/graph.db \
         --codebase /path/to/your-repo \
         --methods "OrderController.createOrder,PaymentService.charge"
 
     # Pass methods via file (one per line or JSON array)
     ANTHROPIC_API_KEY=... python validations/run_validation.py \
-        --graph /path/to/.jidra/graph_validated.jsonl \
+        --graph /path/to/.jidra/graph.db \
         --codebase /path/to/your-repo \
         --methods-file my_methods.txt
 
     # Auto-discover endpoints from the graph
     ANTHROPIC_API_KEY=... python validations/run_validation.py \
-        --graph /path/to/.jidra/graph_validated.jsonl \
+        --graph /path/to/.jidra/graph.db \
         --codebase /path/to/your-repo \
         --auto-discover --discover-limit 5
 
@@ -82,7 +82,7 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--graph", required=True, help="Path to graph_validated.jsonl")
+    parser.add_argument("--graph", required=True, help="Path to graph.db")
     parser.add_argument("--codebase", required=True, help="Path to Java repo root")
 
     method_group = parser.add_mutually_exclusive_group()

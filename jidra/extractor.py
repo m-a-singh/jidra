@@ -22,6 +22,7 @@ from .models import (
     method_signature,
     resolved_call_edge_id,
 )
+from .parallel import parallel_map
 from .parser import make_parser
 
 
@@ -1517,16 +1518,14 @@ def _resolve_calls(graph: Graph) -> None:
 
 
 def _build_java_graph(codebase_root: Path, on_progress=None) -> Graph:
-    parser = make_parser()
-
     all_classes: list[ClassEntry] = []
     all_methods: list[MethodEntry] = []
     all_fields: list[FieldEntry] = []
     all_calls: list[CallSite] = []
     all_inheritance_edges: list[InheritanceEdge] = []
 
-    for file_path in iter_java_files(codebase_root):
-        result = _extract_file(file_path, parser)
+    file_paths = list(iter_java_files(codebase_root))
+    for result in parallel_map(_extract_file, file_paths):
         all_classes.extend(result.classes)
         all_methods.extend(result.methods)
         all_fields.extend(result.fields)
@@ -1653,7 +1652,6 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
     """
 
     graphs: list[Graph] = []
-    parser = make_parser()
 
     # Filter files by language and extract per language
     java_files = {f for f in files if f.suffix == ".java" or ".java" in str(f)}
@@ -1670,10 +1668,8 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
         all_calls: list[CallSite] = []
         all_inheritance_edges: list[InheritanceEdge] = []
 
-        for file_path in java_files:
-            if not file_path.exists():
-                continue
-            result = _extract_file(file_path, parser)
+        existing_java_files = [f for f in java_files if f.exists()]
+        for result in parallel_map(_extract_file, existing_java_files):
             all_classes.extend(result.classes)
             all_methods.extend(result.methods)
             all_fields.extend(result.fields)
@@ -1752,41 +1748,37 @@ def build_graph_partitioned(
     output_dir: Path,
     on_progress=None,
 ) -> dict:
-    """Build one graph.jsonl per detected build module, plus a composed index.
+    """Build a single graph.db, partitioned by `module_id` when the codebase
+    has multiple detected build modules.
 
-    Falls back to a single graph.jsonl (identical to build_graph()) when no
-    multi-module structure is detected.
+    Falls back to a single unpartitioned graph (module_id=None, identical to
+    build_graph()) when no multi-module structure is detected.
 
     Returns:
-        {"multi_module": bool, "modules": {module_name: graph_path}, "index_path": str | None}
+        {"multi_module": bool, "db_path": str, "modules": {module_name: module_dir}}
     """
-    import json as _json
-
+    from . import graph_store
     from .actuator_client import _detect_build_directories
-    from .exporter import export_jsonl, graph_records
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    db_path = output_dir / "graph.db"
+    conn = graph_store.connect(db_path)
 
     modules = _detect_build_directories(str(codebase_root))
 
     if len(modules) <= 1:
         graph = build_graph(codebase_root, on_progress=on_progress)
-        graph_path = output_dir / "graph.jsonl"
-        export_jsonl(graph_path, graph_records(graph))
-        return {"multi_module": False, "modules": {}, "index_path": None}
+        graph_store.save_full_graph(conn, graph)
+        return {"multi_module": False, "db_path": str(db_path), "modules": {}}
 
     index: dict[str, str] = {}
-    for _tool, module_dir in modules:
+    for tool, module_dir in modules:
         module_name = module_dir.name
         module_graph = build_graph(module_dir, on_progress=on_progress)
-        module_output_dir = output_dir / module_name
-        module_output_dir.mkdir(parents=True, exist_ok=True)
-        graph_path = module_output_dir / "graph.jsonl"
-        export_jsonl(graph_path, graph_records(module_graph))
-        index[module_name] = str(graph_path)
+        graph_store.save_full_graph(conn, module_graph, module_id=module_name)
+        graph_store.save_module_metadata(conn, module_name, str(module_dir), tool)
+        index[module_name] = str(module_dir)
 
-    index_path = output_dir / "modules_index.json"
-    index_path.write_text(_json.dumps(index, indent=2), encoding="utf-8")
-
-    return {"multi_module": True, "modules": index, "index_path": str(index_path)}
+    return {"multi_module": True, "db_path": str(db_path), "modules": index}

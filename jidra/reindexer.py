@@ -4,6 +4,7 @@ import json
 import time
 from pathlib import Path
 
+from .models import Graph
 
 MANIFEST_FILENAME = "file_manifest.json"
 
@@ -274,6 +275,9 @@ def quick_stale_check(graph_dir: Path) -> bool:
         return False
 
 
+_REINDEX_VARIANT = "validated"
+
+
 def incremental_reindex(
     codebase_root: Path,
     graph_path: Path,
@@ -287,7 +291,13 @@ def incremental_reindex(
     3. build_graph_for_files(changed_files) → mini_graph
     4. diff_graph_records → dispatch by change_type
     5. For Java: load_confirmed_beans_for_reindex() → filter edges
-    6. Re-export JSONL; save manifest with new last_indexed_at_ns
+    6. Persist via targeted SQL deletes/inserts scoped to changed_files (not a
+       full-graph rewrite); save manifest with new last_indexed_at_ns.
+
+    Note: edge re-resolution (`_resolve_calls`) still needs enough graph context
+    to be correct, so a full `validated`-variant load is used for that in-memory
+    step. What this removes is the *persistence* cost — only rows for changed
+    files are deleted/rewritten in the DB, never the whole graph.
 
     Returns:
     {
@@ -302,38 +312,36 @@ def incremental_reindex(
     start_ns = time.perf_counter_ns()
 
     from .extractor import build_graph
-    from .graph_io import load_graph_jsonl
-    from .exporter import export_jsonl, graph_records
+    from . import graph_store
 
     graph_dir = graph_path if graph_path.is_dir() else graph_path.parent
     graph_dir.mkdir(parents=True, exist_ok=True)
 
-    # Determine main graph path
-    if graph_path.is_dir():
-        main_graph_path = graph_path / "graph_validated.jsonl"
-    else:
-        main_graph_path = graph_path
+    db_path = graph_store.resolve_graph_db_path(graph_path)
+    conn = graph_store.connect(db_path)
 
-    # Load manifest and existing graph
+    # Load manifest
     manifest = load_manifest(graph_dir)
 
-    if not manifest:
-        # Full rebuild
+    def _full_rebuild(changed_files: list[str]) -> dict:
         full_graph = build_graph(codebase_root)
         last_indexed_at_ns = int(time.time_ns())
-        current_fps = compute_fingerprints(codebase_root)
-        save_manifest(graph_dir, current_fps, last_indexed_at_ns)
-        export_jsonl(main_graph_path, graph_records(full_graph))
-
+        fps = compute_fingerprints(codebase_root)
+        save_manifest(graph_dir, fps, last_indexed_at_ns)
+        graph_store.save_full_graph(conn, full_graph, variant=_REINDEX_VARIANT)
         elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
         return {
             "change_type": "full_rebuild",
-            "changed_files": list(current_fps.keys()),
+            "changed_files": changed_files,
             "added_methods": len(full_graph.methods),
             "removed_methods": 0,
             "elapsed_ms": elapsed_ms,
             "actuator_cache_warning": None,
         }
+
+    if not manifest:
+        current_fps = compute_fingerprints(codebase_root)
+        return _full_rebuild(list(current_fps.keys()))
 
     # Fingerprint diff
     current_fps = compute_fingerprints(codebase_root)
@@ -354,26 +362,10 @@ def incremental_reindex(
             "actuator_cache_warning": None,
         }
 
-    # Load existing graph
-    try:
-        existing_graph = load_graph_jsonl(main_graph_path)
-    except (FileNotFoundError, json.JSONDecodeError):
-        # Graph missing or corrupt; full rebuild
-        full_graph = build_graph(codebase_root)
-        last_indexed_at_ns = int(time.time_ns())
-        current_fps = compute_fingerprints(codebase_root)
-        save_manifest(graph_dir, current_fps, last_indexed_at_ns)
-        export_jsonl(main_graph_path, graph_records(full_graph))
-
-        elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
-        return {
-            "change_type": "full_rebuild",
-            "changed_files": list(current_fps.keys()),
-            "added_methods": len(full_graph.methods),
-            "removed_methods": 0,
-            "elapsed_ms": elapsed_ms,
-            "actuator_cache_warning": None,
-        }
+    # Load existing graph (full read is fine — it's a SQL query, not a file parse)
+    existing_graph = graph_store.load_graph(conn, variant=_REINDEX_VARIANT)
+    if not existing_graph.classes and not existing_graph.methods:
+        return _full_rebuild(list(changed_files_set))
 
     # Build mini-graph for changed files
     from .extractor import build_graph_for_files
@@ -382,20 +374,7 @@ def incremental_reindex(
 
     if not changed_files_paths:
         # All changed files deleted; full rebuild
-        full_graph = build_graph(codebase_root)
-        last_indexed_at_ns = int(time.time_ns())
-        save_manifest(graph_dir, current_fps, last_indexed_at_ns)
-        export_jsonl(main_graph_path, graph_records(full_graph))
-
-        elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
-        return {
-            "change_type": "full_rebuild",
-            "changed_files": list(changed_files_set),
-            "added_methods": len(full_graph.methods),
-            "removed_methods": 0,
-            "elapsed_ms": elapsed_ms,
-            "actuator_cache_warning": None,
-        }
+        return _full_rebuild(list(changed_files_set))
 
     mini_graph = build_graph_for_files(changed_files_paths, codebase_root)
 
@@ -449,10 +428,82 @@ def incremental_reindex(
             )
         ]
 
-    # Export and save manifest
+    # Persist via targeted SQL deletes/inserts scoped to what actually changed.
     last_indexed_at_ns = int(time.time_ns())
     save_manifest(graph_dir, current_fps, last_indexed_at_ns)
-    export_jsonl(main_graph_path, graph_records(result_graph))
+
+    method_by_id = {m.id: m for m in result_graph.methods}
+
+    if change_type == "metadata_only":
+        for old_id, new_line, _delta in diff_result["line_shifted_methods"]:
+            m = method_by_id.get(old_id)
+            if m is not None:
+                graph_store.update_method_lines(
+                    conn,
+                    old_id,
+                    m.start_line,
+                    m.end_line,
+                    m.source,
+                    variant=_REINDEX_VARIANT,
+                )
+        graph_store.replace_resolved_call_edges(
+            conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
+        )
+    elif change_type == "callsite_change":
+        changed_method_ids = diff_result["callsite_changed_method_ids"]
+        graph_store.delete_callsites_by_caller(
+            conn, changed_method_ids, variant=_REINDEX_VARIANT
+        )
+        graph_store.delete_methods(conn, changed_method_ids, variant=_REINDEX_VARIANT)
+        graph_store.insert_methods(
+            conn,
+            [m for m in result_graph.methods if m.id in changed_method_ids],
+            variant=_REINDEX_VARIANT,
+        )
+        graph_store.insert_callsites(
+            conn,
+            [
+                c
+                for c in result_graph.callsites
+                if c.caller_method_id in changed_method_ids
+            ],
+            variant=_REINDEX_VARIANT,
+        )
+        graph_store.replace_resolved_call_edges(
+            conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
+        )
+        conn.commit()
+    elif change_type == "structural":
+        fragment = Graph(
+            classes=[
+                c for c in result_graph.classes if c.file_path in changed_files_set
+            ],
+            methods=[
+                m for m in result_graph.methods if m.file_path in changed_files_set
+            ],
+            fields=[f for f in result_graph.fields if f.file_path in changed_files_set],
+            callsites=[
+                c for c in result_graph.callsites if c.file_path in changed_files_set
+            ],
+            inheritance_edges=[
+                e
+                for e in result_graph.inheritance_edges
+                if e.source_class_id
+                in {
+                    c.id
+                    for c in result_graph.classes
+                    if c.file_path in changed_files_set
+                }
+            ],
+            resolved_call_edges=[],
+        )
+        graph_store.upsert_for_files(
+            conn, fragment, changed_files_set, variant=_REINDEX_VARIANT
+        )
+        graph_store.replace_resolved_call_edges(
+            conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
+        )
+    # no_change: nothing to persist
 
     added_count = len(diff_result.get("added_method_ids", []))
     removed_count = len(diff_result.get("removed_method_ids", []))

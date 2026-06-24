@@ -17,24 +17,24 @@ Scoring:
   recall     = true_positives / (true_positives + false_negatives)
   drift      = |run1_claims Δ run2_claims| / |run1_claims ∪ run2_claims|
 
-Ground truth is derived directly from graph_validated.jsonl — no manual labelling.
+Ground truth is derived directly from graph.db — no manual labelling.
 
 Usage:
     # Pass methods inline
     ANTHROPIC_API_KEY=... python validations/hallucination_test.py \
-        --graph /path/to/.jidra/graph_validated.jsonl \
+        --graph /path/to/.jidra/graph.db \
         --codebase /path/to/repo \
         --methods "OrderController.createOrder,PaymentService.charge"
 
     # Pass methods via file (one per line, or JSON array)
     ANTHROPIC_API_KEY=... python validations/hallucination_test.py \
-        --graph /path/to/.jidra/graph_validated.jsonl \
+        --graph /path/to/.jidra/graph.db \
         --codebase /path/to/repo \
         --methods-file validations/my_methods.txt
 
     # Auto-discover endpoints from the graph (no --methods needed)
     ANTHROPIC_API_KEY=... python validations/hallucination_test.py \
-        --graph /path/to/.jidra/graph_validated.jsonl \
+        --graph /path/to/.jidra/graph.db \
         --codebase /path/to/repo \
         --auto-discover --discover-limit 5
 
@@ -65,7 +65,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jidra.cost_calculator import _build_jidra_context, _collect_naive_files
-from jidra.graph_io import load_graph_jsonl
+from jidra import graph_store
 from jidra.selector import _resolve_method_selector
 
 
@@ -867,7 +867,7 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--graph", required=True, help="Path to graph_validated.jsonl")
+    parser.add_argument("--graph", required=True, help="Path to graph.db")
     parser.add_argument("--codebase", required=True, help="Path to Java repo root")
 
     method_group = parser.add_mutually_exclusive_group()
@@ -919,11 +919,9 @@ def main() -> None:
 
     run_tests = {int(t.strip()) for t in args.tests.split(",")}
 
-    graph = load_graph_jsonl(graph_path)
-    nodes = [
-        json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()
-    ]
-    node_by_id = {n.get("id"): n for n in nodes}
+    conn = graph_store.connect(graph_path)
+    graph = graph_store.load_graph(conn, variant="validated")
+    node_by_id = graph_store.load_nodes(conn, variant="validated")
     all_symbols = _all_graph_symbols(node_by_id)
     client = Anthropic()
 

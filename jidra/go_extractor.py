@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Callable
 
 from .go_filters import iter_go_files
+from .parallel import parallel_map
 from .models import (
     CallSite,
     ClassEntry,
@@ -711,6 +712,37 @@ def _extract_types(
     )
 
 
+def _parse_and_extract_types(
+    file_path: Path,
+) -> tuple[
+    Path,
+    str,
+    str,
+    list[ClassEntry],
+    list[FieldEntry],
+    list[InheritanceEdge],
+    dict[str, ClassEntry],
+]:
+    """Pass-1 worker: parse one file and extract its types, fully self-contained.
+
+    Returns plain picklable values only (no tree-sitter Node) so this can run
+    in a worker process via `parallel_map` — the parsed tree itself never
+    crosses the process boundary, it's discarded once this returns.
+    """
+    parser = make_go_parser()
+    meta = _parse_file(file_path, parser)
+    classes, fields, edges, local_map = _extract_types(meta)
+    return (
+        meta.file_path,
+        meta.package_name,
+        meta.package_scope,
+        classes,
+        fields,
+        edges,
+        local_map,
+    )
+
+
 def _build_global_class_map(
     file_metas: list[_FileMeta],
 ) -> tuple[
@@ -786,19 +818,42 @@ def _merge_unresolved(
 def build_go_graph(
     codebase_root: Path, on_progress: Callable[[int], None] | None = None
 ) -> Graph:
-    parser = make_go_parser()
+    file_paths = list(iter_go_files(codebase_root))
 
     # Pass 1: parse every file and collect all type declarations globally.
-    file_metas = [_parse_file(fp, parser) for fp in iter_go_files(codebase_root)]
-    all_classes, all_fields, all_edges, class_map = _build_global_class_map(file_metas)
+    # Parallel-safe — each worker parses its own file and returns plain
+    # picklable values; the parsed tree is discarded inside the worker.
+    all_classes: list[ClassEntry] = []
+    all_fields: list[FieldEntry] = []
+    all_edges: list[InheritanceEdge] = []
+    class_map: dict[tuple[str, str], ClassEntry] = {}
+    for (
+        file_path,
+        package_name,
+        package_scope,
+        classes,
+        fields,
+        edges,
+        local_map,
+    ) in parallel_map(_parse_and_extract_types, file_paths):
+        all_classes.extend(classes)
+        all_fields.extend(fields)
+        all_edges.extend(edges)
+        for short_name, cls in local_map.items():
+            class_map[(package_scope, short_name)] = cls
 
     if on_progress:
         on_progress(len(all_classes))
 
-    # Pass 2: extract methods/functions using the cross-file type map.
+    # Pass 2: extract methods/functions using the cross-file type map. Stays
+    # sequential (re-parses each file) because `_PendingBody.block` holds a
+    # live tree-sitter Node consumed by `_resolve_calls` below — Node objects
+    # aren't picklable, so this pass can't hand its output to worker processes.
+    parser = make_go_parser()
     all_methods: list[MethodEntry] = []
     all_pending: list[_PendingBody] = []
-    for meta in file_metas:
+    for file_path in file_paths:
+        meta = _parse_file(file_path, parser)
         methods, extra_classes, pending = _extract_methods_for_file(meta, class_map)
         all_methods.extend(methods)
         all_classes.extend(extra_classes)

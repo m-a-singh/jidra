@@ -14,9 +14,11 @@ import ast
 import logging
 from collections import deque
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Callable
 
+from .parallel import parallel_map
 from .models import (
     CallSite,
     ClassEntry,
@@ -469,22 +471,24 @@ def _build_import_graph(graph: Graph) -> dict[str, set[str]]:
     return import_graph
 
 
-def _reachable(
-    import_graph: dict[str, set[str]], from_module: str, to_module: str
-) -> bool:
-    """BFS over the import graph to check if from_module can reach to_module."""
-    visited: set[str] = {from_module}
-    queue: deque[str] = deque([from_module])
+def _imported_closure(import_graph: dict[str, set[str]], from_module: str) -> set[str]:
+    """All modules transitively imported from `from_module` (BFS closure)."""
+    visited: set[str] = set()
+    queue: deque[str] = deque(import_graph.get(from_module, ()))
     while queue:
         current = queue.popleft()
-        for imp in import_graph.get(current, set()):
-            # Match exact module or any parent package (e.g. "foo" covers "foo.bar")
-            if imp == to_module or to_module.startswith(imp + "."):
-                return True
-            if imp not in visited:
-                visited.add(imp)
-                queue.append(imp)
-    return False
+        if current in visited:
+            continue
+        visited.add(current)
+        queue.extend(import_graph.get(current, ()))
+    return visited
+
+
+def _covers(imported: set[str], to_module: str) -> bool:
+    if to_module in imported:
+        return True
+    # Match any parent package (e.g. "foo" covers "foo.bar")
+    return any(to_module.startswith(imp + ".") for imp in imported)
 
 
 def _filter_phantom_edges(graph: Graph) -> int:
@@ -497,6 +501,11 @@ def _filter_phantom_edges(graph: Graph) -> int:
     import_graph = _build_import_graph(graph)
     method_file: dict[str, str] = {m.id: m.file_path for m in graph.methods}
 
+    # The import graph has one node per module; caching the BFS closure per
+    # caller module avoids re-walking it for every edge (there are usually far
+    # more edges than modules).
+    closure_cache: dict[str, set[str]] = {}
+
     kept: list[ResolvedCallEdge] = []
     dropped = 0
     for edge in graph.resolved_call_edges:
@@ -505,7 +514,16 @@ def _filter_phantom_edges(graph: Graph) -> int:
         caller_mod = _file_to_module(caller_file)
         callee_mod = _file_to_module(callee_file)
 
-        if caller_mod == callee_mod or _reachable(import_graph, caller_mod, callee_mod):
+        if caller_mod == callee_mod:
+            kept.append(edge)
+            continue
+
+        imported = closure_cache.get(caller_mod)
+        if imported is None:
+            imported = _imported_closure(import_graph, caller_mod)
+            closure_cache[caller_mod] = imported
+
+        if _covers(imported, callee_mod):
             kept.append(edge)
         else:
             dropped += 1
@@ -541,6 +559,38 @@ def _apply_pyright_type_hints(
             cs.receiver_resolution_source = "pyright"
             enriched += 1
     return enriched
+
+
+def _extract_py_file(file_path: Path, codebase_root: Path) -> Graph | None:
+    """Parse and extract a single Python file, independent of all others.
+
+    Module-level (not a closure) so it can be pickled and run in a worker
+    process via `parallel_map`.
+    """
+    try:
+        source_code = file_path.read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(source_code, filename=str(file_path))
+
+        module_parts = file_path.relative_to(codebase_root).with_suffix("").parts
+        module_namespace = ".".join(module_parts)
+
+        extractor = ASTExtractor(file_path, codebase_root, module_namespace)
+        extractor.visit(tree)
+
+        return Graph(
+            classes=extractor.classes,
+            methods=extractor.methods,
+            fields=extractor.fields,
+            callsites=extractor.callsites,
+            inheritance_edges=extractor.inheritance_edges,
+            resolved_call_edges=[],
+        )
+    except SyntaxError as e:
+        logger.warning(f"Syntax error in {file_path}: {e}")
+        return None
+    except Exception as e:
+        logger.warning(f"Error parsing {file_path}: {e}")
+        return None
 
 
 def build_py_graph(
@@ -583,32 +633,20 @@ def build_py_graph(
             validator = None
 
     # Step 2: Discover and parse Python files
-    python_files = iter_python_files(codebase_root)
+    python_files = list(iter_python_files(codebase_root))
 
-    for file_path in python_files:
-        try:
-            source_code = file_path.read_text(encoding="utf-8", errors="replace")
-            tree = ast.parse(source_code, filename=str(file_path))
+    worker = partial(_extract_py_file, codebase_root=codebase_root)
+    for result in parallel_map(worker, python_files):
+        if result is None:
+            continue
+        all_classes.extend(result.classes)
+        all_methods.extend(result.methods)
+        all_fields.extend(result.fields)
+        all_callsites.extend(result.callsites)
+        all_inheritance_edges.extend(result.inheritance_edges)
 
-            module_parts = file_path.relative_to(codebase_root).with_suffix("").parts
-            module_namespace = ".".join(module_parts)
-
-            extractor = ASTExtractor(file_path, codebase_root, module_namespace)
-            extractor.visit(tree)
-
-            all_classes.extend(extractor.classes)
-            all_methods.extend(extractor.methods)
-            all_fields.extend(extractor.fields)
-            all_callsites.extend(extractor.callsites)
-            all_inheritance_edges.extend(extractor.inheritance_edges)
-
-            if on_progress:
-                on_progress(len(all_classes))
-
-        except SyntaxError as e:
-            logger.warning(f"Syntax error in {file_path}: {e}")
-        except Exception as e:
-            logger.warning(f"Error parsing {file_path}: {e}")
+        if on_progress:
+            on_progress(len(all_classes))
 
     # Step 3: Enrich untyped call sites with Pyright-inferred receiver types
     # This converts Phase-2/3/4 guesses into Phase-1 exact matches
@@ -661,6 +699,10 @@ def _resolve_calls(graph: Graph) -> None:
     by_class_and_name: dict[tuple[str, str], list[MethodEntry]] = {}
     by_name_and_arity: dict[tuple[str, int], list[MethodEntry]] = {}
     by_name: dict[str, list[MethodEntry]] = {}
+    # name -> arity -> methods, so phase 2B can probe arity+-1 directly
+    # instead of linear-scanning the whole (possibly huge, for common names
+    # like "get"/"run") by_name bucket.
+    by_name_arity_buckets: dict[str, dict[int, list[MethodEntry]]] = {}
 
     for method in graph.methods:
         # Index 1: (class, method_name)
@@ -680,6 +722,10 @@ def _resolve_calls(graph: Graph) -> None:
         if method.method_name not in by_name:
             by_name[method.method_name] = []
         by_name[method.method_name].append(method)
+
+        by_name_arity_buckets.setdefault(method.method_name, {}).setdefault(
+            arity, []
+        ).append(method)
 
     edges: list[ResolvedCallEdge] = []
 
@@ -704,13 +750,19 @@ def _resolve_calls(graph: Graph) -> None:
                 if candidates:
                     callsite.resolution_status = "resolved_arity"
 
-        # PHASE 2B: Name + close arity (within 1 parameter)
-        if not candidates and callsite.callee_name in by_name:
-            for method in by_name[callsite.callee_name]:
-                if abs(len(method.parameter_types) - callsite.argument_count) <= 1:
-                    candidates.append(method)
-                    callsite.resolution_status = "resolved_close_arity"
-                    break
+        # PHASE 2B: Name + close arity (within 1 parameter). Phase 2A already
+        # covered exact arity, so only +-1 needs checking here, and the
+        # nested arity index makes that an O(1) probe instead of a linear
+        # scan of every method sharing this name.
+        if not candidates:
+            arity_buckets = by_name_arity_buckets.get(callsite.callee_name)
+            if arity_buckets:
+                for delta in (-1, 1):
+                    bucket = arity_buckets.get(callsite.argument_count + delta)
+                    if bucket:
+                        candidates.append(bucket[0])
+                        callsite.resolution_status = "resolved_close_arity"
+                        break
 
         # PHASE 2C: Name only (very lenient fallback)
         if not candidates and callsite.callee_name in by_name:
