@@ -141,18 +141,16 @@ If unset, JIDRA treats any package as project code for anchoring.
 ```bash
 python -m jidra.cli index \
   --codebase /path/to/java/repo \
-  --output /tmp/graph.jsonl
+  --output /tmp/graph.db
 ```
 
-When output is a directory, JIDRA writes:
-- `graph.jsonl` (main)
-- `graph_test.jsonl` (test)
+When output is a directory, JIDRA writes a single `graph.db` SQLite file. Main and test source are kept as separate rows via a `variant` column (`main` / `test` / `validated`) rather than separate files.
 
 ### 2) Trace method flow
 
 ```bash
 python -m jidra.cli trace \
-  --graph /tmp/graph.jsonl \
+  --graph /tmp/graph.db \
   --method com.example.Controller.search
 ```
 
@@ -160,7 +158,7 @@ python -m jidra.cli trace \
 
 ```bash
 python -m jidra.cli context \
-  --graph /tmp/graph.jsonl \
+  --graph /tmp/graph.db \
   --method com.example.Controller.search
 ```
 
@@ -168,7 +166,7 @@ python -m jidra.cli context \
 
 ```bash
 python -m jidra.cli prompt \
-  --graph /tmp/graph.jsonl \
+  --graph /tmp/graph.db \
   --method com.example.Controller.search \
   --target codex
 ```
@@ -177,11 +175,37 @@ python -m jidra.cli prompt \
 
 ```bash
 python -m jidra.cli diagnose \
-  --graph /tmp/graph.jsonl \
+  --graph /tmp/graph.db \
   --method com.example.Controller.search \
   --target codex \
   --llm-profile local
 ```
+
+## Storage: SQLite (`graph.db`)
+
+JIDRA persists the code graph in a single SQLite database, `graph.db`, instead of the
+JSONL files (`graph.jsonl`, `graph_test.jsonl`, `graph_validated.jsonl`) used in earlier
+versions. One file, three logical graphs:
+
+- **`variant` column** (`main` / `test` / `validated`) replaces the three separate
+  JSONL files — production code, test code, and the Spring-Actuator-filtered graph all
+  live in the same tables, distinguished by a column instead of a filename.
+- **`module_id` column** replaces per-module JSONL files + `modules_index.json` for
+  multi-module repos — one `graph.db`, scoped rows, no index file to keep in sync.
+- **Real incremental updates**: reindexing now runs scoped SQL `DELETE`/`INSERT`
+  against just the changed `file_path` rows, instead of loading the entire graph into
+  memory and rewriting the whole file on every change. Large repos reindex
+  proportionally to what changed, not to total codebase size.
+- **No compression step**: SQLite's on-disk format made the `--compress`/`.jsonl.zst`
+  path unnecessary, so it (and the `zstandard` dependency) was removed entirely.
+- **Inspectable with standard tools**: `sqlite3 graph.db ".tables"` /
+  `SELECT * FROM methods WHERE variant='validated'` work directly — no custom JSONL
+  parsing required to poke at the data.
+
+`jidra up` writes `graph.db` (plus the validation report and visualization HTML) to
+JIDRA's own `jidra/output/<repo-slug>-<branch>/` directory rather than into the
+target repo — the repo you're analyzing only ever gets a `.mcp.json` (or nothing, if
+you register the MCP server via `claude mcp add` / `codex mcp add` instead).
 
 ## Graph Selection Behavior
 
@@ -189,8 +213,8 @@ For `trace`, `context`, `trace-route`, `prompt`, `diagnose`:
 
 - `--graph` provided: used directly
 - `--graph` omitted: selected by `--graph-type` (`main` default)
-  - `main` -> `jidra/output/graph.jsonl`
-  - `test` -> `jidra/output/graph_test.jsonl`
+  - `main` -> `jidra/output/graph.db` (`variant="main"`)
+  - `test` -> `jidra/output/graph.db` (`variant="test"`)
 
 ## Method Selectors
 
@@ -230,7 +254,7 @@ Behavior:
 - Fetches `/actuator/beans` to extract confirmed bean class names
 - Filters graph: removes edges to non-bean classes, removes CallSites pointing to non-beans
 - Upgrades unresolved CallSites where receiver type matches a confirmed bean
-- Outputs: `graph_validated.jsonl` (filtered graph) + JSON report
+- Outputs: `graph.db` with `variant="validated"` rows (filtered graph) + JSON report
 
 Filtering logic:
 1. Extract confirmed bean class names from actuator response
@@ -243,7 +267,7 @@ Example: Direct URL
 ```bash
 jidra validate \
   --actuator-url http://localhost:8080 \
-  --graph /path/to/graph.jsonl \
+  --graph /path/to/graph.db \
   --output /path/to/output \
   --report /path/to/report.json
 ```
@@ -252,7 +276,7 @@ Example: Auto Docker build+run (always does clean Java build)
 ```bash
 jidra validate \
   --codebase /path/to/java/repo \
-  --graph /path/to/graph.jsonl \
+  --graph /path/to/graph.db \
   --port 8080 \
   --timeout 120
 ```
@@ -266,14 +290,14 @@ jidra automatically:
 
 To skip the Java build (if you've already done `gradle build` manually):
 ```bash
-jidra validate --codebase /path/to/java/repo --graph /path/to/graph.jsonl --skip-build
+jidra validate --codebase /path/to/java/repo --graph /path/to/graph.db --skip-build
 ```
 
 Example: Debug mode (report removals, don't filter)
 ```bash
 jidra validate \
   --actuator-url http://localhost:8080 \
-  --graph /path/to/graph.jsonl \
+  --graph /path/to/graph.db \
   --no-filter \
   --report /tmp/validation_debug.json
 ```
@@ -663,7 +687,7 @@ Measures real token savings via Claude API calls — traditional raw source vs J
 
 ```bash
 ANTHROPIC_API_KEY=... python validations/run_validation.py \
-    --graph /path/to/.jidra/graph_validated.jsonl \
+    --graph /path/to/.jidra/graph.db \
     --codebase /path/to/your-repo \
     --methods "OrderController.createOrder,PaymentService.charge" \
     --model claude-opus-4-7 \
@@ -682,19 +706,19 @@ Tests whether JIDRA reduces hallucinations and model drift across 5 dimensions:
 ```bash
 # Pass your own methods inline
 ANTHROPIC_API_KEY=... python validations/hallucination_test.py \
-    --graph /path/to/.jidra/graph_validated.jsonl \
+    --graph /path/to/.jidra/graph.db \
     --codebase /path/to/your-repo \
     --methods "OrderController.createOrder,PaymentService.charge"
 
 # Pass methods via file (one per line)
 ANTHROPIC_API_KEY=... python validations/hallucination_test.py \
-    --graph /path/to/.jidra/graph_validated.jsonl \
+    --graph /path/to/.jidra/graph.db \
     --codebase /path/to/your-repo \
     --methods-file my_methods.txt
 
 # Auto-discover endpoints from the graph
 ANTHROPIC_API_KEY=... python validations/hallucination_test.py \
-    --graph /path/to/.jidra/graph_validated.jsonl \
+    --graph /path/to/.jidra/graph.db \
     --codebase /path/to/your-repo \
     --auto-discover --discover-limit 5
 

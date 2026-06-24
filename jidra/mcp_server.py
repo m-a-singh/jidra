@@ -417,7 +417,7 @@ def run_mcp_server(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the JIDRA MCP server")
-    parser.add_argument("--graph", default=None, help="Path to graph.jsonl")
+    parser.add_argument("--graph", default=None, help="Path to graph.db")
     parser.add_argument(
         "--codebase", default=None, help="Path to codebase root (for reindex tool)"
     )

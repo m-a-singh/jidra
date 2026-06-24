@@ -12,7 +12,7 @@ that the ranking heuristic may need retuning — the agent is reaching past
 what the heuristic considered the important nodes.
 
 Usage:
-    python scripts/analyze_session_logs.py --graph path/to/graph.jsonl \\
+    python scripts/analyze_session_logs.py --graph path/to/graph.db \\
         path/to/session_log.jsonl [more_session_logs.jsonl ...]
 """
 
@@ -118,7 +118,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("logs", nargs="+", help="Path(s) to session_log.jsonl files")
     parser.add_argument(
-        "--graph", required=True, help="Path to the graph.jsonl used during the session"
+        "--graph", required=True, help="Path to the graph.db used during the session"
     )
     args = parser.parse_args()
 

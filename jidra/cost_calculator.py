@@ -1,4 +1,4 @@
-"""JIDRA Cost/ROI Calculator — derived from actual graph_validated.jsonl, not estimates."""
+"""JIDRA Cost/ROI Calculator — derived from actual graph.db (validated variant), not estimates."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ Be technical and specific."""
 
 @dataclass
 class GraphStats:
-    """Facts measured directly from graph_validated.jsonl."""
+    """Facts measured directly from graph.db (validated variant)."""
 
     num_classes: int
     num_methods: int
@@ -248,9 +248,10 @@ def analyze_method_offline(
     Uses chars/4 approximation for token counting.
     """
     from .selector import _resolve_method_selector
-    from .graph_io import load_graph_jsonl
+    from . import graph_store
 
-    graph = load_graph_jsonl(graph_path)
+    conn = graph_store.connect(graph_path)
+    graph = graph_store.load_graph(conn, variant="validated")
     candidates = _resolve_method_selector(graph, method_selector)
     if not candidates:
         raise ValueError(f"No method matched selector: {method_selector!r}")
@@ -263,10 +264,7 @@ def analyze_method_offline(
     method = candidates[0]
 
     # Reload as raw dicts so we can walk node structure
-    nodes = [
-        json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()
-    ]
-    node_by_id = {n.get("id"): n for n in nodes}
+    node_by_id = graph_store.load_nodes(conn, variant="validated")
     method_node = node_by_id.get(method.id)
     if not method_node:
         raise ValueError(f"Method node {method.id} not found in raw graph")
@@ -350,16 +348,14 @@ def analyze_method_online(
     )
 
     # Re-derive the actual context strings
-    from .graph_io import load_graph_jsonl
+    from . import graph_store
 
-    nodes = [
-        json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()
-    ]
-    node_by_id = {n.get("id"): n for n in nodes}
+    conn = graph_store.connect(graph_path)
+    node_by_id = graph_store.load_nodes(conn, variant="validated")
 
     from .selector import _resolve_method_selector
 
-    graph = load_graph_jsonl(graph_path)
+    graph = graph_store.load_graph(conn, variant="validated")
     candidates = _resolve_method_selector(graph, method_selector)
     method_node = node_by_id.get(candidates[0].id)
 
@@ -437,12 +433,17 @@ def analyze_method_online(
 
 def analyze_graph(graph_path: Path) -> GraphStats:
     """
-    Read graph_validated.jsonl and measure real average token costs across all methods.
+    Read graph.db (validated variant) and measure real average token costs across all methods.
     Use analyze_method_offline() for a specific method instead.
     """
-    nodes = [
-        json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()
-    ]
+    from . import graph_store
+
+    if not graph_path.exists():
+        raise FileNotFoundError(f"Graph not found: {graph_path}")
+
+    conn = graph_store.connect(graph_path)
+    node_by_id = graph_store.load_nodes(conn, variant="validated")
+    nodes = list(node_by_id.values())
 
     method_nodes = [n for n in nodes if n.get("node_type") == "method"]
     class_nodes = [n for n in nodes if n.get("node_type") == "class"]
@@ -615,7 +616,7 @@ def format_stats(stats: GraphStats) -> str:
     lines = [
         "",
         "=" * 70,
-        "Codebase Analysis (from graph_validated.jsonl)",
+        "Codebase Analysis (from graph.db, validated variant)",
         "=" * 70,
         f"Classes:               {stats.num_classes:,}",
         f"Methods:               {stats.num_methods:,}",

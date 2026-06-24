@@ -2,7 +2,7 @@ import time
 from pathlib import Path
 
 import jidra.cli as cli
-from jidra.graph_io import load_graph_jsonl
+from jidra import graph_store
 
 
 def _record_keys(graph) -> dict:
@@ -95,13 +95,13 @@ public class UserService {
 
     cli._index(str(codebase), str(output), _quiet=True)
 
-    main_path = output / "graph.jsonl"
-    incremental_graph = load_graph_jsonl(main_path)
+    main_path = output / "graph.db"
+    incremental_graph = graph_store.load_graph(graph_store.connect(main_path), variant="main")
 
     # Full rebuild into a separate output dir for comparison.
     full_output = tmp_path / "out_full"
     cli._index(str(codebase), str(full_output), _quiet=True, force=True)
-    full_graph = load_graph_jsonl(full_output / "graph.jsonl")
+    full_graph = graph_store.load_graph(graph_store.connect(full_output / "graph.db"), variant="main")
 
     assert _record_keys(incremental_graph) == _record_keys(full_graph)
 
@@ -116,7 +116,7 @@ def test_file_deletion_removes_records(tmp_path):
     files["repository"].unlink()
     cli._index(str(codebase), str(output), _quiet=True)
 
-    graph = load_graph_jsonl(output / "graph.jsonl")
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="main")
     repo_path = str(files["repository"])
     assert all(c.file_path != repo_path for c in graph.classes)
     assert all(m.file_path != repo_path for m in graph.methods)
@@ -144,7 +144,7 @@ public class AuditLog {
 
     cli._index(str(codebase), str(output), _quiet=True)
 
-    graph = load_graph_jsonl(output / "graph.jsonl")
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="main")
     assert any(c.full_name == "com.example.AuditLog" for c in graph.classes)
 
 
@@ -191,7 +191,7 @@ public class UserService {
 
     cli._index(str(codebase), str(output), _quiet=True)
 
-    graph = load_graph_jsonl(output / "graph.jsonl")
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="main")
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch_all = method_by_sig["com.example.UserService#fetchAll()"]
     find_all = method_by_sig["com.example.UserRepository#findAll()"]
@@ -228,7 +228,7 @@ public class UserRepository {
 
     cli._index(str(codebase), str(output), _quiet=True)
 
-    graph = load_graph_jsonl(output / "graph.jsonl")
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="main")
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch = method_by_sig["com.example.UserService#fetch(String)"]
     find = method_by_sig["com.example.UserRepository#find(String)"]

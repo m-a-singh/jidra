@@ -9,7 +9,7 @@ from jidra.cost_calculator import (
     analyze_graph,
 )
 
-GRAPH_PATH = Path(__file__).parent.parent / "jidra/output/graph_validated.jsonl"
+GRAPH_PATH = Path(__file__).parent.parent / "jidra/output/graph.db"
 
 
 # ---------------------------------------------------------------------------
@@ -24,9 +24,9 @@ def calc():
 
 @pytest.fixture
 def real_stats():
-    """GraphStats measured from the real graph_validated.jsonl."""
+    """GraphStats measured from the real graph.db (validated variant)."""
     if not GRAPH_PATH.exists():
-        pytest.skip("graph_validated.jsonl not present")
+        pytest.skip("graph.db not present")
     return analyze_graph(GRAPH_PATH)
 
 
@@ -112,7 +112,7 @@ class TestAnalyzeGraph:
 
     def test_missing_graph_raises(self, calc):
         with pytest.raises(FileNotFoundError):
-            analyze_graph(Path("/nonexistent/graph.jsonl"))
+            analyze_graph(Path("/nonexistent/graph.db"))
 
 
 # ---------------------------------------------------------------------------

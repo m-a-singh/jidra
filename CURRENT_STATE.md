@@ -113,9 +113,9 @@ Repo (any language)
    Java:   tree-sitter AST → call resolution → optional Spring Actuator validation
    TS:     ts-morph Docker sidecar → JSONL records
    Python: AST + symbol table → Pyright validation
--> `exporter.graph_records(...)` + source split
--> `graph.jsonl` and `graph_test.jsonl` (all languages merged, `language` field on each node)
--> loaded by `graph_io.load_graph_jsonl(...)`
+-> `graph_store.save_full_graph(...)` + source split
+-> single `graph.db` SQLite file (all languages merged, `language` field on each row; `main`/`test`/`validated` distinguished by a `variant` column, multi-module repos by a `module_id` column)
+-> loaded by `graph_store.load_graph(...)` / `graph_store.load_nodes(...)`
 -> consumed by `trace_engine` / `context_builder` / `flow_stitcher`
 -> prompt text built in CLI (`_build_prompt` or `_build_flow_prompt`)
 -> optional LLM call in `diagnose` via `JidraLLMClient`
@@ -123,7 +123,7 @@ Repo (any language)
 
 ## 6) What Is Graph-Backed vs LLM-Generated
 - Deterministic graph facts:
-  - methods/classes/callsites/resolved edges loaded from JSONL
+  - methods/classes/callsites/resolved edges loaded from `graph.db` (SQLite)
   - selector resolution, trace traversal, context extraction, flow stitching, MCP graph tools
   - method source retrieval by method id
 - Heuristic labels/ranking:

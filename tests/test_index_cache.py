@@ -97,8 +97,7 @@ def test_same_codebase_different_output_dir_still_builds(tmp_path):
     cli._index(str(codebase), str(output_a), _quiet=True)
     cli._index(str(codebase), str(output_b), _quiet=True)
 
-    assert (output_b / "graph.jsonl").exists()
-    assert (output_b / "graph_test.jsonl").exists()
+    assert (output_b / "graph.db").exists()
 
 
 def test_missing_output_files_forces_rebuild_even_on_cache_hit(tmp_path, capsys):
@@ -106,13 +105,13 @@ def test_missing_output_files_forces_rebuild_even_on_cache_hit(tmp_path, capsys)
     output = tmp_path / "out"
 
     cli._index(str(codebase), str(output), _quiet=True)
-    (output / "graph.jsonl").unlink()
+    (output / "graph.db").unlink()
 
     cli._index(str(codebase), str(output))
     captured = capsys.readouterr()
 
     assert "Graph up to date, skipping rebuild." not in captured.out
-    assert (output / "graph.jsonl").exists()
+    assert (output / "graph.db").exists()
 
 
 def test_force_always_rebuilds(tmp_path, monkeypatch):
