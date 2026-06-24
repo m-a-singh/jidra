@@ -1288,14 +1288,22 @@ def _validate(
     graph_dir = Path(output).resolve() if output else db_path.parent
     save_actuator_cache(graph_dir, beans_response)
 
-    # Determine destination db (defaults to the same db, "validated" variant)
+    # Determine destination db (defaults to the same db). "validated" is a
+    # derived read-time view (see graph_store.load_graph) — there's no
+    # physical "validated" copy to write, so writing to a different output db
+    # means that db needs its own copy of the unfiltered main graph too.
     output_db_path = (
         graph_store.resolve_graph_db_path(Path(output).resolve()) if output else db_path
     )
     output_conn = (
         graph_store.connect(output_db_path) if output_db_path != db_path else conn
     )
-    graph_store.save_full_graph(output_conn, filtered_graph, variant="validated")
+    if output_db_path != db_path:
+        graph_store.save_full_graph(output_conn, graph)
+    if not no_filter:
+        # --no-filter means "report only" — leave confirmed_bean untouched so
+        # the validated view stays unfiltered, matching what was requested.
+        graph_store.mark_confirmed_beans(output_conn, confirmed_beans)
 
     # Prepare report
     report_dict = {
@@ -1403,8 +1411,9 @@ def _process(
 
     # ===== STEP 2: VALIDATE (Java only — filter phantom edges with Spring Actuator) =====
     if not has_java:
-        # No actuator for non-Java repos — the static graph is the final graph
-        graph_store.save_full_graph(conn, graph, variant="validated")
+        # No actuator for non-Java repos, and no Spring annotations either —
+        # the validated view (derived from main + confirmed_bean) is already
+        # identical to main with nothing to mark.
         report_dict = {
             "total_classes": len(graph.classes),
             "edges_before": len(graph.resolved_call_edges),
@@ -1456,7 +1465,7 @@ def _process(
             graph, confirmed_beans, verbose=True
         )
 
-        graph_store.save_full_graph(conn, filtered_graph, variant="validated")
+        graph_store.mark_confirmed_beans(conn, confirmed_beans)
 
         report_path = output_dir / "validation_report.json"
         report_dict = {
@@ -1708,9 +1717,10 @@ def _up() -> None:
     except Exception as e:
         raise SystemExit(f"Graph build failed: {e}") from e
 
-    # `_process()` always populates the "validated" variant in graph.db, regardless
-    # of language (Java gets Spring Actuator filtering; other languages get an
-    # unfiltered copy of the static graph).
+    # `_process()` always populates `main`, and for Java also stamps
+    # `confirmed_bean` on classes — the "validated" view the MCP engine reads
+    # is derived from those at query time (see graph_store.load_graph), so
+    # it's always available regardless of language.
     graph_validated_path = graph_store.resolve_graph_db_path(jidra_dir)
     if not graph_validated_path.exists():
         raise SystemExit(f"Graph build failed: {graph_validated_path} not created")
