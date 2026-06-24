@@ -94,6 +94,10 @@ class ASTExtractor(ast.NodeVisitor):
         self.current_class: ClassEntry | None = None
         self.current_method_id: str | None = None
         self.symbol_table = SymbolTable()
+        # ids of FunctionDef/AsyncFunctionDef nodes already extracted as methods
+        # by visit_ClassDef, so visit_FunctionDef/visit_AsyncFunctionDef don't
+        # re-extract them as phantom module-level functions.
+        self._extracted_method_nodes: set[int] = set()
 
     def visit_Import(self, node: ast.Import):
         """Track import statements with full module mapping."""
@@ -146,7 +150,7 @@ class ASTExtractor(ast.NodeVisitor):
             extends=bases[0] if bases else None,
             implements=bases[1:] if len(bases) > 1 else [],
             imports=self.imports.copy(),
-            stereotypes=self._get_stereotypes(node),
+            stereotypes=self._get_stereotypes(node, bases),
         )
         self.classes.append(class_entry)
 
@@ -171,6 +175,7 @@ class ASTExtractor(ast.NodeVisitor):
             if isinstance(item, ast.FunctionDef) or isinstance(
                 item, ast.AsyncFunctionDef
             ):
+                self._extracted_method_nodes.add(id(item))
                 self._extract_method(item, class_entry)
             elif isinstance(item, ast.AnnAssign):
                 self._extract_field(item, class_entry)
@@ -182,7 +187,7 @@ class ASTExtractor(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef):
         """Extract top-level function."""
         prev_class = self.current_class
-        if self.current_class is None:
+        if self.current_class is None and id(node) not in self._extracted_method_nodes:
             # Wrap in synthetic module class
             self._ensure_module_class()
             self._extract_method(node, self.current_class)
@@ -194,7 +199,7 @@ class ASTExtractor(ast.NodeVisitor):
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         """Extract async function."""
         prev_class = self.current_class
-        if self.current_class is None:
+        if self.current_class is None and id(node) not in self._extracted_method_nodes:
             self._ensure_module_class()
             self._extract_method(node, self.current_class)
         self.generic_visit(node)
@@ -254,6 +259,14 @@ class ASTExtractor(ast.NodeVisitor):
         signature = method_signature(class_entry.full_name, method_name, param_types)
         mid = method_id(signature, self.file_path, node.lineno)
 
+        (
+            annotations,
+            framework_role,
+            is_endpoint,
+            route,
+            http_method,
+        ) = self._py_method_framework_meta(node, class_entry)
+
         method_entry = MethodEntry(
             id=mid,
             class_id=class_entry.id,
@@ -268,11 +281,15 @@ class ASTExtractor(ast.NodeVisitor):
             end_line=node.end_lineno or node.lineno,
             source=self._get_source_lines(node.lineno, node.end_lineno or node.lineno),
             class_context={},
-            annotations=[],
+            annotations=annotations,
             local_variable_types={},
             field_reads=[],
             field_writes=[],
-            is_endpoint=False,
+            is_endpoint=is_endpoint,
+            http_method=http_method,
+            route=route,
+            framework_role=framework_role,
+            language="python",
         )
         self.methods.append(method_entry)
 
@@ -410,8 +427,10 @@ class ASTExtractor(ast.NodeVisitor):
             )
             self.classes.append(self.current_class)
 
-    def _get_stereotypes(self, node: ast.ClassDef) -> list[str]:
-        """Detect stereotypes from decorators."""
+    def _get_stereotypes(
+        self, node: ast.ClassDef, bases: list[str] | None = None
+    ) -> list[str]:
+        """Detect stereotypes from decorators and base classes."""
         stereotypes = []
         for decorator in node.decorator_list:
             dec_name = ""
@@ -425,7 +444,84 @@ class ASTExtractor(ast.NodeVisitor):
             if "dataclass" in dec_name.lower():
                 stereotypes.append("dataclass")
 
+        base_names = bases or []
+        # Django: `class Foo(models.Model)` / `class Foo(Model)`.
+        if any(b.split(".")[-1] == "Model" for b in base_names):
+            stereotypes.append("django_model")
+        # Django class-based views subclass *View.
+        if any(b.split(".")[-1].endswith("View") for b in base_names):
+            stereotypes.append("django_view")
+
         return stereotypes or ["generic"]
+
+    @staticmethod
+    def _decorator_dotted_name(decorator: ast.expr) -> str:
+        """Return the dotted callable of a decorator, e.g. 'app.route',
+        'router.get'. Handles both `@x.y` and `@x.y(...)` forms."""
+        func = decorator.func if isinstance(decorator, ast.Call) else decorator
+        parts: list[str] = []
+        while isinstance(func, ast.Attribute):
+            parts.append(func.attr)
+            func = func.value
+        if isinstance(func, ast.Name):
+            parts.append(func.id)
+        return ".".join(reversed(parts))
+
+    _HTTP_VERBS = {"get", "post", "put", "patch", "delete", "head", "options"}
+
+    def _py_method_framework_meta(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef, class_entry: ClassEntry
+    ) -> tuple[list[str], str | None, bool, str | None, str | None]:
+        """Inspect a function's decorators (and enclosing class) for web-framework
+        roles. Returns (annotations, framework_role, is_endpoint, route, http_method)."""
+        annotations: list[str] = []
+        framework_role: str | None = None
+        is_endpoint = False
+        route: str | None = None
+        http_method: str | None = None
+
+        for dec in node.decorator_list:
+            dotted = self._decorator_dotted_name(dec)
+            if not dotted:
+                continue
+            annotations.append(dotted)
+            tail = dotted.split(".")[-1]
+            first_arg = None
+            kw_methods = None
+            if isinstance(dec, ast.Call):
+                if dec.args and isinstance(dec.args[0], ast.Constant):
+                    first_arg = dec.args[0].value
+                for kw in dec.keywords:
+                    if kw.arg == "methods" and isinstance(
+                        kw.value, (ast.List, ast.Tuple)
+                    ):
+                        verbs = [
+                            e.value
+                            for e in kw.value.elts
+                            if isinstance(e, ast.Constant)
+                        ]
+                        kw_methods = verbs[0] if verbs else None
+            # Flask / Blueprint: @app.route("/x", methods=["POST"])
+            if tail == "route":
+                framework_role = "flask_route"
+                is_endpoint = True
+                route = first_arg if isinstance(first_arg, str) else route
+                http_method = (kw_methods or "GET").upper()
+            # FastAPI / APIRouter: @router.get("/x"), @app.post("/x")
+            elif tail in self._HTTP_VERBS:
+                framework_role = "fastapi_route"
+                is_endpoint = True
+                route = first_arg if isinstance(first_arg, str) else route
+                http_method = tail.upper()
+
+        # Django class-based view: get()/post()/... on a *View subclass.
+        if framework_role is None and node.name in self._HTTP_VERBS:
+            if "django_view" in (class_entry.stereotypes or []):
+                framework_role = "django_handler"
+                is_endpoint = True
+                http_method = node.name.upper()
+
+        return annotations, framework_role, is_endpoint, route, http_method
 
     def _get_annotation_name(self, node: ast.expr | None) -> str | None:
         """Extract type name from annotation."""
