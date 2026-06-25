@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .file_filters import apply_filters
+
 EXCLUDED_DIRS = {
     "__pycache__",
     "venv",
@@ -33,4 +35,4 @@ def iter_python_files(root: Path) -> list[Path]:
     for path in root.rglob("*.py"):
         if should_include_dir(path.parent):
             files.append(path)
-    return sorted(files)
+    return sorted(apply_filters(files, root))

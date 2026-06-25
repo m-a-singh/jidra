@@ -26,6 +26,7 @@ from .models import (
     method_id,
     method_signature,
 )
+from .file_filters import apply_filters
 from .parser import make_ts_parser
 
 _SOURCE_GLOBS = ("*.ts", "*.tsx")
@@ -445,6 +446,7 @@ class _FileExtractor:
 
 
 def _iter_ts_files(codebase_root: Path):
+    candidates = []
     for path in codebase_root.rglob("*"):
         if path.suffix not in (".ts", ".tsx"):
             continue
@@ -452,7 +454,8 @@ def _iter_ts_files(codebase_root: Path):
             continue
         if _IGNORE_DIRS & set(path.parts):
             continue
-        yield path
+        candidates.append(path)
+    yield from apply_filters(candidates, codebase_root)
 
 
 def build_ts_graph_treesitter(
