@@ -42,6 +42,33 @@ This project is intentionally focused and graph-driven.
 
 Same cost today at Sonnet pricing because output tokens dominate — but 606k fewer input tokens per query. At Opus pricing ($15/M input vs $3/M) that gap is $9.09 saved per query.
 
+## Screenshots
+
+`jidra up` is the one-command setup flow — prompts, a live spinner while parsing, and a styled summary panel when it's done:
+
+<p align="center">
+  <img src="docs/assets/jidra-up-full-run.png" alt="jidra up — full run: banner, prompts, pipeline progress, and ready panel" width="800">
+</p>
+
+Live progress while indexing is in flight:
+
+<p align="center">
+  <img src="docs/assets/jidra-up-live-progress.png" alt="jidra up — live parsing spinner" width="800">
+</p>
+
+`jidra up` writes its output (graph + visualization) under `jidra/output/<repo-slug>-<branch>/`, never into the target repo:
+
+<p align="center">
+  <img src="docs/assets/jidra-output-directory-structure.png" alt="jidra output directory structure" width="400">
+</p>
+
+The generated `graph_visualization.html` — interactive graph, Graphviz DOT, and JSON export tabs:
+
+<p align="center">
+  <img src="docs/assets/graph-visualization-overview.png" alt="Interactive graph visualization overview" width="800">
+  <img src="docs/assets/graph-visualization-json-export.png" alt="Graph visualization JSON export tab" width="800">
+</p>
+
 ## What JIDRA Does
 
 - **Indexes** Scala, Java, TypeScript, Python, and Go source into deterministic call graphs
