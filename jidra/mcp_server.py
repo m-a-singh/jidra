@@ -256,9 +256,165 @@ def analyze_stack_trace(
     return _maybe_add_stale_hint(result, graph_dir)
 
 
-def run_mcp_server(
-    default_graph_path: str | None = None, codebase_path: str | None = None
-) -> None:
+def _resolve_graph_dir(resolved_graph: str) -> Path:
+    p = Path(resolved_graph)
+    return p if p.is_dir() else p.parent
+
+
+def dispatch_tool(
+    name: str,
+    params: dict | None,
+    *,
+    default_graph_path: str | None,
+    codebase_path: str | None,
+) -> dict:
+    """Single source of truth for every JIDRA MCP tool's behavior.
+
+    Used directly by ``direct`` mode and by the daemon (Phase 5); the proxy
+    forwards tool calls here over a socket. Returns a plain dict and raises
+    KeyError only for an unknown tool name.
+    """
+    p = params or {}
+    graph_path = p.get("graph_path") or default_graph_path or DEFAULT_MAIN_GRAPH
+    graph_dir = _resolve_graph_dir(graph_path)
+
+    def engine():
+        return get_engine(graph_path)
+
+    if name == "jidra_get_method_context":
+        _log_session_call(codebase_path, name, p.get("method"))
+        return _maybe_add_stale_hint(
+            engine().get_method_context(
+                method=p["method"], max_chars=p.get("max_chars")
+            ),
+            graph_dir,
+        )
+    if name == "jidra_get_flow":
+        _log_session_call(codebase_path, name, p.get("method"))
+        return _maybe_add_stale_hint(
+            engine().get_flow(
+                method=p["method"], depth=p.get("depth"), top_n=p.get("top_n")
+            ),
+            graph_dir,
+        )
+    if name == "jidra_get_agent_flow":
+        _log_session_call(codebase_path, name, p.get("method"))
+        return _maybe_add_stale_hint(
+            engine().get_agent_flow(
+                method=p["method"], depth=p.get("depth"), top_n=p.get("top_n")
+            ),
+            graph_dir,
+        )
+    if name == "jidra_get_method_source":
+        _log_session_call(codebase_path, name, p.get("method"))
+        return _maybe_add_stale_hint(
+            engine().get_method_source(method=p["method"]), graph_dir
+        )
+    if name == "jidra_get_call_chain":
+        _log_session_call(codebase_path, name, p.get("from_method"))
+        return _maybe_add_stale_hint(
+            engine().get_call_chain(
+                from_method=p["from_method"],
+                to_method=p["to_method"],
+                max_depth=p.get("max_depth", 6),
+            ),
+            graph_dir,
+        )
+    if name == "jidra_search":
+        _log_session_call(codebase_path, name, p.get("query"))
+        return _maybe_add_stale_hint(
+            engine().search(
+                query=p["query"],
+                limit=p.get("limit", 20),
+                language=p.get("language"),
+            ),
+            graph_dir,
+        )
+    if name == "jidra_explore":
+        _log_session_call(codebase_path, name, p.get("query"))
+        return _maybe_add_stale_hint(
+            engine().explore(query=p["query"], top_n=p.get("top_n", 10)), graph_dir
+        )
+    if name == "jidra_get_file_dependents":
+        _log_session_call(codebase_path, name, p.get("file_path"))
+        return _maybe_add_stale_hint(
+            engine().get_file_dependents(p["file_path"]), graph_dir
+        )
+    if name == "jidra_get_file_dependencies":
+        _log_session_call(codebase_path, name, p.get("file_path"))
+        return _maybe_add_stale_hint(
+            engine().get_file_dependencies(p["file_path"]), graph_dir
+        )
+    if name == "jidra_get_endpoints":
+        _log_session_call(codebase_path, name)
+        return _maybe_add_stale_hint(
+            engine().get_endpoints(framework=p.get("framework")), graph_dir
+        )
+    if name == "jidra_get_components":
+        _log_session_call(codebase_path, name)
+        return _maybe_add_stale_hint(
+            engine().get_components(kind=p.get("kind")), graph_dir
+        )
+    if name == "jidra_get_framework_summary":
+        _log_session_call(codebase_path, name)
+        return _maybe_add_stale_hint(engine().get_framework_summary(), graph_dir)
+    if name == "jidra_analyze_stack_trace":
+        _log_session_call(codebase_path, name)
+        return analyze_stack_trace(
+            stack_trace=p["stack_trace"],
+            graph_path=graph_path,
+            depth=p.get("depth", 6),
+            max_nodes=p.get("max_nodes", 80),
+            include_utility=p.get("include_utility", False),
+        )
+    if name == "jidra_graph_health":
+        _log_session_call(codebase_path, name)
+        return graph_health(graph_path=graph_path)
+    if name == "jidra_check_staleness":
+        _log_session_call(codebase_path, name)
+        return check_staleness(
+            graph_path=p.get("graph_path"), codebase=p.get("codebase")
+        )
+    if name == "jidra_reindex":
+        _log_session_call(codebase_path, name)
+        return jidra_reindex_impl(
+            graph_path=p.get("graph_path"),
+            codebase=p.get("codebase"),
+            changed_files=p.get("changed_files"),
+        )
+    raise KeyError(f"unknown tool: {name}")
+
+
+# Tool names exposed by the server, for the daemon's tools/list reply.
+TOOL_NAMES = [
+    "jidra_get_method_context",
+    "jidra_get_flow",
+    "jidra_get_agent_flow",
+    "jidra_get_method_source",
+    "jidra_get_call_chain",
+    "jidra_search",
+    "jidra_explore",
+    "jidra_get_file_dependents",
+    "jidra_get_file_dependencies",
+    "jidra_get_endpoints",
+    "jidra_get_components",
+    "jidra_get_framework_summary",
+    "jidra_analyze_stack_trace",
+    "jidra_graph_health",
+    "jidra_check_staleness",
+    "jidra_reindex",
+]
+
+
+def build_mcp(
+    default_graph_path: str | None = None,
+    codebase_path: str | None = None,
+    invoke=None,
+):
+    """Build the FastMCP server. `invoke(name, params) -> dict` does the work:
+    in ``direct`` mode it dispatches locally; in ``proxy`` mode it forwards to
+    the daemon over a socket. The tool surface (names, signatures, docstrings)
+    is identical either way."""
     try:
         from mcp.server.fastmcp import FastMCP
     except Exception as exc:  # pragma: no cover - runtime dependency gate
@@ -267,63 +423,68 @@ def run_mcp_server(
         ) from exc
 
     default_path = default_graph_path or DEFAULT_MAIN_GRAPH
+    if invoke is None:
+
+        def invoke(name, p):
+            return dispatch_tool(
+                name,
+                p,
+                default_graph_path=default_path,
+                codebase_path=codebase_path,
+            )
+
     mcp = FastMCP("JIDRA MCP")
 
     @mcp.tool()
     def jidra_get_method_context(
         method: str,
         graph_path: str | None = None,
-        max_chars: int = 12000,
+        max_chars: int | None = None,
     ) -> dict:
-        """Query a method or class from the local code graph. Returns the method source, call edges, callers, and class hierarchy."""
-        _log_session_call(codebase_path, "jidra_get_method_context", method)
-        resolved_graph = graph_path or default_path
-        graph_dir = (
-            Path(resolved_graph)
-            if Path(resolved_graph).is_dir()
-            else Path(resolved_graph).parent
+        """Query a method or class from the local code graph. Returns the method source, call edges, callers, and class hierarchy.
+        Output size auto-scales to the graph size (budget_tier in the response); pass max_chars to override."""
+        return invoke(
+            "jidra_get_method_context",
+            {"method": method, "graph_path": graph_path, "max_chars": max_chars},
         )
-        engine = get_engine(resolved_graph)
-        result = engine.get_method_context(method=method, max_chars=max_chars)
-        return _maybe_add_stale_hint(result, graph_dir)
 
     @mcp.tool()
     def jidra_get_flow(
         method: str,
         graph_path: str | None = None,
-        depth: int = 4,
-        top_n: int = 4,
+        depth: int | None = None,
+        top_n: int | None = None,
     ) -> dict:
-        """Get ranked downstream call graph for a method from the local code graph."""
-        _log_session_call(codebase_path, "jidra_get_flow", method)
-        resolved_graph = graph_path or default_path
-        graph_dir = (
-            Path(resolved_graph)
-            if Path(resolved_graph).is_dir()
-            else Path(resolved_graph).parent
+        """Get ranked downstream call graph for a method from the local code graph.
+        depth/top_n default to the graph's budget tier when omitted."""
+        return invoke(
+            "jidra_get_flow",
+            {
+                "method": method,
+                "graph_path": graph_path,
+                "depth": depth,
+                "top_n": top_n,
+            },
         )
-        engine = get_engine(resolved_graph)
-        result = engine.get_flow(method=method, depth=depth, top_n=top_n)
-        return _maybe_add_stale_hint(result, graph_dir)
 
     @mcp.tool()
     def jidra_get_agent_flow(
         method: str,
         graph_path: str | None = None,
-        depth: int = 4,
-        top_n: int = 4,
+        depth: int | None = None,
+        top_n: int | None = None,
     ) -> dict:
-        """Get downstream call graph for a method from the local code graph."""
-        _log_session_call(codebase_path, "jidra_get_agent_flow", method)
-        resolved_graph = graph_path or default_path
-        graph_dir = (
-            Path(resolved_graph)
-            if Path(resolved_graph).is_dir()
-            else Path(resolved_graph).parent
+        """Get downstream call graph for a method from the local code graph.
+        depth/top_n default to the graph's budget tier when omitted."""
+        return invoke(
+            "jidra_get_agent_flow",
+            {
+                "method": method,
+                "graph_path": graph_path,
+                "depth": depth,
+                "top_n": top_n,
+            },
         )
-        engine = get_engine(resolved_graph)
-        result = engine.get_agent_flow(method=method, depth=depth, top_n=top_n)
-        return _maybe_add_stale_hint(result, graph_dir)
 
     @mcp.tool()
     def jidra_get_method_source(
@@ -333,16 +494,9 @@ def run_mcp_server(
         """TRIGGER: any request to see the implementation of a specific method or function. Call this BEFORE opening a file.
         Returns the source of just that method — no need to find or read the whole file.
         If selector returns suggestions, pick the best match and retry immediately."""
-        _log_session_call(codebase_path, "jidra_get_method_source", method)
-        resolved_graph = graph_path or default_path
-        graph_dir = (
-            Path(resolved_graph)
-            if Path(resolved_graph).is_dir()
-            else Path(resolved_graph).parent
+        return invoke(
+            "jidra_get_method_source", {"method": method, "graph_path": graph_path}
         )
-        engine = get_engine(resolved_graph)
-        result = engine.get_method_source(method=method)
-        return _maybe_add_stale_hint(result, graph_dir)
 
     @mcp.tool()
     def jidra_get_call_chain(
@@ -352,18 +506,105 @@ def run_mcp_server(
         max_depth: int = 6,
     ) -> dict:
         """Find the call chain between two methods in the local code graph."""
-        _log_session_call(codebase_path, "jidra_get_call_chain", from_method)
-        resolved_graph = graph_path or default_path
-        graph_dir = (
-            Path(resolved_graph)
-            if Path(resolved_graph).is_dir()
-            else Path(resolved_graph).parent
+        return invoke(
+            "jidra_get_call_chain",
+            {
+                "from_method": from_method,
+                "to_method": to_method,
+                "graph_path": graph_path,
+                "max_depth": max_depth,
+            },
         )
-        engine = get_engine(resolved_graph)
-        result = engine.get_call_chain(
-            from_method=from_method, to_method=to_method, max_depth=max_depth
+
+    @mcp.tool()
+    def jidra_search(
+        query: str,
+        graph_path: str | None = None,
+        limit: int = 20,
+        language: str | None = None,
+    ) -> dict:
+        """Keyword/full-text search over method names, signatures, and source in
+        the local code graph. Use this when you DON'T know the exact method name —
+        e.g. jidra_search("token validation"). Returns ranked method hits; follow
+        up with jidra_get_method_context on a hit. Optionally filter by language
+        (java, python, typescript, ...)."""
+        return invoke(
+            "jidra_search",
+            {
+                "query": query,
+                "graph_path": graph_path,
+                "limit": limit,
+                "language": language,
+            },
         )
-        return _maybe_add_stale_hint(result, graph_dir)
+
+    @mcp.tool()
+    def jidra_explore(
+        query: str,
+        graph_path: str | None = None,
+        top_n: int = 10,
+    ) -> dict:
+        """Natural-language exploration of the codebase. Tokenizes the query
+        (handles CamelCase/snake_case), searches the graph, ranks results by
+        relevance, and attaches class/endpoint context. Use this as the FIRST
+        step when starting from a vague description rather than a known symbol."""
+        return invoke(
+            "jidra_explore", {"query": query, "graph_path": graph_path, "top_n": top_n}
+        )
+
+    @mcp.tool()
+    def jidra_get_file_dependents(
+        file_path: str,
+        graph_path: str | None = None,
+    ) -> dict:
+        """Blast radius: which files would break if you change `file_path`.
+        Returns caller files ranked by number of call sites (most-coupled first)
+        — the impact-analysis question to ask BEFORE refactoring a file."""
+        return invoke(
+            "jidra_get_file_dependents",
+            {"file_path": file_path, "graph_path": graph_path},
+        )
+
+    @mcp.tool()
+    def jidra_get_file_dependencies(
+        file_path: str,
+        graph_path: str | None = None,
+    ) -> dict:
+        """Forward dependencies: which files `file_path` depends on, via both
+        resolved call edges and class inheritance (extends/implements)."""
+        return invoke(
+            "jidra_get_file_dependencies",
+            {"file_path": file_path, "graph_path": graph_path},
+        )
+
+    @mcp.tool()
+    def jidra_get_endpoints(
+        framework: str | None = None,
+        graph_path: str | None = None,
+    ) -> dict:
+        """List all HTTP endpoints in the codebase (Spring, NestJS, Flask,
+        FastAPI, Django) with method, route, and framework role. Optionally
+        filter by framework (e.g. "flask", "fastapi", "spring", "typescript")."""
+        return invoke(
+            "jidra_get_endpoints", {"framework": framework, "graph_path": graph_path}
+        )
+
+    @mcp.tool()
+    def jidra_get_components(
+        kind: str | None = None,
+        graph_path: str | None = None,
+    ) -> dict:
+        """List UI/framework components and hooks (React, Vue, Angular, NestJS).
+        Optionally filter by kind substring (e.g. "react", "angular", "hook")."""
+        return invoke("jidra_get_components", {"kind": kind, "graph_path": graph_path})
+
+    @mcp.tool()
+    def jidra_get_framework_summary(
+        graph_path: str | None = None,
+    ) -> dict:
+        """Discovery overview: counts of framework roles, class stereotypes, and
+        languages in the graph. A good first call to understand a new codebase."""
+        return invoke("jidra_get_framework_summary", {"graph_path": graph_path})
 
     @mcp.tool()
     def jidra_analyze_stack_trace(
@@ -374,13 +615,15 @@ def run_mcp_server(
         include_utility: bool = False,
     ) -> dict:
         """Analyze a stack trace against the local code graph to find debug locations."""
-        _log_session_call(codebase_path, "jidra_analyze_stack_trace")
-        return analyze_stack_trace(
-            stack_trace=stack_trace,
-            graph_path=graph_path or default_path,
-            depth=depth,
-            max_nodes=max_nodes,
-            include_utility=include_utility,
+        return invoke(
+            "jidra_analyze_stack_trace",
+            {
+                "stack_trace": stack_trace,
+                "graph_path": graph_path,
+                "depth": depth,
+                "max_nodes": max_nodes,
+                "include_utility": include_utility,
+            },
         )
 
     @mcp.tool()
@@ -388,8 +631,7 @@ def run_mcp_server(
         graph_path: str | None = None,
     ) -> dict:
         """Resolved/unresolved/external callsite breakdown for the local code graph."""
-        _log_session_call(codebase_path, "jidra_graph_health")
-        return graph_health(graph_path=graph_path or default_path)
+        return invoke("jidra_graph_health", {"graph_path": graph_path})
 
     @mcp.tool()
     def jidra_check_staleness(
@@ -397,8 +639,9 @@ def run_mcp_server(
         codebase: str | None = None,
     ) -> dict:
         """Check if the local code graph is stale compared to source files."""
-        _log_session_call(codebase_path, "jidra_check_staleness")
-        return check_staleness(graph_path=graph_path, codebase=codebase)
+        return invoke(
+            "jidra_check_staleness", {"graph_path": graph_path, "codebase": codebase}
+        )
 
     @mcp.tool()
     def jidra_reindex(
@@ -407,11 +650,26 @@ def run_mcp_server(
         changed_files: list[str] | None = None,
     ) -> dict:
         """Update the local code graph after file changes."""
-        _log_session_call(codebase_path, "jidra_reindex")
-        return jidra_reindex_impl(
-            graph_path=graph_path, codebase=codebase, changed_files=changed_files
+        return invoke(
+            "jidra_reindex",
+            {
+                "graph_path": graph_path,
+                "codebase": codebase,
+                "changed_files": changed_files,
+            },
         )
 
+    return mcp
+
+
+def run_mcp_server(
+    default_graph_path: str | None = None,
+    codebase_path: str | None = None,
+    invoke=None,
+) -> None:
+    """Run the JIDRA MCP server over stdio (``direct`` mode, or ``proxy`` when an
+    `invoke` forwarder is supplied)."""
+    mcp = build_mcp(default_graph_path, codebase_path, invoke)
     mcp.run(transport="stdio")
 
 
@@ -421,7 +679,40 @@ def main() -> None:
     parser.add_argument(
         "--codebase", default=None, help="Path to codebase root (for reindex tool)"
     )
+    parser.add_argument(
+        "--mode",
+        choices=["direct", "proxy", "daemon"],
+        default="direct",
+        help=(
+            "direct: load the graph in-process (default, fallback, Windows). "
+            "proxy: thin stdio<->socket bridge to a shared daemon. "
+            "daemon: run the detached shared-graph server."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.mode == "daemon":
+        from .daemon import JidraDaemon
+
+        JidraDaemon(graph_path=args.graph, codebase_path=args.codebase).start()
+        return
+
+    if args.mode == "proxy":
+        from .proxy import JidraProxy
+
+        proxy = JidraProxy(graph_path=args.graph, codebase_path=args.codebase)
+        # Unix sockets aren't available everywhere (e.g. Windows) — degrade to
+        # in-process direct mode rather than failing the MCP handshake.
+        if not proxy.available():
+            run_mcp_server(default_graph_path=args.graph, codebase_path=args.codebase)
+            return
+        run_mcp_server(
+            default_graph_path=args.graph,
+            codebase_path=args.codebase,
+            invoke=proxy.call,
+        )
+        return
+
     run_mcp_server(default_graph_path=args.graph, codebase_path=args.codebase)
 
 

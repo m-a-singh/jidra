@@ -315,7 +315,11 @@ def _is_noisy_unresolved_lambda_call(call: str, reason: str, receiver) -> bool:
 
 
 def build_method_context(
-    graph, method_id: str, max_chars: int = 12000, language: str | None = None
+    graph,
+    method_id: str,
+    max_chars: int = 12000,
+    language: str | None = None,
+    max_source_lines: int | None = None,
 ) -> dict:
     method = next((m for m in graph.methods if m.id == method_id), None)
     if not method:
@@ -348,11 +352,29 @@ def build_method_context(
         "referenced_fields": sorted(set(method.field_reads + method.field_writes)),
         "relevant_imports": (class_entry.imports[:20] if class_entry else []),
     }
+    # Line-based cap (budget tier) runs first so even a short-but-tall method is
+    # windowed; the char-based cap below then guards total payload size.
+    if max_source_lines is not None:
+        ctx["method_source"] = _truncate_source_lines(
+            method.source or "", max_source_lines
+        )
     text = str(ctx)
     if len(text) > max_chars:
         keep = max(300, max_chars // 3)
-        ctx["method_source"] = _truncate_method_source(method.source or "", keep)
+        ctx["method_source"] = _truncate_method_source(ctx["method_source"] or "", keep)
     return ctx
+
+
+def _truncate_source_lines(source: str, max_lines: int) -> str:
+    """Window source to at most `max_lines` lines: head + tail with a marker."""
+    lines = source.splitlines()
+    if len(lines) <= max_lines:
+        return source
+    head_n = max(1, max_lines - 3)
+    omitted = len(lines) - head_n - 3
+    return "\n".join(
+        lines[:head_n] + [f"... [{omitted} lines omitted] ..."] + lines[-3:]
+    )
 
 
 def _truncate_method_source(source: str, keep: int) -> str:

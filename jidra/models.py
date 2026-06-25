@@ -9,6 +9,55 @@ def _stable_id(value: str) -> str:
     return sha1(value.encode("utf-8")).hexdigest()[:16]
 
 
+# Phase 4: extended class stereotype taxonomy carried in ClassEntry.stereotypes.
+# Extractors classify classes into these semantic roles so queries like "all
+# HTTP endpoints" or "all React hooks" become first-class instead of string
+# matching on raw annotations.
+STEREOTYPE_VALUES = {
+    # Spring
+    "controller",
+    "rest_controller",
+    "service",
+    "transactional_service",
+    "repository",
+    "component",
+    "configuration",
+    "entity",
+    "event_listener",
+    # React
+    "react_component",
+    "react_hook",
+    "react_context",
+    # Vue
+    "vue_component",
+    "vue_composable",
+    "vue_store",
+    # Angular
+    "angular_component",
+    "angular_service",
+    "angular_module",
+    "angular_guard",
+    # Django / Flask / FastAPI
+    "django_view",
+    "django_model",
+    "flask_route",
+    "fastapi_route",
+    # NestJS (TS, already emitted by the sidecar)
+    "module",
+    # Generic / structural
+    "interface",
+    "enum",
+    "record",
+    "annotation",
+    "dataclass",
+    "dto",
+    "test",
+    "mock",
+    "generic",
+    "unknown",
+}
+
+
 @dataclass
 class FieldEntry:
     id: str
@@ -63,6 +112,11 @@ class MethodEntry:
     controller_route: str | None = None
     full_route: str | None = None
     language: str = "unknown"
+    # Phase 4: semantic framework role, e.g. "http_handler", "event_listener",
+    # "scheduled_task", "async_task", "hook", "flask_route", "fastapi_route",
+    # "django_handler". None for plain methods. See STEREOTYPE_VALUES for the
+    # class-level taxonomy.
+    framework_role: str | None = None
 
 
 @dataclass
@@ -111,6 +165,20 @@ class Graph:
     callsites: list[CallSite]
     inheritance_edges: list[InheritanceEdge]
     resolved_call_edges: list[ResolvedCallEdge]
+
+
+@dataclass
+class SearchResult:
+    """A single ranked hit from `engine.search` / `engine.explore` (Phase 1)."""
+
+    method_id: str
+    method_name: str
+    signature: str
+    class_full_name: str
+    file_path: str
+    language: str
+    score: float
+    snippet: str = ""
 
 
 def class_id(full_name: str, file_path: str) -> str:
