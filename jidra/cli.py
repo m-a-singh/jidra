@@ -20,6 +20,7 @@ from .extractor import build_graph
 from .flow_doc_agent import FlowDocAgent
 from .flow_stitcher import stitch_flow
 from . import graph_store
+from . import ui
 from .graph_validator import parse_actuator_beans, validate_graph
 from .graph_visualizer import build_graph_data, render_interactive_html
 from .selector import (
@@ -686,6 +687,16 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Force full rebuild, bypassing the fingerprint cache",
     )
+    index_parser.add_argument(
+        "--ts-backend",
+        choices=("auto", "treesitter", "tsmorph"),
+        default="auto",
+        help=(
+            "TypeScript extraction backend. auto/treesitter: in-process "
+            "tree-sitter (no Docker, ~65%% resolution). tsmorph: Docker ts-morph "
+            "sidecar (higher resolution)."
+        ),
+    )
 
     trace_parser = subparsers.add_parser("trace", help="Trace a method call flow")
     trace_parser.add_argument(
@@ -828,6 +839,31 @@ def _parse_args() -> argparse.Namespace:
     mcp_parser.add_argument(
         "--codebase", help="Path to Java codebase (for reindex tool)"
     )
+
+    reindex_parser = subparsers.add_parser(
+        "reindex", help="Incrementally update graph.db after file changes"
+    )
+    reindex_parser.add_argument("--graph", help="Path to graph.db")
+    reindex_parser.add_argument(
+        "--codebase", help="Path to codebase root (defaults to graph's parent)"
+    )
+    reindex_parser.add_argument(
+        "--changed-files",
+        nargs="*",
+        default=None,
+        help="Hint: only these files changed (used by git hooks).",
+    )
+
+    hooks_parser = subparsers.add_parser(
+        "hooks", help="Install/uninstall git hooks that auto-reindex the graph"
+    )
+    hooks_parser.add_argument(
+        "action", choices=("install", "uninstall"), help="install or uninstall"
+    )
+    hooks_parser.add_argument(
+        "--repo", default=None, help="Repository root (defaults to CWD)"
+    )
+    hooks_parser.add_argument("--graph", help="Path to graph.db the hooks reindex")
 
     flow_doc_parser = subparsers.add_parser(
         "flow-doc", help="Generate recursive deterministic flow markdown"
@@ -1129,6 +1165,7 @@ def _index(
     on_progress=None,
     _quiet: bool = False,
     force: bool = False,
+    ts_backend: str = "auto",
 ) -> None:
     from .cache import (
         compute_file_manifest,
@@ -1206,6 +1243,7 @@ def _index(
         on_progress=on_progress,
         changed_files=changed_files,
         previous_graph=previous_graph,
+        ts_backend=ts_backend,
     )
 
     if changed_files is not None and previous_graph is not None and not _quiet:
@@ -1332,13 +1370,6 @@ def _validate(
         print(json.dumps(report_dict, indent=2))
 
 
-def _progress(step: int, total: int, msg: str, newline: bool = False) -> None:
-    pct = int(100 * step / total)
-    bar = "█" * (pct // 5) + "░" * (20 - pct // 5)
-    end = "\n" if newline else "\r"
-    print(f"  [{bar}] {pct:3d}% • {msg}", end=end, flush=True)
-
-
 def _process(
     codebase: str,
     actuator_url: str | None,
@@ -1349,9 +1380,7 @@ def _process(
     build_dir: str | None,
     repo_root: str | None = None,
 ) -> None:
-    print("\n" + "=" * 80)
-    print("JIDRA FULL PROCESSING PIPELINE")
-    print("=" * 80)
+    ui.banner("JIDRA Processing Pipeline")
 
     codebase_path = Path(codebase).resolve()
     output_dir = Path(output).resolve() if output else OUTPUT_DIR
@@ -1367,34 +1396,27 @@ def _process(
     total_steps = 3 if has_java else 2
 
     # ===== STEP 1: INDEX (Build static call graph) =====
-    print(f"\n[1/{total_steps}] INDEXING CODEBASE ({lang_label})")
-    print(f"     Scanning: {codebase_path}")
-    _progress(0, total_steps, "Starting index...")
+    ui.section(1, total_steps, f"Indexing codebase ({lang_label})")
+    ui.info(f"Scanning {codebase_path}")
 
     db_path = graph_store.resolve_graph_db_path(output_dir)
     try:
+        with ui.spinner("Parsing source...") as handle:
 
-        def on_class_parsed(class_count):
-            print(
-                f"     AST:  [████░░░░░░░░░░░░░░░░] ~30% • Parsing {class_count} classes...",
-                end="\r",
-                flush=True,
+            def on_class_parsed(class_count):
+                handle.update(f"Parsing source... {class_count} classes")
+
+            _index(
+                str(codebase_path),
+                str(output_dir),
+                on_progress=on_class_parsed,
+                _quiet=True,
             )
-
-        _index(
-            str(codebase_path),
-            str(output_dir),
-            on_progress=on_class_parsed,
-            _quiet=True,
-        )
         conn = graph_store.connect(db_path)
         graph = graph_store.load_graph(conn, variant="main")
-        print()  # newline after AST progress
-        _progress(
-            1,
-            total_steps,
-            f"✓ Indexed {len(graph.classes)} classes, {len(graph.methods)} methods, {len(graph.resolved_call_edges)} edges",
-            newline=True,
+        ui.success(
+            f"Indexed {len(graph.classes)} classes, {len(graph.methods)} methods, "
+            f"{len(graph.resolved_call_edges)} edges"
         )
     except Exception as e:
         raise SystemExit(f"Indexing failed: {e}")
@@ -1405,9 +1427,9 @@ def _process(
         raw_html = render_interactive_html(raw_graph_data)
         raw_html_path = output_dir / "graph_visualization_raw.html"
         raw_html_path.write_text(raw_html, encoding="utf-8")
-        print(f"     ✓ Raw visualization: {raw_html_path.name}")
+        ui.success(f"Raw visualization: {raw_html_path.name}")
     except Exception as _viz_err:
-        print(f"     ! Raw visualization skipped: {_viz_err}")
+        ui.warn(f"Raw visualization skipped: {_viz_err}")
 
     # ===== STEP 2: VALIDATE (Java only — filter phantom edges with Spring Actuator) =====
     if not has_java:
@@ -1426,46 +1448,46 @@ def _process(
         report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
         filtered_graph = graph
     else:
-        print(f"\n[2/{total_steps}] VALIDATING WITH SPRING ACTUATOR")
-        print(f"     Connecting to: {actuator_url or 'Docker (will auto-build)'}")
-        _progress(1, total_steps, "Fetching actuator beans...")
+        ui.section(2, total_steps, "Validating with Spring Actuator")
+        ui.info(f"Connecting to {actuator_url or 'Docker (will auto-build)'}")
 
         try:
-            if actuator_url:
-                beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
-                confirmed_beans = parse_actuator_beans(beans_response)
-            elif codebase:
-                # Docker-based actuator validation disabled for testing —
-                # falling back to static annotation-based bean detection.
-                # docker_context = (
-                #     Path(repo_root).resolve() if repo_root else codebase_path
-                # )
-                # with run_docker_and_fetch_beans(
-                #     str(docker_context),
-                #     port=port,
-                #     timeout=timeout,
-                #     skip_build=skip_build,
-                #     build_dir=build_dir,
-                # ) as beans_response:
-                #     confirmed_beans = parse_actuator_beans(beans_response)
-                #     # Cache actuator response for future incremental reindex
-                #     from .graph_validator import save_actuator_cache
-                #
-                #     save_actuator_cache(output_dir, beans_response)
-                from .graph_validator import detect_beans_from_graph
+            with ui.spinner("Fetching actuator beans..."):
+                if actuator_url:
+                    beans_response = fetch_beans_from_url(actuator_url, timeout=timeout)
+                    confirmed_beans = parse_actuator_beans(beans_response)
+                elif codebase:
+                    # Docker-based actuator validation disabled for testing —
+                    # falling back to static annotation-based bean detection.
+                    # docker_context = (
+                    #     Path(repo_root).resolve() if repo_root else codebase_path
+                    # )
+                    # with run_docker_and_fetch_beans(
+                    #     str(docker_context),
+                    #     port=port,
+                    #     timeout=timeout,
+                    #     skip_build=skip_build,
+                    #     build_dir=build_dir,
+                    # ) as beans_response:
+                    #     confirmed_beans = parse_actuator_beans(beans_response)
+                    #     # Cache actuator response for future incremental reindex
+                    #     from .graph_validator import save_actuator_cache
+                    #
+                    #     save_actuator_cache(output_dir, beans_response)
+                    from .graph_validator import detect_beans_from_graph
 
-                confirmed_beans = detect_beans_from_graph(graph)
-            else:
-                raise SystemExit("Either --actuator-url or --codebase is required")
+                    confirmed_beans = detect_beans_from_graph(graph)
+                else:
+                    raise SystemExit("Either --actuator-url or --codebase is required")
         except ActuatorError as e:
             raise SystemExit(f"Actuator error: {e}") from e
 
-        _progress(2, total_steps, "Filtering phantom edges...")
-        filtered_graph, validation_report = validate_graph(
-            graph, confirmed_beans, verbose=True
-        )
+        with ui.spinner("Filtering phantom edges..."):
+            filtered_graph, validation_report = validate_graph(
+                graph, confirmed_beans, verbose=True
+            )
 
-        graph_store.mark_confirmed_beans(conn, confirmed_beans)
+            graph_store.mark_confirmed_beans(conn, confirmed_beans)
 
         report_path = output_dir / "validation_report.json"
         report_dict = {
@@ -1483,48 +1505,42 @@ def _process(
             "callsites_upgraded": validation_report.callsites_upgraded,
         }
         report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=True))
-        _progress(
-            2,
-            total_steps,
-            f"✓ Removed {validation_report.edges_removed} phantom edges ({report_dict['edges_removed_pct']:.1f}%)",
-            newline=True,
+        ui.success(
+            f"Removed {validation_report.edges_removed} phantom edges "
+            f"({report_dict['edges_removed_pct']:.1f}%)"
         )
 
     # ===== FINAL STEP: VISUALIZE (Generate interactive HTML) =====
     viz_step = total_steps
-    print(f"\n[{viz_step}/{total_steps}] GENERATING INTERACTIVE VISUALIZATION")
-    print(f"     Output: {output_dir}")
-    _progress(viz_step - 1, total_steps, "Building graph visualization...")
+    ui.section(viz_step, total_steps, "Generating interactive visualization")
+    ui.info(f"Output: {output_dir}")
 
-    graph_data = build_graph_data(filtered_graph, verbose=True)
-    html = render_interactive_html(graph_data)
+    with ui.spinner("Building graph visualization..."):
+        graph_data = build_graph_data(filtered_graph, verbose=True)
+        html = render_interactive_html(graph_data)
 
-    html_path = output_dir / "graph_visualization.html"
-    html_path.write_text(html, encoding="utf-8")
-    _progress(
-        total_steps,
-        total_steps,
-        f"✓ Generated visualization: {html_path.name}",
-        newline=True,
-    )
+        html_path = output_dir / "graph_visualization.html"
+        html_path.write_text(html, encoding="utf-8")
+    ui.success(f"Generated visualization: {html_path.name}")
 
     # ===== SUMMARY =====
-    print("\n" + "=" * 80)
-    print("✓ PIPELINE COMPLETE")
-    print("=" * 80)
-    print(f"\nGenerated files in: {output_dir}")
-    print(f"  • {db_path.name}")
-    print(f"      {len(graph.classes)} classes, {len(graph.methods)} methods")
     edges_pct = 100 - report_dict.get("edges_removed_pct", 0.0)
-    print(
-        f"      {len(filtered_graph.resolved_call_edges)} edges ({edges_pct:.1f}% of original)"
+    ui.kv_panel(
+        "Pipeline complete",
+        [
+            (
+                db_path.name,
+                f"{len(graph.classes)} classes, {len(graph.methods)} methods",
+            ),
+            (
+                "",
+                f"{len(filtered_graph.resolved_call_edges)} edges ({edges_pct:.1f}% of original)",
+            ),
+            (report_path.name, "Validation metrics"),
+            (html_path.name, "Interactive graph (Interactive | Graphviz | JSON)"),
+            ("View graph", f"file://{html_path}"),
+        ],
     )
-    print(f"  • {report_path.name}")
-    print("      Validation metrics")
-    print(f"  • {html_path.name}")
-    print("      Interactive graph with 3 tabs (Interactive | Graphviz | JSON)")
-    print(f"\nView graph: file://{html_path}")
-    print("=" * 80 + "\n")
 
 
 def _prompt(
@@ -1533,24 +1549,9 @@ def _prompt(
     allowed_values: list[str] | None = None,
     optional: bool = False,
 ) -> str:
-    while True:
-        if default:
-            response = input(f"{prompt_text} [{default}]: ").strip()
-        else:
-            response = input(f"{prompt_text}: ").strip()
-
-        if not response:
-            if default:
-                return default
-            if optional:
-                return ""
-            print("Please enter a value.")
-            continue
-
-        if allowed_values and response not in allowed_values:
-            print(f"Invalid option. Choose from: {', '.join(allowed_values)}")
-            continue
-        return response
+    return ui.prompt(
+        prompt_text, default=default, choices=allowed_values, optional=optional
+    )
 
 
 def _prompt_int(prompt_text: str, default: int) -> int:
@@ -1566,17 +1567,7 @@ def _prompt_int(prompt_text: str, default: int) -> int:
 
 
 def _prompt_yn(prompt_text: str, default: bool = False) -> bool:
-    default_str = "Y/n" if default else "y/N"
-    while True:
-        response = input(f"{prompt_text} [{default_str}]: ").strip().lower()
-        if not response:
-            return default
-        if response in ("y", "yes"):
-            return True
-        if response in ("n", "no"):
-            return False
-        print("Please enter 'y' or 'n'.")
-        continue
+    return ui.prompt_yn(prompt_text, default=default)
 
 
 _JIDRA_CLAUDE_MD_MARKER = "<!-- jidra-managed -->"
@@ -1611,7 +1602,7 @@ glob — for any question about code structure, call flows, or method implementa
 
     if not claude_md.exists():
         claude_md.write_text(jidra_section + "\n", encoding="utf-8")
-        print(f"✓ Created CLAUDE.md in {repo}")
+        ui.success(f"Created CLAUDE.md in {repo}")
         return
 
     existing = claude_md.read_text(encoding="utf-8")
@@ -1627,20 +1618,18 @@ glob — for any question about code structure, call flows, or method implementa
             flags=re.DOTALL,
         )
         claude_md.write_text(updated, encoding="utf-8")
-        print("✓ Updated JIDRA section in existing CLAUDE.md")
+        ui.success("Updated JIDRA section in existing CLAUDE.md")
     else:
         # Append our section without touching existing content
         claude_md.write_text(
             existing.rstrip() + "\n\n" + jidra_section + "\n",
             encoding="utf-8",
         )
-        print("✓ Appended JIDRA section to existing CLAUDE.md")
+        ui.success("Appended JIDRA section to existing CLAUDE.md")
 
 
 def _up() -> None:
-    print(f"\n{'=' * 80}")
-    print("JIDRA ONE-COMMAND SETUP")
-    print(f"{'=' * 80}\n")
+    ui.banner("JIDRA", "One-command setup — code graph + MCP server")
 
     repo_path = _prompt("Repository path")
     repo = Path(repo_path).resolve()
@@ -1661,7 +1650,7 @@ def _up() -> None:
     has_python = "python" in langs
     has_go = "go" in langs
 
-    print(f"   Detected languages: {', '.join(langs)}")
+    ui.success(f"Detected languages: {', '.join(langs)}")
 
     if has_java:
         actuator_url = _prompt(
@@ -1685,7 +1674,7 @@ def _up() -> None:
 
     jidra_dir = _repo_output_dir(repo)
     if jidra_dir.exists():
-        print(f"\nFound existing JIDRA output for this repo at: {jidra_dir}")
+        ui.info(f"Found existing JIDRA output for this repo at: {jidra_dir}")
         choice = _prompt(
             "Reuse it (incremental rebuild) or create a new one?",
             "reuse",
@@ -1695,11 +1684,11 @@ def _up() -> None:
             import secrets
 
             jidra_dir = _repo_output_dir(repo, suffix=secrets.token_hex(3))
-            print(f"Creating new output dir: {jidra_dir}")
+            ui.info(f"Creating new output dir: {jidra_dir}")
 
-    print("\n[1/2] BUILDING GRAPH")
-    print(f"      Repository: {repo}")
-    print(f"      Codebase path: {codebase_path}\n")
+    ui.section(1, 2, "Building graph")
+    ui.info(f"Repository: {repo}")
+    ui.info(f"Codebase path: {codebase_path}")
 
     try:
         _process(
@@ -1725,7 +1714,7 @@ def _up() -> None:
     if not graph_validated_path.exists():
         raise SystemExit(f"Graph build failed: {graph_validated_path} not created")
 
-    print("\n[2/2] MCP CONFIGURATION")
+    ui.section(2, 2, "MCP configuration")
 
     settings_path = repo / ".mcp.json"
     _pkg_dir = Path(__file__).resolve().parent.parent
@@ -1738,6 +1727,8 @@ def _up() -> None:
         "args": [
             "-m",
             "jidra.mcp_server",
+            "--mode",
+            "proxy",
             "--graph",
             str(graph_validated_path),
             "--codebase",
@@ -1749,6 +1740,13 @@ def _up() -> None:
             "jidra_get_flow",
             "jidra_get_agent_flow",
             "jidra_get_call_chain",
+            "jidra_search",
+            "jidra_explore",
+            "jidra_get_file_dependents",
+            "jidra_get_file_dependencies",
+            "jidra_get_endpoints",
+            "jidra_get_components",
+            "jidra_get_framework_summary",
             "jidra_analyze_stack_trace",
             "jidra_check_staleness",
             "jidra_reindex",
@@ -1769,13 +1767,15 @@ def _up() -> None:
         settings_path.write_text(
             json.dumps(settings, indent=2, ensure_ascii=True), encoding="utf-8"
         )
-        print(f"\n✓ MCP config written to: {settings_path}\n")
+        ui.success(f"MCP config written to: {settings_path}")
     else:
         server_args = [
             "--",
             _python,
             "-m",
             "jidra.mcp_server",
+            "--mode",
+            "proxy",
             "--graph",
             str(graph_validated_path),
             "--codebase",
@@ -1812,6 +1812,12 @@ def _up() -> None:
             "",
         ]
 
+    ready_rows = [
+        ("Graph", str(graph_validated_path)),
+        ("Config", str(settings_path)),
+        ("Repo", f"Open Claude Code in {repo}"),
+    ]
+
     if watch:
         ext_map = []
         if has_java:
@@ -1824,17 +1830,15 @@ def _up() -> None:
             ext_map += [".go"]
         watch_ext = tuple(ext_map)
         watch_ext_str = " / ".join(f"*{e}" for e in watch_ext)
-        print("[3/3] WATCHING FOR CHANGES\n")
-        print("JIDRA is ready!\n")
-        print(f"   Graph:   {graph_validated_path}")
-        print(f"   Config:  {settings_path}\n")
-        for line in manual_mcp_lines:
-            print(f"   {line}" if line else "")
-        print(f"   Open Claude Code in {repo} and JIDRA tools will be available.")
-        print(
-            f"   Watching {codebase_path}/**/{watch_ext_str} for changes (full re-index on each)...\n"
+        ready_rows.append(
+            (
+                "Watching",
+                f"{codebase_path}/**/{watch_ext_str} (full re-index on each change)",
+            )
         )
-        print("   Press Ctrl+C to stop.\n")
+        ui.kv_panel("JIDRA is ready", ready_rows)
+        _print_manual_mcp(manual_mcp_lines)
+        ui.info("Press Ctrl+C to stop.")
 
         try:
             from watchdog.observers import Observer
@@ -1851,10 +1855,7 @@ def _up() -> None:
 
                     rebuild_in_progress.set()
                     file_name = Path(event.src_path).name
-                    print(
-                        f"\nDetected change: {file_name} — rebuilding graph...",
-                        flush=True,
-                    )
+                    ui.rule(f"Detected change: {file_name}")
                     try:
                         _process(
                             codebase=str(codebase_path),
@@ -1866,9 +1867,9 @@ def _up() -> None:
                             build_dir=build_dir,
                             repo_root=str(repo),
                         )
-                        print("✓ Graph rebuilt successfully\n", flush=True)
+                        ui.success("Graph rebuilt successfully")
                     except Exception as e:
-                        print(f"✗ Rebuild failed: {e}\n", flush=True)
+                        ui.error(f"Rebuild failed: {e}")
                     finally:
                         rebuild_in_progress.clear()
 
@@ -1882,7 +1883,7 @@ def _up() -> None:
             except KeyboardInterrupt:
                 observer.stop()
                 observer.join()
-                print("\nDone.")
+                ui.success("Done.")
         except ImportError:
             raise SystemExit(
                 "watchdog is required for --watch mode but is not installed"
@@ -1890,15 +1891,21 @@ def _up() -> None:
         except Exception as e:
             raise SystemExit(f"Watch mode failed: {e}") from e
     else:
-        print("JIDRA is ready!\n")
-        print(f"   Graph:   {graph_validated_path}")
-        print(f"   Config:  {settings_path}\n")
-        for line in manual_mcp_lines:
-            print(f"   {line}" if line else "")
-        print(f"   Open Claude Code in {repo} and JIDRA tools will be available.\n")
-        print(f"{'=' * 80}\n")
+        ui.kv_panel("JIDRA is ready", ready_rows)
+        _print_manual_mcp(manual_mcp_lines)
 
     _write_claude_md(repo, langs)
+
+
+def _print_manual_mcp(lines: list[str]) -> None:
+    if not lines:
+        return
+    if not ui.RICH:
+        for line in lines:
+            print(f"   {line}" if line else "")
+        return
+    for line in lines:
+        ui.console.print(f"  [dim]{line}[/dim]" if line else "")
 
 
 def _cost_roi(
@@ -2004,7 +2011,12 @@ def main() -> None:
         return
 
     if args.command == "index":
-        _index(args.codebase, args.output, force=args.force)
+        _index(
+            args.codebase,
+            args.output,
+            force=args.force,
+            ts_backend=getattr(args, "ts_backend", "auto"),
+        )
         return
 
     if args.command == "validate":
@@ -2079,6 +2091,32 @@ def main() -> None:
             return
         except RuntimeError as exc:
             raise SystemExit(str(exc))
+
+    if args.command == "reindex":
+        from .reindexer import incremental_reindex
+
+        graph_path = _resolve_graph_db_path(args.graph)
+        codebase = (
+            Path(args.codebase).resolve() if args.codebase else graph_path.parent.parent
+        )
+        summary = incremental_reindex(
+            codebase, graph_path, hint_changed_files=args.changed_files
+        )
+        print(json.dumps(summary, indent=2, default=str))
+        return
+
+    if args.command == "hooks":
+        from .git_hooks import install_hooks, uninstall_hooks
+
+        repo = Path(args.repo).resolve() if args.repo else Path.cwd()
+        graph_path = _resolve_graph_db_path(args.graph)
+        if args.action == "install":
+            written = install_hooks(repo, graph_path)
+            print(f"✓ Installed JIDRA git hooks: {', '.join(written) or '(none)'}")
+        else:
+            removed = uninstall_hooks(repo)
+            print(f"✓ Removed JIDRA blocks from: {', '.join(removed) or '(none)'}")
+        return
 
     if args.command == "flow-doc":
         graph_path = _resolve_graph_db_path(args.graph)

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .file_filters import apply_filters
+
 EXCLUDED_DIRS = {
     # Build output
     "target",
@@ -29,4 +31,4 @@ def iter_scala_files(root: Path) -> list[Path]:
     for path in root.rglob("*.scala"):
         if _should_include_dir(path.parent):
             files.append(path)
-    return sorted(files)
+    return sorted(apply_filters(files, root))

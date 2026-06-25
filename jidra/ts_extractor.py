@@ -158,6 +158,8 @@ def _build_graph_from_records(records: list[dict]) -> Graph:
                     route=r.get("route"),
                     controller_route=r.get("controller_route"),
                     full_route=r.get("full_route"),
+                    language=r.get("language", "typescript"),
+                    framework_role=r.get("framework_role"),
                 )
             )
 
@@ -237,13 +239,36 @@ def build_ts_graph(
     codebase_root: Path,
     on_progress: Callable[[int], None] | None = None,
     timeout: int = 300,
+    backend: str = "auto",
 ) -> Graph:
     """
     Build a JIDRA Graph from a TypeScript/React codebase.
 
-    Spins up an ephemeral node:20-slim Docker container, runs the ts-morph
-    sidecar, and returns a Graph in the same shape as build_graph() for Java.
+    backend:
+      - "auto"/"treesitter" (default): in-process tree-sitter — no Docker needed.
+        Syntax-only, so call resolution is lower quality (~65% vs ts-morph's ~80%).
+      - "tsmorph": the Docker ts-morph sidecar (full TypeScript compiler types).
+    "auto" tries tree-sitter and falls back to the sidecar if the optional
+    `tree-sitter-typescript` dependency isn't installed — zero regression for
+    existing users.
     """
+    if backend in ("auto", "treesitter"):
+        try:
+            from .ts_treesitter import build_ts_graph_treesitter
+
+            return build_ts_graph_treesitter(codebase_root, on_progress)
+        except ImportError:
+            if backend == "treesitter":
+                raise
+            import sys
+
+            print(
+                "jidra: tree-sitter-typescript not installed; falling back to the "
+                "Docker ts-morph sidecar. `pip install tree-sitter-typescript` to "
+                "avoid Docker.",
+                file=sys.stderr,
+            )
+
     if on_progress:
         on_progress(0)
 
