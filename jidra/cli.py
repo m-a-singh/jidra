@@ -1251,6 +1251,20 @@ def _index(
 
     graph_store.save_full_graph(conn, graph)
 
+    from .smithy_extractor import build_smithy_graph
+    from .smithy_bridge import link_operations
+
+    smithy_shapes, smithy_operations = build_smithy_graph(codebase_path)
+    smithy_links = (
+        link_operations(graph.classes, smithy_operations) if smithy_operations else []
+    )
+    graph_store.save_smithy_graph(conn, smithy_shapes, smithy_operations, smithy_links)
+    if smithy_operations and not _quiet:
+        print(
+            f"Smithy: {len(smithy_operations)} operations, "
+            f"{len(smithy_shapes)} shapes, {len(smithy_links)} handler links"
+        )
+
     save_cache(codebase_path, {"fingerprint": fp, "manifest": manifest})
 
     health = compute_graph_health(graph)

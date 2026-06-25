@@ -751,6 +751,69 @@ class JidraEngine:
             "total_call_sites": total_calls,
         }
 
+    def get_operation_graph(self, operation: str) -> dict:
+        """Smithy operation lookup (Phase A/B): the operation's contract
+        (service, http binding, input/output shape ids, errors) plus any real
+        handler class bridged to it via a known codegen toolchain's naming
+        convention (smithy-java, smithy4s). `operation` matches by simple
+        name or full shape id (namespace#Name)."""
+        operations = graph_store.load_smithy_operations(self.conn)
+        match = next(
+            (o for o in operations if o.id == operation or o.name == operation), None
+        )
+        if match is None:
+            return {
+                "operation": operation,
+                "found": False,
+                "note": "No Smithy operation matched that name/shape id.",
+            }
+        links = graph_store.load_smithy_operation_links(
+            self.conn, operation_id=match.id
+        )
+        handlers = [
+            {
+                "class_full_name": link.class_full_name,
+                "file_path": link.file_path,
+                "line": link.line,
+                "language": link.language,
+                "codegen_profile": link.codegen_profile,
+            }
+            for link in links
+        ]
+        return {
+            "operation": match.name,
+            "operation_id": match.id,
+            "found": True,
+            "service": match.service_name,
+            "http_method": match.http_method,
+            "http_uri": match.http_uri,
+            "input_shape_id": match.input_shape_id,
+            "output_shape_id": match.output_shape_id,
+            "errors": match.errors,
+            "handlers": handlers,
+            "handler_count": len(handlers),
+        }
+
+    def list_operations(self, service: str | None = None) -> dict:
+        """All Smithy operations in the graph, optionally filtered to one
+        `service` shape name."""
+        operations = graph_store.load_smithy_operations(self.conn)
+        if service:
+            operations = [o for o in operations if o.service_name == service]
+        return {
+            "count": len(operations),
+            "operations": [
+                {
+                    "name": o.name,
+                    "operation_id": o.id,
+                    "service": o.service_name,
+                    "http_method": o.http_method,
+                    "http_uri": o.http_uri,
+                }
+                for o in operations
+            ],
+        }
+
     def get_endpoints(self, framework: str | None = None) -> dict:
         """All HTTP endpoints in the graph (Spring/NestJS/Flask/FastAPI/Django).
 

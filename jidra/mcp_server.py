@@ -358,6 +358,16 @@ def dispatch_tool(
     if name == "jidra_get_framework_summary":
         _log_session_call(codebase_path, name)
         return _maybe_add_stale_hint(engine().get_framework_summary(), graph_dir)
+    if name == "jidra_get_operation_graph":
+        _log_session_call(codebase_path, name, p.get("operation"))
+        return _maybe_add_stale_hint(
+            engine().get_operation_graph(p["operation"]), graph_dir
+        )
+    if name == "jidra_list_operations":
+        _log_session_call(codebase_path, name)
+        return _maybe_add_stale_hint(
+            engine().list_operations(service=p.get("service")), graph_dir
+        )
     if name == "jidra_analyze_stack_trace":
         _log_session_call(codebase_path, name)
         return analyze_stack_trace(
@@ -399,6 +409,8 @@ TOOL_NAMES = [
     "jidra_get_endpoints",
     "jidra_get_components",
     "jidra_get_framework_summary",
+    "jidra_get_operation_graph",
+    "jidra_list_operations",
     "jidra_analyze_stack_trace",
     "jidra_graph_health",
     "jidra_check_staleness",
@@ -605,6 +617,32 @@ def build_mcp(
         """Discovery overview: counts of framework roles, class stereotypes, and
         languages in the graph. A good first call to understand a new codebase."""
         return invoke("jidra_get_framework_summary", {"graph_path": graph_path})
+
+    @mcp.tool()
+    def jidra_get_operation_graph(
+        operation: str,
+        graph_path: str | None = None,
+    ) -> dict:
+        """Smithy operation lookup: the operation's contract (service, HTTP
+        binding, input/output shape ids, errors) plus the real handler class
+        that implements it, if one was bridged via a known codegen toolchain
+        (smithy-java, smithy4s). `operation` matches by simple name or full
+        shape id (namespace#Name)."""
+        return invoke(
+            "jidra_get_operation_graph", {"operation": operation, "graph_path": graph_path}
+        )
+
+    @mcp.tool()
+    def jidra_list_operations(
+        service: str | None = None,
+        graph_path: str | None = None,
+    ) -> dict:
+        """List all Smithy operations in the graph, optionally filtered to one
+        service shape name. Use this to discover operation names before
+        calling jidra_get_operation_graph."""
+        return invoke(
+            "jidra_list_operations", {"service": service, "graph_path": graph_path}
+        )
 
     @mcp.tool()
     def jidra_analyze_stack_trace(
