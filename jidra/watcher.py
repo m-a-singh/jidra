@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from .file_filters import gitignored_paths, is_too_large
+
 SOURCE_EXTENSIONS = {".java", ".py", ".ts", ".tsx", ".scala", ".go"}
 IGNORE_DIRS = {
     "node_modules",
@@ -101,7 +103,13 @@ class JidraWatcher:
         if p.suffix not in SOURCE_EXTENSIONS:
             return False
         parts = set(p.parts)
-        return not (parts & IGNORE_DIRS)
+        if parts & IGNORE_DIRS:
+            return False
+        if is_too_large(p):
+            return False
+        if gitignored_paths(self.codebase_root, [p]):
+            return False
+        return True
 
     def _on_change(self, path: str) -> None:
         if not path or not self._is_relevant(path):

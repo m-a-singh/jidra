@@ -155,6 +155,13 @@ class JidraDaemon:
         except Exception:
             pass
 
+        # Reconcile any changes made while the daemon was down (e.g. a `git
+        # pull` with no editor open) before serving the first client. Only
+        # when codebase_path is known — reload() guesses a path otherwise,
+        # which risks reindexing the wrong tree and wiping the graph.
+        if self.codebase_path:
+            self.reload()
+
         self._start_watcher()
         threading.Thread(target=self._watchdog, daemon=True).start()
         try:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .file_filters import apply_filters
+
 EXCLUDED_DIRS = {
     "vendor",
     "node_modules",
@@ -23,4 +25,4 @@ def iter_go_files(root: Path) -> list[Path]:
     for path in root.rglob("*.go"):
         if should_include_dir(path.parent):
             files.append(path)
-    return sorted(files)
+    return sorted(apply_filters(files, root))
