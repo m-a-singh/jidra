@@ -86,7 +86,7 @@ def error(msg: str) -> None:
 
 
 @contextmanager
-def spinner(message: str) -> Iterator["_SpinnerHandle"]:
+def spinner(message: str) -> Iterator[_RichSpinnerHandle | _PlainSpinnerHandle]:
     """Animated spinner for indeterminate work. `.update(text)` to change
     the visible message mid-task (e.g. a live file/class counter)."""
     if not RICH:
@@ -156,7 +156,9 @@ def kv_panel(title: str, rows: list[tuple[str, str]]) -> None:
     for label, value in rows:
         table.add_row(label, value)
     console.print(
-        Panel(table, title=f"[{OK}]{title}[/{OK}]", box=box.ROUNDED, border_style="green")
+        Panel(
+            table, title=f"[{OK}]{title}[/{OK}]", box=box.ROUNDED, border_style="green"
+        )
     )
 
 
@@ -164,7 +166,9 @@ def rule(text: str = "") -> None:
     if not RICH:
         print(f"\n{'-' * 80}")
         return
-    console.print(f"[{DIM}]{'─' * 60}[/{DIM}] {text}" if text else f"[{DIM}]{'─' * 60}[/{DIM}]")
+    console.print(
+        f"[{DIM}]{'─' * 60}[/{DIM}] {text}" if text else f"[{DIM}]{'─' * 60}[/{DIM}]"
+    )
 
 
 def prompt(

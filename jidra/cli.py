@@ -1528,7 +1528,10 @@ def _process(
     ui.kv_panel(
         "Pipeline complete",
         [
-            (db_path.name, f"{len(graph.classes)} classes, {len(graph.methods)} methods"),
+            (
+                db_path.name,
+                f"{len(graph.classes)} classes, {len(graph.methods)} methods",
+            ),
             (
                 "",
                 f"{len(filtered_graph.resolved_call_edges)} edges ({edges_pct:.1f}% of original)",
@@ -1546,7 +1549,9 @@ def _prompt(
     allowed_values: list[str] | None = None,
     optional: bool = False,
 ) -> str:
-    return ui.prompt(prompt_text, default=default, choices=allowed_values, optional=optional)
+    return ui.prompt(
+        prompt_text, default=default, choices=allowed_values, optional=optional
+    )
 
 
 def _prompt_int(prompt_text: str, default: int) -> int:
@@ -1826,7 +1831,10 @@ def _up() -> None:
         watch_ext = tuple(ext_map)
         watch_ext_str = " / ".join(f"*{e}" for e in watch_ext)
         ready_rows.append(
-            ("Watching", f"{codebase_path}/**/{watch_ext_str} (full re-index on each change)")
+            (
+                "Watching",
+                f"{codebase_path}/**/{watch_ext_str} (full re-index on each change)",
+            )
         )
         ui.kv_panel("JIDRA is ready", ready_rows)
         _print_manual_mcp(manual_mcp_lines)
