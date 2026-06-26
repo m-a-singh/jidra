@@ -1065,6 +1065,32 @@ def _parse_args() -> argparse.Namespace:
         "--output", help="Write JSON result to this file instead of printing"
     )
 
+    graph_docs_parser = subparsers.add_parser(
+        "graph-docs",
+        help="Generate doc-to-code linkage graph HTML from indexed documents",
+    )
+    graph_docs_parser.add_argument("--graph", help="Path to graph.db")
+    graph_docs_parser.add_argument(
+        "--output", help="Output HTML path (default: <graph_dir>/doc_graph.html)"
+    )
+
+    index_docs_parser = subparsers.add_parser(
+        "index-docs",
+        help="Index documents (MD, PDF, DOCX, PPTX) into the doc store for LLM context",
+    )
+    index_docs_parser.add_argument(
+        "--path", required=True, help="File path or directory to index"
+    )
+    index_docs_parser.add_argument(
+        "--graph", help="Path to graph.db (defaults to jidra output dir)"
+    )
+    index_docs_parser.add_argument(
+        "--extensions",
+        nargs="*",
+        default=[".md", ".mdx", ".txt", ".pdf"],
+        help="File extensions when --path is a directory",
+    )
+
     history_parser = subparsers.add_parser(
         "history",
         help="Show telemetry history (index + reindex events)",
@@ -1797,6 +1823,7 @@ def _up() -> None:
         "alwaysAllow": [
             "jidra_get_method_context",
             "jidra_get_method_source",
+            "jidra_find_callers",
             "jidra_get_flow",
             "jidra_get_agent_flow",
             "jidra_get_call_chain",
@@ -1810,6 +1837,8 @@ def _up() -> None:
             "jidra_analyze_stack_trace",
             "jidra_check_staleness",
             "jidra_reindex",
+            "jidra_get_docs",
+            "jidra_index_docs",
         ],
     }
 
@@ -2029,7 +2058,30 @@ def _up() -> None:
     _write_claude_md(repo, langs)
 
 
-def _render_history_html(index_rows: list[dict], reindex_rows: list[dict]) -> str:
+def _write_doc_graph(output_dir: Path, db_path: Path) -> Path | None:
+    """Generate doc_graph.html alongside the code graph. Returns the path, or
+    None if no documents have been indexed yet (nothing to render)."""
+    try:
+        from .doc_graph_visualizer import build_doc_graph_data, render_doc_graph_html
+        from . import doc_store
+
+        conn = graph_store.connect(db_path)
+        doc_store.migrate(conn)
+        if not doc_store.list_sources(conn):
+            return None
+        graph = graph_store.load_graph(conn, variant="main")
+        data = build_doc_graph_data(conn, graph)
+        html = render_doc_graph_html(data)
+        out = output_dir / "doc_graph.html"
+        out.write_text(html, encoding="utf-8")
+        return out
+    except Exception:
+        return None
+
+
+def _render_history_html(
+    index_rows: list[dict], reindex_rows: list[dict], doc_rows: list[dict] | None = None
+) -> str:
     import datetime
 
     def _fmt_ts(ts_ms: int) -> str:
@@ -2042,12 +2094,16 @@ def _render_history_html(index_rows: list[dict], reindex_rows: list[dict]) -> st
             return f"{ms/1000:.1f}s"
         return f"{ms}ms"
 
+    doc_rows = doc_rows or []
+
     # Summary stats
     total_classes = index_rows[0]["classes"] if index_rows else 0
     total_methods = index_rows[0]["methods"] if index_rows else 0
     total_lines   = index_rows[0]["lines"]   if index_rows else 0
     avg_index_ms  = int(sum(r["elapsed_ms"] for r in index_rows) / len(index_rows)) if index_rows else 0
     total_reindex = len(reindex_rows)
+    total_docs    = sum(1 for r in doc_rows if r["status"] == "ok")
+    total_doc_chunks = sum(r["chunks"] for r in doc_rows if r["status"] == "ok")
     change_type_counts: dict[str, int] = {}
     for r in reindex_rows:
         ct = r["change_type"]
@@ -2060,6 +2116,8 @@ def _render_history_html(index_rows: list[dict], reindex_rows: list[dict]) -> st
             ("Lines of Code",   f"{total_lines:,}",          "#34d399", "≡"),
             ("Avg Index Time",  _fmt_elapsed(avg_index_ms),  "#f59e0b", "⏱"),
             ("Reindex Events",  f"{total_reindex:,}",        "#fb7185", "↻"),
+            ("Docs Indexed",    f"{total_docs:,}",           "#67e8f9", "📄"),
+            ("Doc Chunks",      f"{total_doc_chunks:,}",     "#a78bfa", "⊞"),
         ]
         parts = []
         for label, value, color, icon in cards:
@@ -2136,6 +2194,38 @@ def _render_history_html(index_rows: list[dict], reindex_rows: list[dict]) -> st
             )
         return "\n".join(rows)
 
+    def _doc_table_rows() -> str:
+        if not doc_rows:
+            return "<tr><td colspan='8' class='empty-row'>No documents indexed yet — run `jidra index-docs --path ./specs/`</td></tr>"
+        rows = []
+        for i, r in enumerate(doc_rows):
+            file_short = Path(r["source_path"]).name
+            size_kb = r["file_size_bytes"] / 1024
+            size_str = f"{size_kb:.1f} KB" if size_kb >= 1 else f"{r['file_size_bytes']} B"
+            status_html = (
+                "<span class='badge' style='background:#14291a;color:#34d399'>ok</span>"
+                if r["status"] == "ok"
+                else "<span class='badge' style='background:#3d0e15;color:#fb7185' title='"
+                + (r.get("error") or "")
+                + "'>"
+                + r["status"]
+                + "</span>"
+            )
+            cls = "row-alt" if i % 2 else ""
+            rows.append(
+                f"<tr class='{cls}'>"
+                f"<td class='ts'>{_fmt_ts(r['ts'])}</td>"
+                f"<td><span class='file-name' title='{r['source_path']}'>{file_short}</span></td>"
+                f"<td>{_lang_badge(r['source_type'])}</td>"
+                f"<td class='num'>{r['chunks']}</td>"
+                f"<td class='num'>{r['linked_classes']}</td>"
+                f"<td class='num'>{size_str}</td>"
+                f"<td class='num elapsed'>{_fmt_elapsed(r['elapsed_ms'])}</td>"
+                f"<td>{status_html}</td>"
+                f"</tr>"
+            )
+        return "\n".join(rows)
+
     # Chart data
     idx_rev = list(reversed(index_rows))
     chart_labels  = json.dumps([_fmt_ts(r["ts"]) for r in idx_rev])
@@ -2148,6 +2238,12 @@ def _render_history_html(index_rows: list[dict], reindex_rows: list[dict]) -> st
     ri_elapsed  = json.dumps([r["elapsed_ms"] for r in reindex_rev])
     ct_labels   = json.dumps(list(change_type_counts.keys()))
     ct_values   = json.dumps(list(change_type_counts.values()))
+
+    doc_rev = list(reversed(doc_rows[-30:]))
+    doc_chart_labels  = json.dumps([Path(r["source_path"]).name for r in doc_rev])
+    doc_chart_chunks  = json.dumps([r["chunks"] for r in doc_rev])
+    doc_chart_linked  = json.dumps([r["linked_classes"] for r in doc_rev])
+    doc_chart_elapsed = json.dumps([r["elapsed_ms"] for r in doc_rev])
     ct_colors   = json.dumps(["#64748b","#38bdf8","#f59e0b","#fb7185","#a78bfa"][:len(change_type_counts)])
 
     import datetime as _dt
@@ -2224,7 +2320,7 @@ def _render_history_html(index_rows: list[dict], reindex_rows: list[dict]) -> st
   /* ── Stat cards ── */
   .stats-grid {{
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 16px;
     margin-bottom: 32px;
   }}
@@ -2444,6 +2540,32 @@ def _render_history_html(index_rows: list[dict], reindex_rows: list[dict]) -> st
     </table>
   </div>
 
+  <!-- Doc Index Charts -->
+  <div class="charts-row2" style="margin-top:8px">
+    <div class="chart-card">
+      <h3>Doc Chunks &amp; Linked Classes per File</h3>
+      <canvas id="chartDocChunks"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Doc Indexing Elapsed Time (ms)</h3>
+      <canvas id="chartDocElapsed"></canvas>
+    </div>
+  </div>
+
+  <!-- Doc Index Events Table -->
+  <div class="section-header">
+    <h2>Doc Index Events</h2>
+    <span class="count">{len(doc_rows)}</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Time</th><th>File</th><th>Type</th><th>Chunks</th><th>Linked Classes</th><th>Size</th><th>Elapsed</th><th>Status</th></tr>
+      </thead>
+      <tbody>{_doc_table_rows()}</tbody>
+    </table>
+  </div>
+
 </div><!-- /main -->
 
 <script>
@@ -2485,6 +2607,21 @@ new Chart('chartDoughnut', {{ type: 'doughnut', data: {{
   labels: {ct_labels},
   datasets: [{{ data: {ct_values}, backgroundColor: {ct_colors}, borderWidth: 0, hoverOffset: 6 }}]
 }}, options: {{ ...noScales, cutout: '65%' }} }});
+
+// Doc chunks + linked classes
+new Chart('chartDocChunks', {{ type: 'bar', data: {{
+  labels: {doc_chart_labels},
+  datasets: [
+    {{ label: 'Chunks', data: {doc_chart_chunks}, backgroundColor: '#67e8f933', borderColor: '#67e8f9', borderWidth: 1, borderRadius: 4 }},
+    {{ label: 'Linked Classes', data: {doc_chart_linked}, backgroundColor: '#a78bfa33', borderColor: '#a78bfa', borderWidth: 1, borderRadius: 4 }},
+  ]
+}}, options: {{ ...baseOpts, scales: {{ ...baseOpts.scales, x: {{ ...baseOpts.scales.x, ticks: {{ ...baseOpts.scales.x.ticks, maxRotation: 45 }} }} }} }} }});
+
+// Doc elapsed
+new Chart('chartDocElapsed', {{ type: 'bar', data: {{
+  labels: {doc_chart_labels},
+  datasets: [{{ label: 'Elapsed (ms)', data: {doc_chart_elapsed}, backgroundColor: '#fb718533', borderColor: '#fb7185', borderWidth: 1, borderRadius: 4 }}]
+}}, options: {{ ...baseOpts, scales: {{ ...baseOpts.scales, x: {{ ...baseOpts.scales.x, ticks: {{ ...baseOpts.scales.x.ticks, maxRotation: 45 }} }} }} }} }});
 </script>
 </body>
 </html>"""
@@ -2685,16 +2822,103 @@ def main() -> None:
         except RuntimeError as exc:
             raise SystemExit(str(exc))
 
+    if args.command == "graph-docs":
+        from . import ui
+        from .doc_graph_visualizer import build_doc_graph_data, render_doc_graph_html
+        from . import doc_store
+
+        db_path = _resolve_graph_db_path(args.graph)
+        conn = graph_store.connect(db_path)
+        doc_store.migrate(conn)
+        sources = doc_store.list_sources(conn)
+        if not sources:
+            raise SystemExit("No documents indexed yet. Run `jidra index-docs --path ./specs/` first.")
+        graph = graph_store.load_graph(conn, variant="main")
+        with ui.spinner("Building doc graph..."):
+            data = build_doc_graph_data(conn, graph)
+            html = render_doc_graph_html(data)
+        out = Path(args.output).resolve() if args.output else db_path.parent / "doc_graph.html"
+        out.write_text(html, encoding="utf-8")
+        s = data["stats"]
+        ui.success(f"Doc graph: {s['docs']} docs · {s['chunks']} chunks · {s['classes']} classes · {s['links']} links")
+        print(f"file://{out}")
+        import subprocess, sys as _sys
+
+        try:
+            if _sys.platform == "darwin":
+                subprocess.Popen(["open", str(out)])
+            elif _sys.platform.startswith("linux"):
+                subprocess.Popen(["xdg-open", str(out)])
+        except Exception:
+            pass
+        return
+
+    if args.command == "index-docs":
+        from . import ui
+        from .doc_indexer import index_document, extract_graph_names
+        from . import doc_store
+        from .telemetry import record_doc_index_event
+
+        if args.path.startswith(("http://", "https://")):
+            raise SystemExit("URL indexing is disabled — download the document locally first.")
+
+        db_path = _resolve_graph_db_path(args.graph)
+        conn = graph_store.connect(db_path)
+        doc_store.migrate(conn)
+        graph = graph_store.load_graph(conn, variant="main")
+        class_names, method_names = extract_graph_names(graph)
+
+        p = Path(args.path)
+        exts = tuple(args.extensions)
+        files = sorted(p.rglob("*") if p.is_dir() else [p])
+        files = [
+            f
+            for f in files
+            if f.is_file() and ((p.is_dir() and f.suffix.lower() in exts) or not p.is_dir())
+        ]
+
+        if not files:
+            raise SystemExit(f"No matching files found in {p}")
+
+        ui.banner("JIDRA Doc Indexer")
+        ui.info(f"Source: {p}  |  Files: {len(files)}  |  Graph: {db_path.name}")
+
+        for f in files:
+            size = f.stat().st_size
+            t0 = time.time()
+            try:
+                n_chunks = index_document(conn, str(f), class_names, method_names)
+                elapsed_ms = int((time.time() - t0) * 1000)
+                linked_set: set[str] = set()
+                for row in conn.execute(
+                    "SELECT linked_classes FROM doc_chunks WHERE source_path=?", (str(f),)
+                ).fetchall():
+                    linked_set.update(x for x in row[0].split(",") if x)
+                source_type = f.suffix.lstrip(".").lower() or "file"
+                if source_type in ("md", "mdx", "txt"):
+                    source_type = "markdown"
+                record_doc_index_event(str(f), source_type, n_chunks, len(linked_set), size, elapsed_ms)
+                ui.success(f"{f.name}: {n_chunks} chunks, {len(linked_set)} classes linked ({elapsed_ms}ms)")
+            except Exception as e:
+                record_doc_index_event(str(f), "unknown", 0, 0, size, 0, status="error", error=str(e))
+                ui.error(f"{f.name}: {e}")
+
+        doc_graph_out = _write_doc_graph(db_path.parent, db_path)
+        if doc_graph_out:
+            ui.success(f"Doc graph: file://{doc_graph_out}")
+        return
+
     if args.command == "history":
-        from .telemetry import fetch_index_history, fetch_reindex_history
+        from .telemetry import fetch_index_history, fetch_reindex_history, fetch_doc_index_history
         from . import ui as _ui
 
         repo_filter = args.repo
         index_rows = fetch_index_history(repo=repo_filter, limit=args.limit)
         reindex_rows = fetch_reindex_history(repo=repo_filter, limit=args.limit)
+        doc_rows = fetch_doc_index_history(limit=args.limit * 4)
 
         if args.html is not None:
-            html = _render_history_html(index_rows, reindex_rows)
+            html = _render_history_html(index_rows, reindex_rows, doc_rows)
             out = Path(args.html).resolve() if args.html else (OUTPUT_DIR / "telemetry.html")
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(html, encoding="utf-8")

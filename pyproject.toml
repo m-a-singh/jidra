@@ -28,6 +28,7 @@ jidra = "jidra.cli:main"
 
 [project.optional-dependencies]
 mcp = ["mcp"]
+docs = ["markitdown"]
 test = [
   "pytest>=7.0.0",
   "pytest-cov>=4.0.0",

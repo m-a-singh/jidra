@@ -1,6 +1,11 @@
 ARG SBT_VERSION=1.10.11
 FROM eclipse-temurin:21-jdk-jammy
 
+# rsync is required by entrypoint.sh to sync sources into the persistent
+# /workspace volume while preserving the Zinc incremental-compile cache.
+RUN apt-get update && apt-get install -y --no-install-recommends rsync \
+    && rm -rf /var/lib/apt/lists/*
+
 # Download the sbt launcher jar from Maven Central.
 ARG SBT_VERSION
 RUN curl -fL \

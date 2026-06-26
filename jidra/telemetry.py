@@ -36,6 +36,19 @@ CREATE TABLE IF NOT EXISTS reindex_events (
     lines_deleted       INTEGER NOT NULL DEFAULT 0,
     elapsed_ms          INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS doc_index_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts              INTEGER NOT NULL,
+    source_path     TEXT NOT NULL,
+    source_type     TEXT NOT NULL,
+    chunks          INTEGER NOT NULL DEFAULT 0,
+    linked_classes  INTEGER NOT NULL DEFAULT 0,
+    file_size_bytes INTEGER NOT NULL DEFAULT 0,
+    elapsed_ms      INTEGER NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'ok',
+    error           TEXT
+);
 """
 
 
@@ -200,15 +213,68 @@ def fetch_reindex_history(repo: str | None = None, limit: int = 200) -> list[dic
         return []
 
 
+def record_doc_index_event(
+    source_path: str,
+    source_type: str,
+    chunks: int,
+    linked_classes: int,
+    file_size_bytes: int,
+    elapsed_ms: int,
+    status: str = "ok",
+    error: str | None = None,
+) -> None:
+    try:
+        conn = _connect()
+        conn.execute(
+            """INSERT INTO doc_index_events
+               (ts, source_path, source_type, chunks, linked_classes, file_size_bytes, elapsed_ms, status, error)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                int(time.time() * 1000),
+                source_path,
+                source_type,
+                chunks,
+                linked_classes,
+                file_size_bytes,
+                elapsed_ms,
+                status,
+                error,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        refresh_html()
+    except Exception:
+        pass
+
+
+def fetch_doc_index_history(limit: int = 200) -> list[dict]:
+    try:
+        conn = _connect()
+        cols = [
+            "ts", "source_path", "source_type", "chunks", "linked_classes",
+            "file_size_bytes", "elapsed_ms", "status", "error",
+        ]
+        rows = conn.execute(
+            f"SELECT {', '.join(cols)} FROM doc_index_events ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        conn.close()
+        return [dict(zip(cols, r)) for r in rows]
+    except Exception:
+        return []
+
+
 def refresh_html() -> None:
     """Regenerate telemetry.html next to telemetry.db. Called after every record."""
     try:
         index_rows = fetch_index_history(limit=200)
         reindex_rows = fetch_reindex_history(limit=500)
+        doc_rows = fetch_doc_index_history(limit=200)
         # Lazy import to avoid circular dep — cli imports telemetry, not the other way
         from jidra.cli import _render_history_html
 
-        html = _render_history_html(index_rows, reindex_rows)
+        html = _render_history_html(index_rows, reindex_rows, doc_rows)
         out = _TELEMETRY_DIR / "telemetry.html"
         out.write_text(html, encoding="utf-8")
     except Exception:
