@@ -1100,7 +1100,7 @@ def _parse_args() -> argparse.Namespace:
         "--html",
         nargs="?",
         const="",
-        help="Write HTML report (optional path, defaults to output/telemetry.html)",
+        help="Write HTML report (optional path, defaults to ~/.jidra/telemetry/telemetry.html)",
     )
     history_parser.add_argument(
         "--limit", type=int, default=50, help="Max events to show"
@@ -2973,10 +2973,12 @@ def main() -> None:
 
         if args.html is not None:
             html = _render_history_html(index_rows, reindex_rows, doc_rows)
+            from .telemetry import _TELEMETRY_DIR
+
             out = (
                 Path(args.html).resolve()
                 if args.html
-                else (OUTPUT_DIR / "telemetry.html")
+                else (_TELEMETRY_DIR / "telemetry.html")
             )
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(html, encoding="utf-8")

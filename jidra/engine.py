@@ -233,7 +233,38 @@ class JidraEngine:
             max_chars=max_chars,
             max_source_lines=budget["max_source_lines"],
         )
+        result.update(
+            self._smithy_linkage_for_class(getattr(selected, "class_id", None))
+        )
         return self._with_budget(result)
+
+    def _smithy_linkage_for_class(self, class_id: str | None) -> dict:
+        """Surface whether this class is a known Smithy operation handler.
+
+        Distinguishes "we looked and found no link" (smithy_operation: null,
+        smithy_note explains why) from callers who never call this at all —
+        the dict is always present so agents can tell the two apart."""
+        if not class_id:
+            return {
+                "smithy_operation": None,
+                "smithy_note": "no class context for this method",
+            }
+        links = graph_store.load_smithy_operation_links(self.conn, class_id=class_id)
+        if not links:
+            return {
+                "smithy_operation": None,
+                "smithy_note": "no matching Smithy codegen profile found for this class",
+            }
+        link = links[0]
+        operations = graph_store.load_smithy_operations(self.conn)
+        op = next((o for o in operations if o.id == link.operation_id), None)
+        return {
+            "smithy_operation": op.name if op else link.operation_id,
+            "smithy_operation_id": link.operation_id,
+            "smithy_codegen_profile": link.codegen_profile,
+            "smithy_link_type": link.link_type,
+            "smithy_note": None,
+        }
 
     def get_flow(
         self, method: str, depth: int | None = None, top_n: int | None = None

@@ -4,7 +4,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-_TELEMETRY_DIR = Path(__file__).resolve().parent / "output"
+_TELEMETRY_DIR = Path.home() / ".jidra" / "telemetry"
 _TELEMETRY_DB = _TELEMETRY_DIR / "telemetry.db"
 
 _SCHEMA = """
