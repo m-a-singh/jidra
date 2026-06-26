@@ -1065,6 +1065,21 @@ def _parse_args() -> argparse.Namespace:
         "--output", help="Write JSON result to this file instead of printing"
     )
 
+    history_parser = subparsers.add_parser(
+        "history",
+        help="Show telemetry history (index + reindex events)",
+    )
+    history_parser.add_argument("--repo", help="Filter to a specific repo path")
+    history_parser.add_argument(
+        "--html",
+        nargs="?",
+        const="",
+        help="Write HTML report (optional path, defaults to output/telemetry.html)",
+    )
+    history_parser.add_argument(
+        "--limit", type=int, default=50, help="Max events to show"
+    )
+
     subparsers.add_parser(
         "up",
         help="One-command setup: build graph, write MCP config, optionally watch for changes",
@@ -1238,12 +1253,28 @@ def _index(
                 ]
             changed_files = changed_paths
 
+    # Detect smithy4j generated sources. On full index, run gradle to (re)generate
+    # them. On incremental reindex, reuse whatever was already built — smithy
+    # contracts rarely change so we don't rebuild.
+    extra_java_roots: list[Path] = []
+    from .smithy4j_builder import build_smithy4j_sources, find_smithy4j_modules, _GENERATED_SUBPATH
+
+    if changed_files is None:
+        extra_java_roots = build_smithy4j_sources(codebase_path)
+    else:
+        # Incremental: include already-generated dirs if they exist on disk.
+        for module_dir in find_smithy4j_modules(codebase_path):
+            generated = module_dir / _GENERATED_SUBPATH
+            if generated.exists():
+                extra_java_roots.append(generated)
+
     graph = build_graph(
         codebase_path,
         on_progress=on_progress,
         changed_files=changed_files,
         previous_graph=previous_graph,
         ts_backend=ts_backend,
+        extra_java_roots=extra_java_roots or None,
     )
 
     if changed_files is not None and previous_graph is not None and not _quiet:
@@ -1395,6 +1426,7 @@ def _process(
     repo_root: str | None = None,
 ) -> None:
     ui.banner("JIDRA Processing Pipeline")
+    _pipeline_start = time.time()
 
     codebase_path = Path(codebase).resolve()
     output_dir = Path(output).resolve() if output else OUTPUT_DIR
@@ -1537,6 +1569,15 @@ def _process(
         html_path.write_text(html, encoding="utf-8")
     ui.success(f"Generated visualization: {html_path.name}")
 
+    # ===== TELEMETRY =====
+    try:
+        from .telemetry import record_index_event
+
+        _pipeline_elapsed = int((time.time() - _pipeline_start) * 1000)
+        record_index_event(str(codebase_path), langs, filtered_graph, _pipeline_elapsed)
+    except Exception:
+        pass
+
     # ===== SUMMARY =====
     edges_pct = 100 - report_dict.get("edges_removed_pct", 0.0)
     ui.kv_panel(
@@ -1664,7 +1705,14 @@ def _up() -> None:
     has_python = "python" in langs
     has_go = "go" in langs
 
-    ui.success(f"Detected languages: {', '.join(langs)}")
+    display_langs = list(langs)
+    if has_java:
+        from .smithy4j_builder import find_smithy4j_modules
+
+        if find_smithy4j_modules(repo):
+            display_langs.append("smithy4j")
+
+    ui.success(f"Detected languages: {', '.join(display_langs)}")
 
     if has_java:
         actuator_url = _prompt(
@@ -1689,16 +1737,14 @@ def _up() -> None:
     jidra_dir = _repo_output_dir(repo)
     if jidra_dir.exists():
         ui.info(f"Found existing JIDRA output for this repo at: {jidra_dir}")
-        choice = _prompt(
-            "Reuse it (incremental rebuild) or create a new one?",
-            "reuse",
-            allowed_values=["reuse", "new"],
+        reuse = _prompt_yn(
+            "Reuse existing database? (N = fresh rebuild in same dir)", True
         )
-        if choice == "new":
-            import secrets
-
-            jidra_dir = _repo_output_dir(repo, suffix=secrets.token_hex(3))
-            ui.info(f"Creating new output dir: {jidra_dir}")
+        if not reuse:
+            db_path_existing = graph_store.resolve_graph_db_path(jidra_dir)
+            if db_path_existing.exists():
+                db_path_existing.unlink()
+            ui.info("Existing database deleted — will do a full rebuild.")
 
     ui.section(1, 2, "Building graph")
     ui.info(f"Repository: {repo}")
@@ -1859,6 +1905,32 @@ def _up() -> None:
             from watchdog.events import FileSystemEventHandler
 
             rebuild_in_progress = threading.Event()
+            _viz_timer: threading.Timer | None = None
+            _viz_timer_lock = threading.Lock()
+            VIZ_IDLE_SECS = 300
+
+            db_path = graph_store.resolve_graph_db_path(jidra_dir)
+
+            def _regenerate_viz():
+                try:
+                    conn = graph_store.connect(db_path)
+                    graph = graph_store.load_graph(conn, variant="validated")
+                    graph_data = build_graph_data(graph, verbose=True)
+                    html = render_interactive_html(graph_data)
+                    html_path = jidra_dir / "graph_visualization.html"
+                    html_path.write_text(html, encoding="utf-8")
+                    ui.success(f"Visualization updated: {html_path.name}")
+                except Exception as e:
+                    ui.error(f"Visualization failed: {e}")
+
+            def _schedule_viz():
+                nonlocal _viz_timer
+                with _viz_timer_lock:
+                    if _viz_timer is not None:
+                        _viz_timer.cancel()
+                    _viz_timer = threading.Timer(VIZ_IDLE_SECS, _regenerate_viz)
+                    _viz_timer.daemon = True
+                    _viz_timer.start()
 
             class SourceFileHandler(FileSystemEventHandler):
                 def on_modified(self, event):
@@ -1868,20 +1940,66 @@ def _up() -> None:
                         return
 
                     rebuild_in_progress.set()
-                    file_name = Path(event.src_path).name
+                    src_path = (
+                        event.src_path.decode()
+                        if isinstance(event.src_path, bytes)
+                        else event.src_path
+                    )
+                    file_name = Path(src_path).name
                     ui.rule(f"Detected change: {file_name}")
                     try:
-                        _process(
-                            codebase=str(codebase_path),
-                            actuator_url=actuator_url or None,
-                            port=8080,
-                            timeout=180,
-                            output=str(jidra_dir),
-                            skip_build=skip_build,
-                            build_dir=build_dir,
-                            repo_root=str(repo),
-                        )
-                        ui.success("Graph rebuilt successfully")
+                        from .reindexer import incremental_reindex
+                        from .telemetry import record_reindex_event
+
+                        _t0 = time.time()
+                        try:
+                            summary = incremental_reindex(
+                                codebase_path,
+                                db_path,
+                                hint_changed_files=[src_path],
+                            )
+                            _elapsed = int((time.time() - _t0) * 1000)
+                            change_type = summary.get("change_type", "?")
+                            added = summary.get("added_methods", 0)
+                            removed = summary.get("removed_methods", 0)
+                            ui.success(
+                                f"Graph updated ({change_type}): +{added}/-{removed} methods"
+                                + (
+                                    f" [viz in {VIZ_IDLE_SECS}s]"
+                                    if change_type != "no_change"
+                                    else ""
+                                )
+                            )
+                            record_reindex_event(
+                                str(codebase_path),
+                                src_path,
+                                change_type,
+                                summary,
+                                _elapsed,
+                            )
+                            if change_type != "no_change":
+                                _schedule_viz()
+                        except Exception as reindex_err:
+                            ui.warn(
+                                f"Incremental reindex failed ({reindex_err}), "
+                                "falling back to full rebuild..."
+                            )
+                            _t0 = time.time()
+                            _process(
+                                codebase=str(codebase_path),
+                                actuator_url=actuator_url or None,
+                                port=8080,
+                                timeout=180,
+                                output=str(jidra_dir),
+                                skip_build=skip_build,
+                                build_dir=build_dir,
+                                repo_root=str(repo),
+                            )
+                            _elapsed = int((time.time() - _t0) * 1000)
+                            record_reindex_event(
+                                str(codebase_path), src_path, "full_rebuild", {}, _elapsed
+                            )
+                            ui.success("Full rebuild complete.")
                     except Exception as e:
                         ui.error(f"Rebuild failed: {e}")
                     finally:
@@ -1909,6 +2027,467 @@ def _up() -> None:
         _print_manual_mcp(manual_mcp_lines)
 
     _write_claude_md(repo, langs)
+
+
+def _render_history_html(index_rows: list[dict], reindex_rows: list[dict]) -> str:
+    import datetime
+
+    def _fmt_ts(ts_ms: int) -> str:
+        return datetime.datetime.fromtimestamp(ts_ms / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+    def _fmt_elapsed(ms: int) -> str:
+        if ms >= 60000:
+            return f"{ms/60000:.1f}m"
+        if ms >= 1000:
+            return f"{ms/1000:.1f}s"
+        return f"{ms}ms"
+
+    # Summary stats
+    total_classes = index_rows[0]["classes"] if index_rows else 0
+    total_methods = index_rows[0]["methods"] if index_rows else 0
+    total_lines   = index_rows[0]["lines"]   if index_rows else 0
+    avg_index_ms  = int(sum(r["elapsed_ms"] for r in index_rows) / len(index_rows)) if index_rows else 0
+    total_reindex = len(reindex_rows)
+    change_type_counts: dict[str, int] = {}
+    for r in reindex_rows:
+        ct = r["change_type"]
+        change_type_counts[ct] = change_type_counts.get(ct, 0) + 1
+
+    def _stat_cards() -> str:
+        cards = [
+            ("Classes",         f"{total_classes:,}",        "#38bdf8", "⬡"),
+            ("Methods",         f"{total_methods:,}",        "#a78bfa", "ƒ"),
+            ("Lines of Code",   f"{total_lines:,}",          "#34d399", "≡"),
+            ("Avg Index Time",  _fmt_elapsed(avg_index_ms),  "#f59e0b", "⏱"),
+            ("Reindex Events",  f"{total_reindex:,}",        "#fb7185", "↻"),
+        ]
+        parts = []
+        for label, value, color, icon in cards:
+            parts.append(f"""
+            <div class="stat-card">
+              <div class="stat-icon" style="color:{color}">{icon}</div>
+              <div class="stat-value" style="color:{color}">{value}</div>
+              <div class="stat-label">{label}</div>
+            </div>""")
+        return "".join(parts)
+
+    def _change_type_badge(ct: str) -> str:
+        colors = {
+            "no_change":      ("#1e293b", "#64748b"),
+            "metadata_only":  ("#1e3a5f", "#38bdf8"),
+            "callsite_change":("#3d2e00", "#f59e0b"),
+            "structural":     ("#3d0e15", "#fb7185"),
+            "full_rebuild":   ("#1a1a2e", "#a78bfa"),
+        }
+        bg, fg = colors.get(ct, ("#1e293b", "#94a3b8"))
+        return f"<span class='badge' style='background:{bg};color:{fg}'>{ct}</span>"
+
+    def _lang_badge(lang: str) -> str:
+        colors = {"java": "#f59e0b", "python": "#34d399", "typescript": "#38bdf8", "scala": "#fb7185", "go": "#67e8f9"}
+        color = colors.get(lang, "#94a3b8")
+        return f"<span class='badge' style='background:#1e293b;color:{color};border:1px solid {color}33'>{lang}</span>"
+
+    def _index_table_rows() -> str:
+        if not index_rows:
+            return "<tr><td colspan='7' class='empty-row'>No index events recorded yet</td></tr>"
+        rows = []
+        for i, r in enumerate(index_rows):
+            repo_short = Path(r["repo"]).name
+            langs_html = " ".join(_lang_badge(l) for l in r["languages"].split(",") if l)
+            cls = "row-alt" if i % 2 else ""
+            rows.append(
+                f"<tr class='{cls}'>"
+                f"<td class='ts'>{_fmt_ts(r['ts'])}</td>"
+                f"<td><span class='repo-name' title='{r['repo']}'>{repo_short}</span></td>"
+                f"<td>{langs_html}</td>"
+                f"<td class='num'>{r['classes']:,}</td>"
+                f"<td class='num'>{r['methods']:,}</td>"
+                f"<td class='num'>{r['lines']:,}</td>"
+                f"<td class='num elapsed'>{_fmt_elapsed(r['elapsed_ms'])}</td>"
+                f"</tr>"
+            )
+        return "\n".join(rows)
+
+    def _reindex_table_rows() -> str:
+        if not reindex_rows:
+            return "<tr><td colspan='8' class='empty-row'>No reindex events recorded yet</td></tr>"
+        rows = []
+        for i, r in enumerate(reindex_rows):
+            repo_short = Path(r["repo"]).name
+            file_short = Path(r["changed_file"]).name
+            m_added = r["methods_added"]
+            m_del   = r["methods_deleted"]
+            l_added = r["lines_added"]
+            l_del   = r["lines_deleted"]
+            methods_html = f"<span class='delta-pos'>+{m_added}</span> / <span class='delta-neg'>-{m_del}</span>"
+            lines_html   = f"<span class='delta-pos'>+{l_added}</span> / <span class='delta-neg'>-{l_del}</span>"
+            cls = "row-alt" if i % 2 else ""
+            rows.append(
+                f"<tr class='{cls}'>"
+                f"<td class='ts'>{_fmt_ts(r['ts'])}</td>"
+                f"<td><span class='repo-name' title='{r['repo']}'>{repo_short}</span></td>"
+                f"<td><span class='file-name' title='{r['changed_file']}'>{file_short}</span></td>"
+                f"<td>{_lang_badge(r['language'] or '')}</td>"
+                f"<td>{_change_type_badge(r['change_type'])}</td>"
+                f"<td class='num'>{methods_html}</td>"
+                f"<td class='num'>{lines_html}</td>"
+                f"<td class='num elapsed'>{_fmt_elapsed(r['elapsed_ms'])}</td>"
+                f"</tr>"
+            )
+        return "\n".join(rows)
+
+    # Chart data
+    idx_rev = list(reversed(index_rows))
+    chart_labels  = json.dumps([_fmt_ts(r["ts"]) for r in idx_rev])
+    chart_classes = json.dumps([r["classes"]     for r in idx_rev])
+    chart_methods = json.dumps([r["methods"]     for r in idx_rev])
+    chart_elapsed = json.dumps([r["elapsed_ms"]  for r in idx_rev])
+
+    reindex_rev = list(reversed(reindex_rows[-50:]))  # last 50
+    ri_labels   = json.dumps([Path(r["changed_file"]).name + " " + _fmt_ts(r["ts"]) for r in reindex_rev])
+    ri_elapsed  = json.dumps([r["elapsed_ms"] for r in reindex_rev])
+    ct_labels   = json.dumps(list(change_type_counts.keys()))
+    ct_values   = json.dumps(list(change_type_counts.values()))
+    ct_colors   = json.dumps(["#64748b","#38bdf8","#f59e0b","#fb7185","#a78bfa"][:len(change_type_counts)])
+
+    import datetime as _dt
+    generated_at = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="30">
+<title>JIDRA Telemetry</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  :root {{
+    --bg:        #080d14;
+    --surface:   #0f1923;
+    --surface2:  #162032;
+    --border:    #1e2d3d;
+    --text:      #cdd9e5;
+    --muted:     #4d6173;
+    --accent:    #38bdf8;
+    --purple:    #a78bfa;
+    --green:     #34d399;
+    --amber:     #f59e0b;
+    --red:       #fb7185;
+    --cyan:      #67e8f9;
+  }}
+  body {{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }}
+
+  /* ── Header ── */
+  .header {{
+    background: linear-gradient(135deg, #0d1f35 0%, #080d14 60%);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 40px 24px;
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+  }}
+  .header-title {{ flex: 1; }}
+  .header h1 {{
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }}
+  .header h1 .logo {{ font-size: 1.4rem; }}
+  .header .sub {{
+    color: var(--muted);
+    font-size: 0.82rem;
+    margin-top: 4px;
+    letter-spacing: 0.02em;
+  }}
+  .header .generated {{
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-align: right;
+    line-height: 1.6;
+  }}
+
+  /* ── Layout ── */
+  .main {{ padding: 32px 40px; max-width: 1600px; margin: 0 auto; }}
+
+  /* ── Stat cards ── */
+  .stats-grid {{
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }}
+  .stat-card {{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s;
+  }}
+  .stat-card:hover {{ border-color: #2d4a63; }}
+  .stat-card::before {{
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, currentColor 0%, transparent 60%);
+    opacity: .03;
+  }}
+  .stat-icon {{
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    opacity: .8;
+  }}
+  .stat-value {{
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin-bottom: 6px;
+  }}
+  .stat-label {{
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    font-weight: 500;
+  }}
+
+  /* ── Charts ── */
+  .charts-grid {{
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+    margin-bottom: 32px;
+  }}
+  .charts-row2 {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 32px;
+  }}
+  .chart-card {{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }}
+  .chart-card h3 {{
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 16px;
+  }}
+  .chart-card canvas {{ max-height: 200px; }}
+
+  /* ── Section headers ── */
+  .section-header {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    margin-top: 8px;
+  }}
+  .section-header h2 {{
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    font-weight: 600;
+  }}
+  .section-header .count {{
+    background: var(--surface2);
+    color: var(--muted);
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }}
+
+  /* ── Tables ── */
+  .table-wrap {{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 28px;
+  }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 0.82rem; }}
+  thead th {{
+    background: var(--surface2);
+    color: var(--muted);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    font-weight: 600;
+    padding: 11px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }}
+  td {{
+    padding: 10px 16px;
+    border-bottom: 1px solid #0f1923;
+    vertical-align: middle;
+  }}
+  tr:last-child td {{ border-bottom: none; }}
+  tr.row-alt td {{ background: #0b1520; }}
+  tr:hover td {{ background: #152030 !important; }}
+  .ts {{ color: var(--muted); font-size: 0.78rem; white-space: nowrap; font-variant-numeric: tabular-nums; }}
+  .num {{ font-variant-numeric: tabular-nums; text-align: right; }}
+  .elapsed {{ color: var(--amber); font-weight: 500; }}
+  .repo-name {{
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+  }}
+  .file-name {{ color: var(--cyan); font-size: 0.8rem; font-family: 'SF Mono', 'Fira Code', monospace; }}
+  .badge {{
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    letter-spacing: .02em;
+  }}
+  .delta-pos {{ color: var(--green); font-weight: 600; }}
+  .delta-neg {{ color: var(--red); font-weight: 600; }}
+  .empty-row {{ text-align: center; color: var(--muted); padding: 32px; font-size: 0.85rem; }}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">
+    <h1><span class="logo">◈</span> JIDRA Telemetry</h1>
+    <p class="sub">Index &amp; reindex history across all repositories</p>
+  </div>
+  <div class="generated">Generated<br>{generated_at}</div>
+</div>
+
+<div class="main">
+
+  <!-- Stat Cards -->
+  <div class="stats-grid">
+    {_stat_cards()}
+  </div>
+
+  <!-- Charts row 1: growth + change type donut -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Classes &amp; Methods — Index History</h3>
+      <canvas id="chartGrowth"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Reindex Change Types</h3>
+      <canvas id="chartDoughnut"></canvas>
+    </div>
+  </div>
+
+  <!-- Charts row 2: elapsed times -->
+  <div class="charts-row2">
+    <div class="chart-card">
+      <h3>Full Index Elapsed Time</h3>
+      <canvas id="chartElapsed"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Reindex Elapsed Time (last 50)</h3>
+      <canvas id="chartReindexElapsed"></canvas>
+    </div>
+  </div>
+
+  <!-- Index Events Table -->
+  <div class="section-header">
+    <h2>Full Index Events</h2>
+    <span class="count">{len(index_rows)}</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Repo</th><th>Languages</th><th>Classes</th><th>Methods</th><th>Lines</th><th>Elapsed</th></tr>
+      </thead>
+      <tbody>{_index_table_rows()}</tbody>
+    </table>
+  </div>
+
+  <!-- Reindex Events Table -->
+  <div class="section-header">
+    <h2>Incremental Reindex Events</h2>
+    <span class="count">{len(reindex_rows)}</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Repo</th><th>File</th><th>Lang</th><th>Change Type</th><th>Methods +/−</th><th>Lines +/−</th><th>Elapsed</th></tr>
+      </thead>
+      <tbody>{_reindex_table_rows()}</tbody>
+    </table>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+const GRID = '#1a2a3a';
+const TICK = '#4d6173';
+const baseOpts = {{
+  responsive: true,
+  plugins: {{ legend: {{ labels: {{ color: TICK, boxWidth: 12, font: {{ size: 11 }} }} }} }},
+  scales: {{
+    x: {{ ticks: {{ color: TICK, maxTicksLimit: 6, font: {{ size: 10 }} }}, grid: {{ color: GRID }} }},
+    y: {{ ticks: {{ color: TICK, font: {{ size: 10 }} }}, grid: {{ color: GRID }} }},
+  }},
+}};
+const noScales = {{ responsive: true, plugins: {{ legend: {{ labels: {{ color: TICK, font: {{ size: 11 }} }} }} }} }};
+
+// Growth chart
+new Chart('chartGrowth', {{ type: 'line', data: {{
+  labels: {chart_labels},
+  datasets: [
+    {{ label: 'Classes', data: {chart_classes}, borderColor: '#38bdf8', backgroundColor: '#38bdf81a', fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6 }},
+    {{ label: 'Methods', data: {chart_methods}, borderColor: '#a78bfa', backgroundColor: '#a78bfa1a', fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6 }},
+  ]
+}}, options: baseOpts }});
+
+// Elapsed index
+new Chart('chartElapsed', {{ type: 'bar', data: {{
+  labels: {chart_labels},
+  datasets: [{{ label: 'Elapsed (ms)', data: {chart_elapsed}, backgroundColor: '#f59e0b33', borderColor: '#f59e0b', borderWidth: 1, borderRadius: 4 }}]
+}}, options: baseOpts }});
+
+// Reindex elapsed
+new Chart('chartReindexElapsed', {{ type: 'bar', data: {{
+  labels: {ri_labels},
+  datasets: [{{ label: 'Elapsed (ms)', data: {ri_elapsed}, backgroundColor: '#34d39933', borderColor: '#34d399', borderWidth: 1, borderRadius: 4 }}]
+}}, options: {{ ...baseOpts, scales: {{ ...baseOpts.scales, x: {{ ...baseOpts.scales.x, ticks: {{ ...baseOpts.scales.x.ticks, maxRotation: 45 }} }} }} }} }});
+
+// Change type doughnut
+new Chart('chartDoughnut', {{ type: 'doughnut', data: {{
+  labels: {ct_labels},
+  datasets: [{{ data: {ct_values}, backgroundColor: {ct_colors}, borderWidth: 0, hoverOffset: 6 }}]
+}}, options: {{ ...noScales, cutout: '65%' }} }});
+</script>
+</body>
+</html>"""
 
 
 def _print_manual_mcp(lines: list[str]) -> None:
@@ -2105,6 +2684,75 @@ def main() -> None:
             return
         except RuntimeError as exc:
             raise SystemExit(str(exc))
+
+    if args.command == "history":
+        from .telemetry import fetch_index_history, fetch_reindex_history
+        from . import ui as _ui
+
+        repo_filter = args.repo
+        index_rows = fetch_index_history(repo=repo_filter, limit=args.limit)
+        reindex_rows = fetch_reindex_history(repo=repo_filter, limit=args.limit)
+
+        if args.html is not None:
+            html = _render_history_html(index_rows, reindex_rows)
+            out = Path(args.html).resolve() if args.html else (OUTPUT_DIR / "telemetry.html")
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(html, encoding="utf-8")
+            print(f"History report: file://{out}")
+            import subprocess, sys as _sys
+
+            try:
+                if _sys.platform == "darwin":
+                    subprocess.Popen(["open", str(out)])
+                elif _sys.platform.startswith("linux"):
+                    subprocess.Popen(["xdg-open", str(out)])
+            except Exception:
+                pass
+            return
+
+        if not index_rows and not reindex_rows:
+            print("No telemetry recorded yet. Run `jidra up` or `jidra process` first.")
+            return
+
+        if _ui.RICH:
+            from rich.table import Table
+            from rich import print as rprint
+            import datetime
+
+            def _fmt_ts(ts_ms: int) -> str:
+                return datetime.datetime.fromtimestamp(ts_ms / 1000).strftime("%Y-%m-%d %H:%M")
+
+            if index_rows:
+                t = Table(title="Index Events", show_lines=False)
+                for col in ("Time", "Repo", "Languages", "Classes", "Methods", "Lines", "Elapsed"):
+                    t.add_column(col, no_wrap=True)
+                for r in index_rows:
+                    repo_short = Path(r["repo"]).name
+                    t.add_row(
+                        _fmt_ts(r["ts"]), repo_short, r["languages"],
+                        str(r["classes"]), str(r["methods"]), str(r["lines"]),
+                        f"{r['elapsed_ms']}ms",
+                    )
+                rprint(t)
+
+            if reindex_rows:
+                t = Table(title="Reindex Events", show_lines=False)
+                for col in ("Time", "Repo", "File", "Lang", "Type", "Methods +/-", "Elapsed"):
+                    t.add_column(col, no_wrap=True)
+                for r in reindex_rows:
+                    repo_short = Path(r["repo"]).name
+                    t.add_row(
+                        _fmt_ts(r["ts"]), repo_short,
+                        Path(r["changed_file"]).name,
+                        r["language"] or "",
+                        r["change_type"],
+                        f"+{r['methods_added']}/-{r['methods_deleted']}",
+                        f"{r['elapsed_ms']}ms",
+                    )
+                rprint(t)
+        else:
+            print(json.dumps({"index_events": index_rows, "reindex_events": reindex_rows}, indent=2))
+        return
 
     if args.command == "reindex":
         from .reindexer import incremental_reindex
