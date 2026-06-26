@@ -24,7 +24,12 @@ validation, business-only filtering).
 
 from __future__ import annotations
 
-from .models import ClassEntry, SmithyOperationEntry, SmithyOperationLink, smithy_operation_link_id
+from .models import (
+    ClassEntry,
+    SmithyOperationEntry,
+    SmithyOperationLink,
+    smithy_operation_link_id,
+)
 
 _JAVA_OPERATION_SUFFIXES = ("OperationAsync", "Operation")
 
