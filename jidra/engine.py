@@ -233,7 +233,38 @@ class JidraEngine:
             max_chars=max_chars,
             max_source_lines=budget["max_source_lines"],
         )
+        result.update(
+            self._smithy_linkage_for_class(getattr(selected, "class_id", None))
+        )
         return self._with_budget(result)
+
+    def _smithy_linkage_for_class(self, class_id: str | None) -> dict:
+        """Surface whether this class is a known Smithy operation handler.
+
+        Distinguishes "we looked and found no link" (smithy_operation: null,
+        smithy_note explains why) from callers who never call this at all —
+        the dict is always present so agents can tell the two apart."""
+        if not class_id:
+            return {
+                "smithy_operation": None,
+                "smithy_note": "no class context for this method",
+            }
+        links = graph_store.load_smithy_operation_links(self.conn, class_id=class_id)
+        if not links:
+            return {
+                "smithy_operation": None,
+                "smithy_note": "no matching Smithy codegen profile found for this class",
+            }
+        link = links[0]
+        operations = graph_store.load_smithy_operations(self.conn)
+        op = next((o for o in operations if o.id == link.operation_id), None)
+        return {
+            "smithy_operation": op.name if op else link.operation_id,
+            "smithy_operation_id": link.operation_id,
+            "smithy_codegen_profile": link.codegen_profile,
+            "smithy_link_type": link.link_type,
+            "smithy_note": None,
+        }
 
     def get_flow(
         self, method: str, depth: int | None = None, top_n: int | None = None
@@ -347,6 +378,69 @@ class JidraEngine:
             "line_start": getattr(selected, "start_line", None),
             "line_end": getattr(selected, "end_line", None),
             "source": selected.source or "",
+        }
+
+    def find_callers(self, method: str, depth: int = 1) -> dict:
+        """Reverse call lookup: who calls `method`, walked up to `depth` levels
+        of the call graph (BFS). Complements `get_file_dependents` (file-level)
+        with a method-level answer to "what calls this, and what calls those.\""""
+        resolved = self._resolve_single_method(method)
+        if "error" in resolved:
+            suggestions = resolved.get("suggestions", [])
+            if suggestions and suggestions[0].get("score", 0) >= 100:
+                resolved = self._resolve_single_method(suggestions[0]["selector"])
+                if "error" in resolved:
+                    return resolved
+            else:
+                return resolved
+        selected = resolved["method"]
+        if not hasattr(selected, "id"):
+            return {"error": "invalid_method_selector_result"}
+
+        method_by_id = {m.id: m for m in self.graph.methods}
+
+        # Build reverse adjacency: callee_id → [caller_id, ...]
+        reverse: dict[str, list[str]] = {}
+        for edge in self.graph.resolved_call_edges:
+            caller_id = getattr(edge, "caller_method_id", None)
+            callee_id = getattr(edge, "callee_method_id", None)
+            if caller_id and callee_id:
+                reverse.setdefault(callee_id, []).append(caller_id)
+
+        # BFS up the call graph up to `depth` levels
+        visited: set[str] = {selected.id}
+        frontier = [selected.id]
+        callers_by_depth: list[list[dict]] = []
+        for _ in range(max(1, depth)):
+            next_frontier = []
+            level = []
+            for callee_id in frontier:
+                for caller_id in reverse.get(callee_id, []):
+                    if caller_id in visited:
+                        continue
+                    visited.add(caller_id)
+                    next_frontier.append(caller_id)
+                    m = method_by_id.get(caller_id)
+                    level.append(
+                        {
+                            "method_id": caller_id,
+                            "signature": m.signature if m else caller_id,
+                            "file_path": getattr(m, "file_path", None) if m else None,
+                            "start_line": getattr(m, "start_line", None) if m else None,
+                        }
+                    )
+            if level:
+                callers_by_depth.append(level)
+            frontier = next_frontier
+            if not frontier:
+                break
+
+        flat = [c for level in callers_by_depth for c in level]
+        return {
+            "method_id": selected.id,
+            "signature": selected.signature,
+            "caller_count": len(flat),
+            "callers": flat,
         }
 
     def get_call_chain(
