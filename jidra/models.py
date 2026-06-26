@@ -274,9 +274,7 @@ def resolved_call_edge_id(callsite_id_value: str, callee_method_id: str) -> str:
     return _stable_id(f"resolved_call::{callsite_id_value}::{callee_method_id}")
 
 
-def smithy_operation_link_id(
-    operation_id: str, class_id: str, link_type: str
-) -> str:
+def smithy_operation_link_id(operation_id: str, class_id: str, link_type: str) -> str:
     return _stable_id(f"smithy_link::{operation_id}::{class_id}::{link_type}")
 
 

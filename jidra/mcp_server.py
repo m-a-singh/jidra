@@ -629,7 +629,8 @@ def build_mcp(
         (smithy-java, smithy4s). `operation` matches by simple name or full
         shape id (namespace#Name)."""
         return invoke(
-            "jidra_get_operation_graph", {"operation": operation, "graph_path": graph_path}
+            "jidra_get_operation_graph",
+            {"operation": operation, "graph_path": graph_path},
         )
 
     @mcp.tool()
