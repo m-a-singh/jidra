@@ -168,6 +168,69 @@ class Graph:
 
 
 @dataclass
+class SmithyMemberEntry:
+    """A single member of a Smithy structure/union (or inline input/output)."""
+
+    name: str
+    target_shape: str
+    required: bool = False
+
+
+@dataclass
+class SmithyShapeEntry:
+    """A Smithy `structure`/`union`/`enum` shape, parsed straight from the
+    `.smithy` IDL — the source of truth for request/response field shapes,
+    independent of whatever codegen toolchain (smithy-java, smithy4s, ...)
+    later turns it into language-specific types."""
+
+    id: str
+    namespace: str
+    name: str
+    kind: str  # "structure" | "union" | "enum"
+    file_path: str
+    line: int
+    members: list[SmithyMemberEntry] = field(default_factory=list)
+
+
+@dataclass
+class SmithyOperationEntry:
+    """A Smithy `operation` shape, optionally attached to a `service`."""
+
+    id: str
+    namespace: str
+    name: str
+    service_id: str | None
+    service_name: str | None
+    input_shape_id: str | None
+    output_shape_id: str | None
+    file_path: str
+    line: int
+    errors: list[str] = field(default_factory=list)
+    http_method: str | None = None
+    http_uri: str | None = None
+
+
+@dataclass
+class SmithyOperationLink:
+    """Phase B: a real (handwritten) class that implements a Smithy operation
+    via a known codegen toolchain's generated interface/trait naming
+    convention — e.g. a Java class `implements GetBeerOperation` (smithy-java)
+    or a Scala class `extends BeerService[F]` (smithy4s). Bridges the
+    otherwise-invisible gap between a call into generated client code and the
+    real handler that serves it."""
+
+    id: str
+    operation_id: str
+    class_id: str
+    class_full_name: str
+    link_type: str  # "implements" | "calls"
+    codegen_profile: str  # "smithy_java" | "smithy4s"
+    language: str
+    file_path: str
+    line: int
+
+
+@dataclass
 class SearchResult:
     """A single ranked hit from `engine.search` / `engine.explore` (Phase 1)."""
 
@@ -209,6 +272,10 @@ def inheritance_edge_id(source_class: str, target_class: str, relation: str) -> 
 
 def resolved_call_edge_id(callsite_id_value: str, callee_method_id: str) -> str:
     return _stable_id(f"resolved_call::{callsite_id_value}::{callee_method_id}")
+
+
+def smithy_operation_link_id(operation_id: str, class_id: str, link_type: str) -> str:
+    return _stable_id(f"smithy_link::{operation_id}::{class_id}::{link_type}")
 
 
 def to_dict(obj: Any) -> dict[str, Any]:
