@@ -1283,7 +1283,11 @@ def _index(
     # them. On incremental reindex, reuse whatever was already built — smithy
     # contracts rarely change so we don't rebuild.
     extra_java_roots: list[Path] = []
-    from .smithy4j_builder import build_smithy4j_sources, find_smithy4j_modules, _GENERATED_SUBPATH
+    from .smithy4j_builder import (
+        build_smithy4j_sources,
+        find_smithy4j_modules,
+        _GENERATED_SUBPATH,
+    )
 
     if changed_files is None:
         extra_java_roots = build_smithy4j_sources(codebase_path)
@@ -2026,7 +2030,11 @@ def _up() -> None:
                             )
                             _elapsed = int((time.time() - _t0) * 1000)
                             record_reindex_event(
-                                str(codebase_path), src_path, "full_rebuild", {}, _elapsed
+                                str(codebase_path),
+                                src_path,
+                                "full_rebuild",
+                                {},
+                                _elapsed,
                             )
                             ui.success("Full rebuild complete.")
                     except Exception as e:
@@ -2085,13 +2093,15 @@ def _render_history_html(
     import datetime
 
     def _fmt_ts(ts_ms: int) -> str:
-        return datetime.datetime.fromtimestamp(ts_ms / 1000).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.datetime.fromtimestamp(ts_ms / 1000).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
 
     def _fmt_elapsed(ms: int) -> str:
         if ms >= 60000:
-            return f"{ms/60000:.1f}m"
+            return f"{ms / 60000:.1f}m"
         if ms >= 1000:
-            return f"{ms/1000:.1f}s"
+            return f"{ms / 1000:.1f}s"
         return f"{ms}ms"
 
     doc_rows = doc_rows or []
@@ -2099,10 +2109,14 @@ def _render_history_html(
     # Summary stats
     total_classes = index_rows[0]["classes"] if index_rows else 0
     total_methods = index_rows[0]["methods"] if index_rows else 0
-    total_lines   = index_rows[0]["lines"]   if index_rows else 0
-    avg_index_ms  = int(sum(r["elapsed_ms"] for r in index_rows) / len(index_rows)) if index_rows else 0
+    total_lines = index_rows[0]["lines"] if index_rows else 0
+    avg_index_ms = (
+        int(sum(r["elapsed_ms"] for r in index_rows) / len(index_rows))
+        if index_rows
+        else 0
+    )
     total_reindex = len(reindex_rows)
-    total_docs    = sum(1 for r in doc_rows if r["status"] == "ok")
+    total_docs = sum(1 for r in doc_rows if r["status"] == "ok")
     total_doc_chunks = sum(r["chunks"] for r in doc_rows if r["status"] == "ok")
     change_type_counts: dict[str, int] = {}
     for r in reindex_rows:
@@ -2111,13 +2125,13 @@ def _render_history_html(
 
     def _stat_cards() -> str:
         cards = [
-            ("Classes",         f"{total_classes:,}",        "#38bdf8", "⬡"),
-            ("Methods",         f"{total_methods:,}",        "#a78bfa", "ƒ"),
-            ("Lines of Code",   f"{total_lines:,}",          "#34d399", "≡"),
-            ("Avg Index Time",  _fmt_elapsed(avg_index_ms),  "#f59e0b", "⏱"),
-            ("Reindex Events",  f"{total_reindex:,}",        "#fb7185", "↻"),
-            ("Docs Indexed",    f"{total_docs:,}",           "#67e8f9", "📄"),
-            ("Doc Chunks",      f"{total_doc_chunks:,}",     "#a78bfa", "⊞"),
+            ("Classes", f"{total_classes:,}", "#38bdf8", "⬡"),
+            ("Methods", f"{total_methods:,}", "#a78bfa", "ƒ"),
+            ("Lines of Code", f"{total_lines:,}", "#34d399", "≡"),
+            ("Avg Index Time", _fmt_elapsed(avg_index_ms), "#f59e0b", "⏱"),
+            ("Reindex Events", f"{total_reindex:,}", "#fb7185", "↻"),
+            ("Docs Indexed", f"{total_docs:,}", "#67e8f9", "📄"),
+            ("Doc Chunks", f"{total_doc_chunks:,}", "#a78bfa", "⊞"),
         ]
         parts = []
         for label, value, color, icon in cards:
@@ -2131,17 +2145,23 @@ def _render_history_html(
 
     def _change_type_badge(ct: str) -> str:
         colors = {
-            "no_change":      ("#1e293b", "#64748b"),
-            "metadata_only":  ("#1e3a5f", "#38bdf8"),
-            "callsite_change":("#3d2e00", "#f59e0b"),
-            "structural":     ("#3d0e15", "#fb7185"),
-            "full_rebuild":   ("#1a1a2e", "#a78bfa"),
+            "no_change": ("#1e293b", "#64748b"),
+            "metadata_only": ("#1e3a5f", "#38bdf8"),
+            "callsite_change": ("#3d2e00", "#f59e0b"),
+            "structural": ("#3d0e15", "#fb7185"),
+            "full_rebuild": ("#1a1a2e", "#a78bfa"),
         }
         bg, fg = colors.get(ct, ("#1e293b", "#94a3b8"))
         return f"<span class='badge' style='background:{bg};color:{fg}'>{ct}</span>"
 
     def _lang_badge(lang: str) -> str:
-        colors = {"java": "#f59e0b", "python": "#34d399", "typescript": "#38bdf8", "scala": "#fb7185", "go": "#67e8f9"}
+        colors = {
+            "java": "#f59e0b",
+            "python": "#34d399",
+            "typescript": "#38bdf8",
+            "scala": "#fb7185",
+            "go": "#67e8f9",
+        }
         color = colors.get(lang, "#94a3b8")
         return f"<span class='badge' style='background:#1e293b;color:{color};border:1px solid {color}33'>{lang}</span>"
 
@@ -2151,7 +2171,9 @@ def _render_history_html(
         rows = []
         for i, r in enumerate(index_rows):
             repo_short = Path(r["repo"]).name
-            langs_html = " ".join(_lang_badge(l) for l in r["languages"].split(",") if l)
+            langs_html = " ".join(
+                _lang_badge(lang) for lang in r["languages"].split(",") if lang
+            )
             cls = "row-alt" if i % 2 else ""
             rows.append(
                 f"<tr class='{cls}'>"
@@ -2174,11 +2196,11 @@ def _render_history_html(
             repo_short = Path(r["repo"]).name
             file_short = Path(r["changed_file"]).name
             m_added = r["methods_added"]
-            m_del   = r["methods_deleted"]
+            m_del = r["methods_deleted"]
             l_added = r["lines_added"]
-            l_del   = r["lines_deleted"]
+            l_del = r["lines_deleted"]
             methods_html = f"<span class='delta-pos'>+{m_added}</span> / <span class='delta-neg'>-{m_del}</span>"
-            lines_html   = f"<span class='delta-pos'>+{l_added}</span> / <span class='delta-neg'>-{l_del}</span>"
+            lines_html = f"<span class='delta-pos'>+{l_added}</span> / <span class='delta-neg'>-{l_del}</span>"
             cls = "row-alt" if i % 2 else ""
             rows.append(
                 f"<tr class='{cls}'>"
@@ -2201,7 +2223,9 @@ def _render_history_html(
         for i, r in enumerate(doc_rows):
             file_short = Path(r["source_path"]).name
             size_kb = r["file_size_bytes"] / 1024
-            size_str = f"{size_kb:.1f} KB" if size_kb >= 1 else f"{r['file_size_bytes']} B"
+            size_str = (
+                f"{size_kb:.1f} KB" if size_kb >= 1 else f"{r['file_size_bytes']} B"
+            )
             status_html = (
                 "<span class='badge' style='background:#14291a;color:#34d399'>ok</span>"
                 if r["status"] == "ok"
@@ -2228,25 +2252,32 @@ def _render_history_html(
 
     # Chart data
     idx_rev = list(reversed(index_rows))
-    chart_labels  = json.dumps([_fmt_ts(r["ts"]) for r in idx_rev])
-    chart_classes = json.dumps([r["classes"]     for r in idx_rev])
-    chart_methods = json.dumps([r["methods"]     for r in idx_rev])
-    chart_elapsed = json.dumps([r["elapsed_ms"]  for r in idx_rev])
+    chart_labels = json.dumps([_fmt_ts(r["ts"]) for r in idx_rev])
+    chart_classes = json.dumps([r["classes"] for r in idx_rev])
+    chart_methods = json.dumps([r["methods"] for r in idx_rev])
+    chart_elapsed = json.dumps([r["elapsed_ms"] for r in idx_rev])
 
     reindex_rev = list(reversed(reindex_rows[-50:]))  # last 50
-    ri_labels   = json.dumps([Path(r["changed_file"]).name + " " + _fmt_ts(r["ts"]) for r in reindex_rev])
-    ri_elapsed  = json.dumps([r["elapsed_ms"] for r in reindex_rev])
-    ct_labels   = json.dumps(list(change_type_counts.keys()))
-    ct_values   = json.dumps(list(change_type_counts.values()))
+    ri_labels = json.dumps(
+        [Path(r["changed_file"]).name + " " + _fmt_ts(r["ts"]) for r in reindex_rev]
+    )
+    ri_elapsed = json.dumps([r["elapsed_ms"] for r in reindex_rev])
+    ct_labels = json.dumps(list(change_type_counts.keys()))
+    ct_values = json.dumps(list(change_type_counts.values()))
 
     doc_rev = list(reversed(doc_rows[-30:]))
-    doc_chart_labels  = json.dumps([Path(r["source_path"]).name for r in doc_rev])
-    doc_chart_chunks  = json.dumps([r["chunks"] for r in doc_rev])
-    doc_chart_linked  = json.dumps([r["linked_classes"] for r in doc_rev])
+    doc_chart_labels = json.dumps([Path(r["source_path"]).name for r in doc_rev])
+    doc_chart_chunks = json.dumps([r["chunks"] for r in doc_rev])
+    doc_chart_linked = json.dumps([r["linked_classes"] for r in doc_rev])
     doc_chart_elapsed = json.dumps([r["elapsed_ms"] for r in doc_rev])
-    ct_colors   = json.dumps(["#64748b","#38bdf8","#f59e0b","#fb7185","#a78bfa"][:len(change_type_counts)])
+    ct_colors = json.dumps(
+        ["#64748b", "#38bdf8", "#f59e0b", "#fb7185", "#a78bfa"][
+            : len(change_type_counts)
+        ]
+    )
 
     import datetime as _dt
+
     generated_at = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     return f"""<!DOCTYPE html>
@@ -2832,17 +2863,26 @@ def main() -> None:
         doc_store.migrate(conn)
         sources = doc_store.list_sources(conn)
         if not sources:
-            raise SystemExit("No documents indexed yet. Run `jidra index-docs --path ./specs/` first.")
+            raise SystemExit(
+                "No documents indexed yet. Run `jidra index-docs --path ./specs/` first."
+            )
         graph = graph_store.load_graph(conn, variant="main")
         with ui.spinner("Building doc graph..."):
             data = build_doc_graph_data(conn, graph)
             html = render_doc_graph_html(data)
-        out = Path(args.output).resolve() if args.output else db_path.parent / "doc_graph.html"
+        out = (
+            Path(args.output).resolve()
+            if args.output
+            else db_path.parent / "doc_graph.html"
+        )
         out.write_text(html, encoding="utf-8")
         s = data["stats"]
-        ui.success(f"Doc graph: {s['docs']} docs · {s['chunks']} chunks · {s['classes']} classes · {s['links']} links")
+        ui.success(
+            f"Doc graph: {s['docs']} docs · {s['chunks']} chunks · {s['classes']} classes · {s['links']} links"
+        )
         print(f"file://{out}")
-        import subprocess, sys as _sys
+        import subprocess
+        import sys as _sys
 
         try:
             if _sys.platform == "darwin":
@@ -2860,7 +2900,9 @@ def main() -> None:
         from .telemetry import record_doc_index_event
 
         if args.path.startswith(("http://", "https://")):
-            raise SystemExit("URL indexing is disabled — download the document locally first.")
+            raise SystemExit(
+                "URL indexing is disabled — download the document locally first."
+            )
 
         db_path = _resolve_graph_db_path(args.graph)
         conn = graph_store.connect(db_path)
@@ -2874,7 +2916,8 @@ def main() -> None:
         files = [
             f
             for f in files
-            if f.is_file() and ((p.is_dir() and f.suffix.lower() in exts) or not p.is_dir())
+            if f.is_file()
+            and ((p.is_dir() and f.suffix.lower() in exts) or not p.is_dir())
         ]
 
         if not files:
@@ -2891,16 +2934,23 @@ def main() -> None:
                 elapsed_ms = int((time.time() - t0) * 1000)
                 linked_set: set[str] = set()
                 for row in conn.execute(
-                    "SELECT linked_classes FROM doc_chunks WHERE source_path=?", (str(f),)
+                    "SELECT linked_classes FROM doc_chunks WHERE source_path=?",
+                    (str(f),),
                 ).fetchall():
                     linked_set.update(x for x in row[0].split(",") if x)
                 source_type = f.suffix.lstrip(".").lower() or "file"
                 if source_type in ("md", "mdx", "txt"):
                     source_type = "markdown"
-                record_doc_index_event(str(f), source_type, n_chunks, len(linked_set), size, elapsed_ms)
-                ui.success(f"{f.name}: {n_chunks} chunks, {len(linked_set)} classes linked ({elapsed_ms}ms)")
+                record_doc_index_event(
+                    str(f), source_type, n_chunks, len(linked_set), size, elapsed_ms
+                )
+                ui.success(
+                    f"{f.name}: {n_chunks} chunks, {len(linked_set)} classes linked ({elapsed_ms}ms)"
+                )
             except Exception as e:
-                record_doc_index_event(str(f), "unknown", 0, 0, size, 0, status="error", error=str(e))
+                record_doc_index_event(
+                    str(f), "unknown", 0, 0, size, 0, status="error", error=str(e)
+                )
                 ui.error(f"{f.name}: {e}")
 
         doc_graph_out = _write_doc_graph(db_path.parent, db_path)
@@ -2909,7 +2959,11 @@ def main() -> None:
         return
 
     if args.command == "history":
-        from .telemetry import fetch_index_history, fetch_reindex_history, fetch_doc_index_history
+        from .telemetry import (
+            fetch_index_history,
+            fetch_reindex_history,
+            fetch_doc_index_history,
+        )
         from . import ui as _ui
 
         repo_filter = args.repo
@@ -2919,11 +2973,16 @@ def main() -> None:
 
         if args.html is not None:
             html = _render_history_html(index_rows, reindex_rows, doc_rows)
-            out = Path(args.html).resolve() if args.html else (OUTPUT_DIR / "telemetry.html")
+            out = (
+                Path(args.html).resolve()
+                if args.html
+                else (OUTPUT_DIR / "telemetry.html")
+            )
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(html, encoding="utf-8")
             print(f"History report: file://{out}")
-            import subprocess, sys as _sys
+            import subprocess
+            import sys as _sys
 
             try:
                 if _sys.platform == "darwin":
@@ -2944,29 +3003,52 @@ def main() -> None:
             import datetime
 
             def _fmt_ts(ts_ms: int) -> str:
-                return datetime.datetime.fromtimestamp(ts_ms / 1000).strftime("%Y-%m-%d %H:%M")
+                return datetime.datetime.fromtimestamp(ts_ms / 1000).strftime(
+                    "%Y-%m-%d %H:%M"
+                )
 
             if index_rows:
                 t = Table(title="Index Events", show_lines=False)
-                for col in ("Time", "Repo", "Languages", "Classes", "Methods", "Lines", "Elapsed"):
+                for col in (
+                    "Time",
+                    "Repo",
+                    "Languages",
+                    "Classes",
+                    "Methods",
+                    "Lines",
+                    "Elapsed",
+                ):
                     t.add_column(col, no_wrap=True)
                 for r in index_rows:
                     repo_short = Path(r["repo"]).name
                     t.add_row(
-                        _fmt_ts(r["ts"]), repo_short, r["languages"],
-                        str(r["classes"]), str(r["methods"]), str(r["lines"]),
+                        _fmt_ts(r["ts"]),
+                        repo_short,
+                        r["languages"],
+                        str(r["classes"]),
+                        str(r["methods"]),
+                        str(r["lines"]),
                         f"{r['elapsed_ms']}ms",
                     )
                 rprint(t)
 
             if reindex_rows:
                 t = Table(title="Reindex Events", show_lines=False)
-                for col in ("Time", "Repo", "File", "Lang", "Type", "Methods +/-", "Elapsed"):
+                for col in (
+                    "Time",
+                    "Repo",
+                    "File",
+                    "Lang",
+                    "Type",
+                    "Methods +/-",
+                    "Elapsed",
+                ):
                     t.add_column(col, no_wrap=True)
                 for r in reindex_rows:
                     repo_short = Path(r["repo"]).name
                     t.add_row(
-                        _fmt_ts(r["ts"]), repo_short,
+                        _fmt_ts(r["ts"]),
+                        repo_short,
                         Path(r["changed_file"]).name,
                         r["language"] or "",
                         r["change_type"],
@@ -2975,7 +3057,12 @@ def main() -> None:
                     )
                 rprint(t)
         else:
-            print(json.dumps({"index_events": index_rows, "reindex_events": reindex_rows}, indent=2))
+            print(
+                json.dumps(
+                    {"index_events": index_rows, "reindex_events": reindex_rows},
+                    indent=2,
+                )
+            )
         return
 
     if args.command == "reindex":

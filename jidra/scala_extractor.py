@@ -67,7 +67,9 @@ def _ensure_image() -> None:
 
 
 def _is_new_volume(volume: str) -> bool:
-    result = subprocess.run(["docker", "volume", "inspect", volume], capture_output=True)
+    result = subprocess.run(
+        ["docker", "volume", "inspect", volume], capture_output=True
+    )
     return result.returncode != 0
 
 
@@ -104,7 +106,11 @@ def _run_sidecar(codebase_root: Path, tmp_out: str, timeout: int = 600) -> None:
     ]
 
     msg = "  [jidra] Running sbt compile inside Docker"
-    msg += " (this may take 30–120s, first run)..." if first_run else " (incremental via Zinc cache)..."
+    msg += (
+        " (this may take 30–120s, first run)..."
+        if first_run
+        else " (incremental via Zinc cache)..."
+    )
     print(msg, flush=True)
     try:
         result = subprocess.run(

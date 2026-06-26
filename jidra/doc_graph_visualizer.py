@@ -10,6 +10,7 @@ Edge types:
   - doc→chunk   : containment
   - chunk→class : heuristic link (linked_classes field)
 """
+
 from __future__ import annotations
 
 import json
@@ -19,17 +20,23 @@ from pathlib import Path
 
 # ── Data extraction ───────────────────────────────────────────────────────────
 
+
 def build_doc_graph_data(conn: sqlite3.Connection, graph) -> dict:
     """
     Pull doc sources, chunks, and linked class nodes from the DB + graph object.
     Returns a dict with nodes/edges ready for rendering.
     """
     from . import doc_store
+
     doc_store.migrate(conn)
 
     sources = doc_store.list_sources(conn)
     if not sources:
-        return {"nodes": [], "edges": [], "stats": {"docs": 0, "chunks": 0, "classes": 0, "links": 0}}
+        return {
+            "nodes": [],
+            "edges": [],
+            "stats": {"docs": 0, "chunks": 0, "classes": 0, "links": 0},
+        }
 
     # Build class lookup from graph
     class_by_name: dict[str, object] = {}
@@ -47,11 +54,11 @@ def build_doc_graph_data(conn: sqlite3.Connection, graph) -> dict:
     total_links = 0
 
     source_type_colors = {
-        "pdf":      "#f59e0b",
-        "docx":     "#38bdf8",
+        "pdf": "#f59e0b",
+        "docx": "#38bdf8",
         "markdown": "#34d399",
-        "pptx":     "#a78bfa",
-        "file":     "#94a3b8",
+        "pptx": "#a78bfa",
+        "file": "#94a3b8",
     }
 
     for src in sources:
@@ -60,17 +67,19 @@ def build_doc_graph_data(conn: sqlite3.Connection, graph) -> dict:
         src_color = source_type_colors.get(src["source_type"], "#94a3b8")
         src_label = Path(src_path).name
 
-        nodes.append({
-            "id": src_id,
-            "label": src_label,
-            "type": "doc",
-            "source_type": src["source_type"],
-            "full_path": src_path,
-            "chunk_count": src["chunk_count"],
-            "color": src_color,
-            "size": 28,
-            "tooltip": f"{src_label}\n{src['source_type'].upper()} · {src['chunk_count']} chunks",
-        })
+        nodes.append(
+            {
+                "id": src_id,
+                "label": src_label,
+                "type": "doc",
+                "source_type": src["source_type"],
+                "full_path": src_path,
+                "chunk_count": src["chunk_count"],
+                "color": src_color,
+                "size": 28,
+                "tooltip": f"{src_label}\n{src['source_type'].upper()} · {src['chunk_count']} chunks",
+            }
+        )
 
         # Load all chunks for this source
         chunks = conn.execute(
@@ -85,28 +94,32 @@ def build_doc_graph_data(conn: sqlite3.Connection, graph) -> dict:
             preview = (content or "")[:120].replace("\n", " ")
             linked = [x for x in linked_classes_str.split(",") if x]
 
-            nodes.append({
-                "id": c_id,
-                "label": c_label,
-                "type": "chunk",
-                "chunk_index": chunk_index,
-                "linked_count": len(linked),
-                "color": "#1e3a5f" if linked else "#1e293b",
-                "border": src_color,
-                "size": 14,
-                "tooltip": f"{c_label}\n{preview}{'...' if len(content or '') > 120 else ''}",
-            })
+            nodes.append(
+                {
+                    "id": c_id,
+                    "label": c_label,
+                    "type": "chunk",
+                    "chunk_index": chunk_index,
+                    "linked_count": len(linked),
+                    "color": "#1e3a5f" if linked else "#1e293b",
+                    "border": src_color,
+                    "size": 14,
+                    "tooltip": f"{c_label}\n{preview}{'...' if len(content or '') > 120 else ''}",
+                }
+            )
 
             # doc → chunk containment edge
-            edges.append({
-                "id": f"e::doc-chunk::{chunk_id}",
-                "from": src_id,
-                "to": c_id,
-                "type": "contains",
-                "color": "#1e293b",
-                "width": 1,
-                "dashes": False,
-            })
+            edges.append(
+                {
+                    "id": f"e::doc-chunk::{chunk_id}",
+                    "from": src_id,
+                    "to": c_id,
+                    "type": "contains",
+                    "color": "#1e293b",
+                    "width": 1,
+                    "dashes": False,
+                }
+            )
 
             # chunk → class link edges
             for cls_name in linked:
@@ -121,30 +134,37 @@ def build_doc_graph_data(conn: sqlite3.Connection, graph) -> dict:
                     file_path = getattr(cls, "file_path", "") or ""
                     lang = getattr(cls, "language", "unknown") or "unknown"
                     lang_colors = {
-                        "java": "#f59e0b", "typescript": "#38bdf8",
-                        "python": "#34d399", "scala": "#fb7185", "go": "#67e8f9",
+                        "java": "#f59e0b",
+                        "typescript": "#38bdf8",
+                        "python": "#34d399",
+                        "scala": "#fb7185",
+                        "go": "#67e8f9",
                     }
-                    nodes.append({
-                        "id": cls_id,
-                        "label": cls_name,
-                        "type": "class",
-                        "full_name": full_name,
-                        "file_path": file_path,
-                        "language": lang,
-                        "color": lang_colors.get(lang, "#94a3b8"),
-                        "size": 20,
-                        "tooltip": f"{full_name}\n{Path(file_path).name if file_path else ''}\n[{lang}]",
-                    })
+                    nodes.append(
+                        {
+                            "id": cls_id,
+                            "label": cls_name,
+                            "type": "class",
+                            "full_name": full_name,
+                            "file_path": file_path,
+                            "language": lang,
+                            "color": lang_colors.get(lang, "#94a3b8"),
+                            "size": 20,
+                            "tooltip": f"{full_name}\n{Path(file_path).name if file_path else ''}\n[{lang}]",
+                        }
+                    )
 
-                edges.append({
-                    "id": f"e::link::{chunk_id}::{cls_name}",
-                    "from": c_id,
-                    "to": cls_id,
-                    "type": "links_to",
-                    "color": "#38bdf866",
-                    "width": 2,
-                    "dashes": True,
-                })
+                edges.append(
+                    {
+                        "id": f"e::link::{chunk_id}::{cls_name}",
+                        "from": c_id,
+                        "to": cls_id,
+                        "type": "links_to",
+                        "color": "#38bdf866",
+                        "width": 2,
+                        "dashes": True,
+                    }
+                )
                 total_links += 1
 
     stats = {
@@ -159,8 +179,10 @@ def build_doc_graph_data(conn: sqlite3.Connection, graph) -> dict:
 
 # ── HTML renderer ─────────────────────────────────────────────────────────────
 
+
 def render_doc_graph_html(data: dict) -> str:
     import datetime
+
     nodes_json = json.dumps(data["nodes"], ensure_ascii=True)
     edges_json = json.dumps(data["edges"], ensure_ascii=True)
     stats = data["stats"]
@@ -283,15 +305,15 @@ def render_doc_graph_html(data: dict) -> str:
 </div>
 
 <div class="stats-bar">
-  <div class="stat"><span class="val" style="color:#f59e0b">{stats['docs']}</span><span class="lbl">Documents</span></div>
-  <div class="stat"><span class="val" style="color:#a78bfa">{stats['chunks']}</span><span class="lbl">Chunks</span></div>
-  <div class="stat"><span class="val" style="color:#38bdf8">{stats['classes']}</span><span class="lbl">Classes Linked</span></div>
-  <div class="stat"><span class="val" style="color:#34d399">{stats['links']}</span><span class="lbl">Total Links</span></div>
+  <div class="stat"><span class="val" style="color:#f59e0b">{stats["docs"]}</span><span class="lbl">Documents</span></div>
+  <div class="stat"><span class="val" style="color:#a78bfa">{stats["chunks"]}</span><span class="lbl">Chunks</span></div>
+  <div class="stat"><span class="val" style="color:#38bdf8">{stats["classes"]}</span><span class="lbl">Classes Linked</span></div>
+  <div class="stat"><span class="val" style="color:#34d399">{stats["links"]}</span><span class="lbl">Total Links</span></div>
 </div>
 
 <div class="body">
-  {'<div id="graph"></div>' if stats['docs'] > 0 else ''}
-  {'<div class="empty-state"><div class="big">◈</div><p>No documents indexed yet.<br>Run <code>jidra index-docs --path ./specs/</code> to get started.</p></div>' if stats['docs'] == 0 else ''}
+  {'<div id="graph"></div>' if stats["docs"] > 0 else ""}
+  {'<div class="empty-state"><div class="big">◈</div><p>No documents indexed yet.<br>Run <code>jidra index-docs --path ./specs/</code> to get started.</p></div>' if stats["docs"] == 0 else ""}
 
   <div class="sidebar">
     <div class="sidebar-header">Node Inspector</div>
