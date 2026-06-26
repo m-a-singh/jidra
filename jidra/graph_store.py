@@ -14,14 +14,18 @@ from .models import (
     InheritanceEdge,
     MethodEntry,
     ResolvedCallEdge,
+    SmithyMemberEntry,
+    SmithyOperationEntry,
+    SmithyOperationLink,
+    SmithyShapeEntry,
 )
 
-SCHEMA_VERSION = "2.1"
+SCHEMA_VERSION = "2.2"
 
 # Older schema versions whose on-disk layout this code can upgrade in place via
 # `_run_migrations` (additive columns / virtual tables only). A DB stamped with
 # one of these is migrated and re-stamped to SCHEMA_VERSION instead of raising.
-_MIGRATABLE_FROM = {"2.0"}
+_MIGRATABLE_FROM = {"2.0", "2.1"}
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS classes (
@@ -189,6 +193,62 @@ CREATE TRIGGER IF NOT EXISTS methods_fts_update AFTER UPDATE ON methods BEGIN
         new.source, new.language, new.variant
     );
 END;
+
+-- Smithy IDL model data (Phase A). `id` is the Smithy shape ID itself
+-- (namespace#Name) rather than a hash -- it's already globally unique and is
+-- the natural cross-repo join key for a future org-level graph.
+CREATE TABLE IF NOT EXISTS smithy_shapes (
+    id TEXT NOT NULL,
+    variant TEXT NOT NULL,
+    module_id TEXT,
+    namespace TEXT,
+    name TEXT,
+    kind TEXT,
+    file_path TEXT,
+    line INTEGER,
+    members_json TEXT,
+    PRIMARY KEY (id, variant, module_id)
+);
+CREATE INDEX IF NOT EXISTS idx_smithy_shapes_scope ON smithy_shapes (variant, module_id);
+
+CREATE TABLE IF NOT EXISTS smithy_operations (
+    id TEXT NOT NULL,
+    variant TEXT NOT NULL,
+    module_id TEXT,
+    namespace TEXT,
+    name TEXT,
+    service_id TEXT,
+    service_name TEXT,
+    input_shape_id TEXT,
+    output_shape_id TEXT,
+    file_path TEXT,
+    line INTEGER,
+    errors_json TEXT,
+    http_method TEXT,
+    http_uri TEXT,
+    PRIMARY KEY (id, variant, module_id)
+);
+CREATE INDEX IF NOT EXISTS idx_smithy_operations_scope ON smithy_operations (variant, module_id);
+CREATE INDEX IF NOT EXISTS idx_smithy_operations_service ON smithy_operations (service_name);
+
+-- Phase B: real classes bridged to the Smithy operation they implement, via
+-- a known codegen toolchain's naming convention (smithy-java, smithy4s, ...).
+CREATE TABLE IF NOT EXISTS smithy_operation_links (
+    id TEXT NOT NULL,
+    variant TEXT NOT NULL,
+    module_id TEXT,
+    operation_id TEXT,
+    class_id TEXT,
+    class_full_name TEXT,
+    link_type TEXT,
+    codegen_profile TEXT,
+    language TEXT,
+    file_path TEXT,
+    line INTEGER,
+    PRIMARY KEY (id, variant, module_id)
+);
+CREATE INDEX IF NOT EXISTS idx_smithy_links_operation ON smithy_operation_links (operation_id);
+CREATE INDEX IF NOT EXISTS idx_smithy_links_class ON smithy_operation_links (class_id);
 """
 
 
@@ -454,6 +514,200 @@ def _file_path_for_resolved_call(
     e: ResolvedCallEdge, method_file_by_id: dict[str, str]
 ) -> str:
     return method_file_by_id.get(e.caller_method_id, "")
+
+
+def _smithy_shape_row(
+    s: SmithyShapeEntry, variant: str, module_id: str | None
+) -> tuple:
+    members_json = json.dumps(
+        [
+            {"name": m.name, "target_shape": m.target_shape, "required": m.required}
+            for m in s.members
+        ]
+    )
+    return (
+        s.id,
+        variant,
+        module_id,
+        s.namespace,
+        s.name,
+        s.kind,
+        s.file_path,
+        s.line,
+        members_json,
+    )
+
+
+def _smithy_operation_row(
+    o: SmithyOperationEntry, variant: str, module_id: str | None
+) -> tuple:
+    return (
+        o.id,
+        variant,
+        module_id,
+        o.namespace,
+        o.name,
+        o.service_id,
+        o.service_name,
+        o.input_shape_id,
+        o.output_shape_id,
+        o.file_path,
+        o.line,
+        _dumps(o.errors),
+        o.http_method,
+        o.http_uri,
+    )
+
+
+def _smithy_link_row(
+    link: SmithyOperationLink, variant: str, module_id: str | None
+) -> tuple:
+    return (
+        link.id,
+        variant,
+        module_id,
+        link.operation_id,
+        link.class_id,
+        link.class_full_name,
+        link.link_type,
+        link.codegen_profile,
+        link.language,
+        link.file_path,
+        link.line,
+    )
+
+
+def _row_to_smithy_shape(row: sqlite3.Row) -> SmithyShapeEntry:
+    members = [
+        SmithyMemberEntry(
+            name=m["name"], target_shape=m["target_shape"], required=m["required"]
+        )
+        for m in _loads(row["members_json"], [])
+    ]
+    return SmithyShapeEntry(
+        id=row["id"],
+        namespace=row["namespace"],
+        name=row["name"],
+        kind=row["kind"],
+        file_path=row["file_path"],
+        line=row["line"],
+        members=members,
+    )
+
+
+def _row_to_smithy_operation(row: sqlite3.Row) -> SmithyOperationEntry:
+    return SmithyOperationEntry(
+        id=row["id"],
+        namespace=row["namespace"],
+        name=row["name"],
+        service_id=row["service_id"],
+        service_name=row["service_name"],
+        input_shape_id=row["input_shape_id"],
+        output_shape_id=row["output_shape_id"],
+        file_path=row["file_path"],
+        line=row["line"],
+        errors=_loads(row["errors_json"], []),
+        http_method=row["http_method"],
+        http_uri=row["http_uri"],
+    )
+
+
+def _row_to_smithy_link(row: sqlite3.Row) -> SmithyOperationLink:
+    return SmithyOperationLink(
+        id=row["id"],
+        operation_id=row["operation_id"],
+        class_id=row["class_id"],
+        class_full_name=row["class_full_name"],
+        link_type=row["link_type"],
+        codegen_profile=row["codegen_profile"],
+        language=row["language"],
+        file_path=row["file_path"],
+        line=row["line"],
+    )
+
+
+def save_smithy_graph(
+    conn: sqlite3.Connection,
+    shapes: list[SmithyShapeEntry],
+    operations: list[SmithyOperationEntry],
+    links: list[SmithyOperationLink],
+    *,
+    variant: str = "main",
+    module_id: str | None = None,
+) -> None:
+    """Replace all Smithy rows for the given scope. Unlike `save_full_graph`,
+    there's no main/test split for IDL model files -- everything is `main` by
+    default. Always a full replace: `.smithy` files are few and small relative
+    to source code, so re-parsing+replacing on every `jidra index` run is
+    cheap and avoids needing a separate incremental path for this data."""
+    conn.execute(
+        "DELETE FROM smithy_shapes WHERE variant = ? AND module_id IS ?",
+        (variant, module_id),
+    )
+    conn.execute(
+        "DELETE FROM smithy_operations WHERE variant = ? AND module_id IS ?",
+        (variant, module_id),
+    )
+    conn.execute(
+        "DELETE FROM smithy_operation_links WHERE variant = ? AND module_id IS ?",
+        (variant, module_id),
+    )
+    conn.executemany(
+        "INSERT INTO smithy_shapes VALUES (?,?,?,?,?,?,?,?,?)",
+        [_smithy_shape_row(s, variant, module_id) for s in shapes],
+    )
+    conn.executemany(
+        "INSERT INTO smithy_operations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [_smithy_operation_row(o, variant, module_id) for o in operations],
+    )
+    conn.executemany(
+        "INSERT INTO smithy_operation_links VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        [_smithy_link_row(link, variant, module_id) for link in links],
+    )
+    conn.commit()
+
+
+def load_smithy_operations(
+    conn: sqlite3.Connection, *, variant: str = "main", module_id: str | None = None
+) -> list[SmithyOperationEntry]:
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT * FROM smithy_operations WHERE variant = ? AND module_id IS ?",
+        (variant, module_id),
+    ).fetchall()
+    return [_row_to_smithy_operation(r) for r in rows]
+
+
+def load_smithy_shapes(
+    conn: sqlite3.Connection, *, variant: str = "main", module_id: str | None = None
+) -> list[SmithyShapeEntry]:
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT * FROM smithy_shapes WHERE variant = ? AND module_id IS ?",
+        (variant, module_id),
+    ).fetchall()
+    return [_row_to_smithy_shape(r) for r in rows]
+
+
+def load_smithy_operation_links(
+    conn: sqlite3.Connection,
+    *,
+    operation_id: str | None = None,
+    class_id: str | None = None,
+    variant: str = "main",
+    module_id: str | None = None,
+) -> list[SmithyOperationLink]:
+    conn.row_factory = sqlite3.Row
+    query = "SELECT * FROM smithy_operation_links WHERE variant = ? AND module_id IS ?"
+    params: list[Any] = [variant, module_id]
+    if operation_id is not None:
+        query += " AND operation_id = ?"
+        params.append(operation_id)
+    if class_id is not None:
+        query += " AND class_id = ?"
+        params.append(class_id)
+    rows = conn.execute(query, params).fetchall()
+    return [_row_to_smithy_link(r) for r in rows]
 
 
 def _insert_graph(
