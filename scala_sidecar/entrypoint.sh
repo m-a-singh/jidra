@@ -9,10 +9,18 @@ if [ -z "$REPO" ] || [ -z "$OUTPUT" ]; then
   exit 1
 fi
 
-# Copy repo to a writable temp dir — sbt needs to write target/, boot cache,
-# and temp files; the original mount stays read-only and build.sbt is not modified.
-WORKDIR=$(mktemp -d /tmp/repo-XXXXXX)
-cp -r "$REPO"/. "$WORKDIR"
+# Sync source files into /workspace, preserving target/ for Zinc incremental cache.
+# /workspace is a named Docker volume mounted by the caller — it survives across runs,
+# so repeated indexing of the same codebase only recompiles what changed instead of
+# rebuilding from scratch every time. rsync copies only changed source files; target/
+# is excluded so Zinc's own cache there is untouched.
+WORKDIR=/workspace
+mkdir -p "$WORKDIR"
+rsync -a --delete \
+  --exclude="/target/" \
+  --exclude="/.bloop/" \
+  --exclude="/.metals/" \
+  "$REPO"/ "$WORKDIR"/
 cd "$WORKDIR"
 
 

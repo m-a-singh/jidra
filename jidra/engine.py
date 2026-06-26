@@ -349,6 +349,69 @@ class JidraEngine:
             "source": selected.source or "",
         }
 
+    def find_callers(self, method: str, depth: int = 1) -> dict:
+        """Reverse call lookup: who calls `method`, walked up to `depth` levels
+        of the call graph (BFS). Complements `get_file_dependents` (file-level)
+        with a method-level answer to "what calls this, and what calls those.\""""
+        resolved = self._resolve_single_method(method)
+        if "error" in resolved:
+            suggestions = resolved.get("suggestions", [])
+            if suggestions and suggestions[0].get("score", 0) >= 100:
+                resolved = self._resolve_single_method(suggestions[0]["selector"])
+                if "error" in resolved:
+                    return resolved
+            else:
+                return resolved
+        selected = resolved["method"]
+        if not hasattr(selected, "id"):
+            return {"error": "invalid_method_selector_result"}
+
+        method_by_id = {m.id: m for m in self.graph.methods}
+
+        # Build reverse adjacency: callee_id → [caller_id, ...]
+        reverse: dict[str, list[str]] = {}
+        for edge in self.graph.resolved_call_edges:
+            caller_id = getattr(edge, "caller_method_id", None)
+            callee_id = getattr(edge, "callee_method_id", None)
+            if caller_id and callee_id:
+                reverse.setdefault(callee_id, []).append(caller_id)
+
+        # BFS up the call graph up to `depth` levels
+        visited: set[str] = {selected.id}
+        frontier = [selected.id]
+        callers_by_depth: list[list[dict]] = []
+        for _ in range(max(1, depth)):
+            next_frontier = []
+            level = []
+            for callee_id in frontier:
+                for caller_id in reverse.get(callee_id, []):
+                    if caller_id in visited:
+                        continue
+                    visited.add(caller_id)
+                    next_frontier.append(caller_id)
+                    m = method_by_id.get(caller_id)
+                    level.append(
+                        {
+                            "method_id": caller_id,
+                            "signature": m.signature if m else caller_id,
+                            "file_path": getattr(m, "file_path", None) if m else None,
+                            "start_line": getattr(m, "start_line", None) if m else None,
+                        }
+                    )
+            if level:
+                callers_by_depth.append(level)
+            frontier = next_frontier
+            if not frontier:
+                break
+
+        flat = [c for level in callers_by_depth for c in level]
+        return {
+            "method_id": selected.id,
+            "signature": selected.signature,
+            "caller_count": len(flat),
+            "callers": flat,
+        }
+
     def get_call_chain(
         self, from_method: str, to_method: str, max_depth: int = 6
     ) -> dict:

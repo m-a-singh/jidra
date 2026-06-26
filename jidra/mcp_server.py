@@ -261,6 +261,93 @@ def _resolve_graph_dir(resolved_graph: str) -> Path:
     return p if p.is_dir() else p.parent
 
 
+def _dispatch_get_docs(
+    graph_path: str,
+    query: str,
+    linked_class: str | None,
+    limit: int,
+) -> dict:
+    from . import doc_store, graph_store as gs
+
+    conn = gs.connect(Path(graph_path))
+    doc_store.migrate(conn)
+    chunks: list[dict] = []
+    # 1. If a specific class is given, prioritise linked chunks
+    if linked_class:
+        chunks = doc_store.query_by_class(conn, linked_class, limit=limit)
+    # 2. FTS search — covers both the class-linked and free-text cases
+    if not chunks or len(chunks) < limit:
+        fts_chunks = doc_store.query_fts(conn, query, limit=limit)
+        seen = {c["id"] for c in chunks}
+        chunks += [c for c in fts_chunks if c["id"] not in seen]
+    chunks = chunks[:limit]
+    if not chunks:
+        return {"docs_found": False, "message": "No relevant documentation found for this query."}
+    return {
+        "docs_found": True,
+        "count": len(chunks),
+        "chunks": [
+            {
+                "source": c["source_path"],
+                "source_type": c["source_type"],
+                "title": c["title"],
+                "content": c["content"],
+                "linked_classes": [x for x in c["linked_classes"].split(",") if x],
+            }
+            for c in chunks
+        ],
+    }
+
+
+def _dispatch_index_docs(graph_path: str, path: str) -> dict:
+    from . import doc_store, graph_store as gs
+    from .doc_indexer import index_document, index_directory, extract_graph_names
+
+    conn = gs.connect(Path(graph_path))
+    doc_store.migrate(conn)
+    # Load graph for heuristic linking
+    graph = gs.load_graph(conn, variant="main")
+    class_names, method_names = extract_graph_names(graph)
+    if path.startswith(("http://", "https://")):
+        return {
+            "error": "URL indexing is disabled. Download the document locally first to keep all processing offline."
+        }
+    p = Path(path)
+    if p.is_dir():
+        results = index_directory(conn, path, graph_class_names=class_names, graph_method_names=method_names)
+        total_chunks = sum(v for v in results.values() if v >= 0)
+        failed = [k for k, v in results.items() if v < 0]
+        return {
+            "indexed": len(results),
+            "chunks": total_chunks,
+            "failed": failed,
+            "sources": list(results.keys()),
+        }
+    n = index_document(conn, path, class_names, method_names)
+    return {"indexed": 1, "chunks": n, "source": path}
+
+
+def _enrich_with_docs(conn, result: dict, class_name: str | None, query: str | None) -> dict:
+    """Add a docs_available flag to any tool result. No-op if doc tables don't
+    exist yet, so this is always safe to call even on a graph that's never had
+    `jidra_index_docs` run against it."""
+    try:
+        from . import doc_store
+
+        doc_store.migrate(conn)
+        available = False
+        if class_name:
+            available = doc_store.docs_available_for_class(conn, class_name)
+        if not available and query:
+            available = doc_store.docs_available_for_query(conn, query)
+        if available:
+            result["docs_available"] = True
+            result["docs_hint"] = "Call jidra_get_docs to retrieve relevant specification/design context."
+    except Exception:
+        pass
+    return result
+
+
 def dispatch_tool(
     name: str,
     params: dict | None,
@@ -283,12 +370,16 @@ def dispatch_tool(
 
     if name == "jidra_get_method_context":
         _log_session_call(codebase_path, name, p.get("method"))
-        return _maybe_add_stale_hint(
+        result = _maybe_add_stale_hint(
             engine().get_method_context(
                 method=p["method"], max_chars=p.get("max_chars")
             ),
             graph_dir,
         )
+        from . import graph_store as _gs
+
+        class_name = result.get("class_name") or (result.get("suggestions") or [None])[0]
+        return _enrich_with_docs(_gs.connect(Path(graph_path)), result, class_name, p.get("method"))
     if name == "jidra_get_flow":
         _log_session_call(codebase_path, name, p.get("method"))
         return _maybe_add_stale_hint(
@@ -307,8 +398,17 @@ def dispatch_tool(
         )
     if name == "jidra_get_method_source":
         _log_session_call(codebase_path, name, p.get("method"))
-        return _maybe_add_stale_hint(
+        result = _maybe_add_stale_hint(
             engine().get_method_source(method=p["method"]), graph_dir
+        )
+        from . import graph_store as _gs
+
+        class_name = result.get("class_name") or (result.get("suggestions") or [None])[0]
+        return _enrich_with_docs(_gs.connect(Path(graph_path)), result, class_name, p.get("method"))
+    if name == "jidra_find_callers":
+        _log_session_call(codebase_path, name, p.get("method"))
+        return _maybe_add_stale_hint(
+            engine().find_callers(method=p["method"], depth=p.get("depth", 1)), graph_dir
         )
     if name == "jidra_get_call_chain":
         _log_session_call(codebase_path, name, p.get("from_method"))
@@ -322,7 +422,7 @@ def dispatch_tool(
         )
     if name == "jidra_search":
         _log_session_call(codebase_path, name, p.get("query"))
-        return _maybe_add_stale_hint(
+        result = _maybe_add_stale_hint(
             engine().search(
                 query=p["query"],
                 limit=p.get("limit", 20),
@@ -330,11 +430,17 @@ def dispatch_tool(
             ),
             graph_dir,
         )
+        from . import graph_store as _gs
+
+        return _enrich_with_docs(_gs.connect(Path(graph_path)), result, None, p.get("query"))
     if name == "jidra_explore":
         _log_session_call(codebase_path, name, p.get("query"))
-        return _maybe_add_stale_hint(
+        result = _maybe_add_stale_hint(
             engine().explore(query=p["query"], top_n=p.get("top_n", 10)), graph_dir
         )
+        from . import graph_store as _gs
+
+        return _enrich_with_docs(_gs.connect(Path(graph_path)), result, None, p.get("query"))
     if name == "jidra_get_file_dependents":
         _log_session_call(codebase_path, name, p.get("file_path"))
         return _maybe_add_stale_hint(
@@ -392,6 +498,20 @@ def dispatch_tool(
             codebase=p.get("codebase"),
             changed_files=p.get("changed_files"),
         )
+    if name == "jidra_get_docs":
+        _log_session_call(codebase_path, name, p.get("query"))
+        return _dispatch_get_docs(
+            graph_path=graph_path,
+            query=p.get("query", ""),
+            linked_class=p.get("linked_class"),
+            limit=p.get("limit", 5),
+        )
+    if name == "jidra_index_docs":
+        _log_session_call(codebase_path, name, p.get("path"))
+        return _dispatch_index_docs(
+            graph_path=graph_path,
+            path=p["path"],
+        )
     raise KeyError(f"unknown tool: {name}")
 
 
@@ -401,6 +521,7 @@ TOOL_NAMES = [
     "jidra_get_flow",
     "jidra_get_agent_flow",
     "jidra_get_method_source",
+    "jidra_find_callers",
     "jidra_get_call_chain",
     "jidra_search",
     "jidra_explore",
@@ -415,6 +536,8 @@ TOOL_NAMES = [
     "jidra_graph_health",
     "jidra_check_staleness",
     "jidra_reindex",
+    "jidra_get_docs",
+    "jidra_index_docs",
 ]
 
 
@@ -508,6 +631,20 @@ def build_mcp(
         If selector returns suggestions, pick the best match and retry immediately."""
         return invoke(
             "jidra_get_method_source", {"method": method, "graph_path": graph_path}
+        )
+
+    @mcp.tool()
+    def jidra_find_callers(
+        method: str,
+        depth: int = 1,
+        graph_path: str | None = None,
+    ) -> dict:
+        """Find all methods that call the given method (reverse call lookup).
+        Use this to answer "who calls X?" questions. `depth` controls how many
+        levels up the call graph to walk (default 1 = direct callers only).
+        If selector returns suggestions, pick the best match and retry immediately."""
+        return invoke(
+            "jidra_find_callers", {"method": method, "depth": depth, "graph_path": graph_path}
         )
 
     @mcp.tool()
@@ -696,6 +833,46 @@ def build_mcp(
                 "codebase": codebase,
                 "changed_files": changed_files,
             },
+        )
+
+    @mcp.tool()
+    def jidra_get_docs(
+        query: str,
+        linked_class: str | None = None,
+        limit: int = 5,
+        graph_path: str | None = None,
+    ) -> dict:
+        """Search indexed spec/design documents for context relevant to a query or class.
+
+        Call this when:
+        - A code query returns `docs_available: true`
+        - A suggestion list is returned and you want to disambiguate using spec docs
+        - The user asks a question about design intent, spec compliance, or business rules
+        - No code match is found — the concept may only exist in docs so far
+
+        Returns ranked doc chunks with source, title, and content.
+        """
+        return invoke(
+            "jidra_get_docs",
+            {"query": query, "linked_class": linked_class, "limit": limit, "graph_path": graph_path},
+        )
+
+    @mcp.tool()
+    def jidra_index_docs(
+        path: str,
+        graph_path: str | None = None,
+    ) -> dict:
+        """Index a document or directory of documents (MD, PDF, DOCX, PPTX) into the doc store.
+
+        Chunks content, extracts class/method name mentions for heuristic linking to the code graph,
+        and stores in the graph DB for retrieval via jidra_get_docs.
+
+        path: a local file path or directory path. URLs are not accepted — all
+        processing is offline; download the document locally first.
+        """
+        return invoke(
+            "jidra_index_docs",
+            {"path": path, "graph_path": graph_path},
         )
 
     return mcp

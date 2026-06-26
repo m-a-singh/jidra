@@ -7,6 +7,7 @@ then reads the emitted .semanticdb protobuf files to build a Graph.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import subprocess
 import tempfile
@@ -65,11 +66,27 @@ def _ensure_image() -> None:
         )
 
 
+def _is_new_volume(volume: str) -> bool:
+    result = subprocess.run(["docker", "volume", "inspect", volume], capture_output=True)
+    return result.returncode != 0
+
+
+def _workspace_volume(codebase_root: Path) -> str:
+    """Stable per-codebase Docker volume name, used to persist sbt's Zinc
+    incremental-compile cache across separate `docker run` invocations so
+    repeated indexing of the same repo only recompiles what changed."""
+    h = hashlib.sha1(str(codebase_root).encode()).hexdigest()[:12]
+    return f"jidra-zinc-{h}"
+
+
 def _run_sidecar(codebase_root: Path, tmp_out: str, timeout: int = 600) -> None:
     try:
         _ensure_image()
     except FileNotFoundError as e:
         raise ScalaExtractorError("Docker is not available on PATH") from e
+
+    volume = _workspace_volume(codebase_root)
+    first_run = _is_new_volume(volume)
 
     cmd = [
         "docker",
@@ -79,15 +96,16 @@ def _run_sidecar(codebase_root: Path, tmp_out: str, timeout: int = 600) -> None:
         f"{codebase_root}:/repo:ro",
         "-v",
         f"{tmp_out}:/output:rw",
+        "-v",
+        f"{volume}:/workspace:rw",
         DOCKER_IMAGE,
         "/repo",
         "/output",
     ]
 
-    print(
-        "  [jidra] Running sbt compile inside Docker (this may take 30–120s)...",
-        flush=True,
-    )
+    msg = "  [jidra] Running sbt compile inside Docker"
+    msg += " (this may take 30–120s, first run)..." if first_run else " (incremental via Zinc cache)..."
+    print(msg, flush=True)
     try:
         result = subprocess.run(
             cmd,
