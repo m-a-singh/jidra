@@ -282,7 +282,10 @@ def _dispatch_get_docs(
         chunks += [c for c in fts_chunks if c["id"] not in seen]
     chunks = chunks[:limit]
     if not chunks:
-        return {"docs_found": False, "message": "No relevant documentation found for this query."}
+        return {
+            "docs_found": False,
+            "message": "No relevant documentation found for this query.",
+        }
     return {
         "docs_found": True,
         "count": len(chunks),
@@ -314,7 +317,9 @@ def _dispatch_index_docs(graph_path: str, path: str) -> dict:
         }
     p = Path(path)
     if p.is_dir():
-        results = index_directory(conn, path, graph_class_names=class_names, graph_method_names=method_names)
+        results = index_directory(
+            conn, path, graph_class_names=class_names, graph_method_names=method_names
+        )
         total_chunks = sum(v for v in results.values() if v >= 0)
         failed = [k for k, v in results.items() if v < 0]
         return {
@@ -327,7 +332,9 @@ def _dispatch_index_docs(graph_path: str, path: str) -> dict:
     return {"indexed": 1, "chunks": n, "source": path}
 
 
-def _enrich_with_docs(conn, result: dict, class_name: str | None, query: str | None) -> dict:
+def _enrich_with_docs(
+    conn, result: dict, class_name: str | None, query: str | None
+) -> dict:
     """Add a docs_available flag to any tool result. No-op if doc tables don't
     exist yet, so this is always safe to call even on a graph that's never had
     `jidra_index_docs` run against it."""
@@ -342,7 +349,9 @@ def _enrich_with_docs(conn, result: dict, class_name: str | None, query: str | N
             available = doc_store.docs_available_for_query(conn, query)
         if available:
             result["docs_available"] = True
-            result["docs_hint"] = "Call jidra_get_docs to retrieve relevant specification/design context."
+            result["docs_hint"] = (
+                "Call jidra_get_docs to retrieve relevant specification/design context."
+            )
     except Exception:
         pass
     return result
@@ -378,8 +387,12 @@ def dispatch_tool(
         )
         from . import graph_store as _gs
 
-        class_name = result.get("class_name") or (result.get("suggestions") or [None])[0]
-        return _enrich_with_docs(_gs.connect(Path(graph_path)), result, class_name, p.get("method"))
+        class_name = (
+            result.get("class_name") or (result.get("suggestions") or [None])[0]
+        )
+        return _enrich_with_docs(
+            _gs.connect(Path(graph_path)), result, class_name, p.get("method")
+        )
     if name == "jidra_get_flow":
         _log_session_call(codebase_path, name, p.get("method"))
         return _maybe_add_stale_hint(
@@ -403,12 +416,17 @@ def dispatch_tool(
         )
         from . import graph_store as _gs
 
-        class_name = result.get("class_name") or (result.get("suggestions") or [None])[0]
-        return _enrich_with_docs(_gs.connect(Path(graph_path)), result, class_name, p.get("method"))
+        class_name = (
+            result.get("class_name") or (result.get("suggestions") or [None])[0]
+        )
+        return _enrich_with_docs(
+            _gs.connect(Path(graph_path)), result, class_name, p.get("method")
+        )
     if name == "jidra_find_callers":
         _log_session_call(codebase_path, name, p.get("method"))
         return _maybe_add_stale_hint(
-            engine().find_callers(method=p["method"], depth=p.get("depth", 1)), graph_dir
+            engine().find_callers(method=p["method"], depth=p.get("depth", 1)),
+            graph_dir,
         )
     if name == "jidra_get_call_chain":
         _log_session_call(codebase_path, name, p.get("from_method"))
@@ -432,7 +450,9 @@ def dispatch_tool(
         )
         from . import graph_store as _gs
 
-        return _enrich_with_docs(_gs.connect(Path(graph_path)), result, None, p.get("query"))
+        return _enrich_with_docs(
+            _gs.connect(Path(graph_path)), result, None, p.get("query")
+        )
     if name == "jidra_explore":
         _log_session_call(codebase_path, name, p.get("query"))
         result = _maybe_add_stale_hint(
@@ -440,7 +460,9 @@ def dispatch_tool(
         )
         from . import graph_store as _gs
 
-        return _enrich_with_docs(_gs.connect(Path(graph_path)), result, None, p.get("query"))
+        return _enrich_with_docs(
+            _gs.connect(Path(graph_path)), result, None, p.get("query")
+        )
     if name == "jidra_get_file_dependents":
         _log_session_call(codebase_path, name, p.get("file_path"))
         return _maybe_add_stale_hint(
@@ -644,7 +666,8 @@ def build_mcp(
         levels up the call graph to walk (default 1 = direct callers only).
         If selector returns suggestions, pick the best match and retry immediately."""
         return invoke(
-            "jidra_find_callers", {"method": method, "depth": depth, "graph_path": graph_path}
+            "jidra_find_callers",
+            {"method": method, "depth": depth, "graph_path": graph_path},
         )
 
     @mcp.tool()
@@ -854,7 +877,12 @@ def build_mcp(
         """
         return invoke(
             "jidra_get_docs",
-            {"query": query, "linked_class": linked_class, "limit": limit, "graph_path": graph_path},
+            {
+                "query": query,
+                "linked_class": linked_class,
+                "limit": limit,
+                "graph_path": graph_path,
+            },
         )
 
     @mcp.tool()
