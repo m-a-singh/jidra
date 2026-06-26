@@ -1619,14 +1619,16 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         graph.resolved_call_edges = sorted(kept + edges, key=lambda e: e.id)
 
 
-def _build_java_graph(codebase_root: Path, on_progress=None) -> Graph:
+def _build_java_graph(
+    codebase_root: Path, on_progress=None, extra_java_roots: list[Path] | None = None
+) -> Graph:
     all_classes: list[ClassEntry] = []
     all_methods: list[MethodEntry] = []
     all_fields: list[FieldEntry] = []
     all_calls: list[CallSite] = []
     all_inheritance_edges: list[InheritanceEdge] = []
 
-    file_paths = list(iter_java_files(codebase_root))
+    file_paths = list(iter_java_files(codebase_root, extra_roots=extra_java_roots))
     for result in parallel_map(_extract_file, file_paths):
         all_classes.extend(result.classes)
         all_methods.extend(result.methods)
@@ -1666,6 +1668,7 @@ def build_graph(
     changed_files: set[Path] | None = None,
     previous_graph: Graph | None = None,
     ts_backend: str = "auto",
+    extra_java_roots: list[Path] | None = None,
 ) -> Graph:
     if changed_files is not None and previous_graph is not None:
         changed_paths_str = {str(p) for p in changed_files}
@@ -1738,7 +1741,9 @@ def build_graph(
         graphs.append(build_go_graph(codebase_root, on_progress=on_progress))
 
     if "java" in langs:
-        java_graph = _build_java_graph(codebase_root, on_progress=on_progress)
+        java_graph = _build_java_graph(
+            codebase_root, on_progress=on_progress, extra_java_roots=extra_java_roots
+        )
         for cls in java_graph.classes:
             cls.language = "java"
         for m in java_graph.methods:

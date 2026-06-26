@@ -180,12 +180,15 @@ def prompt(
     if not RICH:
         return _plain_prompt(prompt_text, default, choices, optional)
     while True:
-        response = Prompt.ask(
-            f"[bold cyan]?[/bold cyan] {prompt_text}",
-            default=default or None,
-            choices=choices,
-            show_choices=bool(choices),
-            show_default=bool(default),
+        response = (
+            Prompt.ask(
+                f"[bold cyan]?[/bold cyan] {prompt_text}",
+                default=default or None,
+                choices=choices,
+                show_choices=bool(choices),
+                show_default=bool(default),
+            )
+            or ""
         ).strip()
         if not response:
             if default:
