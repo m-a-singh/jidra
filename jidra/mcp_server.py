@@ -583,7 +583,7 @@ PRIMARY_TOOLS = [
     "jidra_explore",
     "jidra_get_method_source",
     "jidra_find_callers",
-    "jidra_get_implementations",
+    "jidra_get_agent_flowjidra_get_implementations",
     "jidra_analyze_stack_trace",
 ]
 
