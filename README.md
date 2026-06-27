@@ -106,12 +106,26 @@ Every index, reindex, and doc-index run is recorded to a local telemetry dashboa
 - **Searches** the graph by keyword or natural language (FTS5-backed `jidra_search` / `jidra_explore`)
 - **Surfaces** framework structure as first-class data — HTTP endpoints, React/Vue/Angular components & hooks (`jidra_get_endpoints`, `jidra_get_components`, `jidra_get_framework_summary`)
 - **Answers** impact-analysis questions — what breaks if I change this file (`jidra_get_file_dependents` / `_dependencies`)
+- **Resolves** interface→implementation and class surface — list every concrete implementation of an interface/abstract class in one call (`jidra_get_implementations`), or every method and field of a class (`jidra_get_class_members`)
 - **Generates** noise-free context (68-95% smaller depending on language), auto-scaled to repo size (budget tiers)
 - **Traces** method/function execution with uncertainty markers
 - **Stays fresh** automatically via git hooks + an in-daemon file watcher (no manual reindex)
 - **Exports** as JSON, MCP tools, or interactive HTML
 - **Integrates** with Claude/Codex/Gemini via MCP (shared-daemon proxy mode shares one in-memory graph across editor windows)
 - **Reduces** LLM token costs by 68-95% (proven on real projects)
+
+## Benchmarked vs CodeGraph (agent-in-loop)
+
+JIDRA was evaluated against the [CodeGraph](https://github.com/colbymchenry/codegraph) MCP server using a real coding agent: the same LLM was given a navigation task and **exactly one backend's tools**, then scored on correctness, tool calls, tokens, and hallucinations. On a Spring Boot Java repo (7 tasks, Haiku 4.5):
+
+| Config | Backend | correct | avg tool calls | avg tokens | halluc. |
+|---|---|---|---|---|---|
+| **A (runtime Actuator)** | **JIDRA** | **7/7** | **3.0** | **~18.9k** | 0/7 |
+| A (runtime Actuator) | CodeGraph | 7/7 | 4.9 | ~65.2k | 0/7 |
+| **B (static only)** | **JIDRA** | **7/7** | **3.9** | **~26.0k** | 0/7 |
+| B (static only) | CodeGraph | 6/7 | 5.0 | ~68.3k | 0/7 |
+
+JIDRA used ~3.5x fewer tokens than CodeGraph at equal correctness. Runtime Actuator grounding (Config A) cut JIDRA a further ~27% tokens and ~1 tool call per task versus static analysis (Config B) by resolving dependency injection ambiguity up front—something CodeGraph's pure-static approach cannot match. The CodeGraph 7/7→6/7 variance between configs is agent run-variance (CodeGraph never uses JIDRA's graph), not a real effect. Full methodology, per-task data, and limitations are in [FINDINGS_jidra_vs_codegraph.md](FINDINGS_jidra_vs_codegraph.md).
 
 ## What JIDRA Does NOT Do (By Design)
 

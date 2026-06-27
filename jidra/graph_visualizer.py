@@ -477,7 +477,7 @@ def render_interactive_html(graph_data: dict) -> str:
     </div>
     <div class="controls">
       <button class="btn" id="btnFit">Fit All</button>
-      <button class="btn {'active' if physics_default else ''}" id="btnPhysics">Physics {'On' if physics_default else 'Off'}</button>
+      <button class="btn {"active" if physics_default else ""}" id="btnPhysics">Physics {"On" if physics_default else "Off"}</button>
       <button class="btn" id="btnEndpoints">Endpoints Only</button>
       <button class="btn" id="btnAll">Show All</button>
       <button class="btn" id="btnNeighbors">Show Neighbors</button>
