@@ -7,7 +7,7 @@ class TestStitchFlow:
     def test_stitch_flow_basic(self, loaded_test_graph, simple_test_graph):
         """Test basic flow stitching from entry method."""
         entry_method = simple_test_graph.methods[0]  # handleRequest
-        result = stitch_flow(loaded_test_graph, entry_method)
+        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
 
         assert "error" not in result
         assert "entry" in result
@@ -30,7 +30,7 @@ class TestStitchFlow:
     def test_stitch_flow_nodes_structure(self, loaded_test_graph, simple_test_graph):
         """Test node structure in stitched flow."""
         entry_method = simple_test_graph.methods[0]
-        result = stitch_flow(loaded_test_graph, entry_method)
+        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
 
         nodes = result.get("nodes", [])
         assert len(nodes) > 0
@@ -79,12 +79,15 @@ class TestStitchFlow:
         def is_business(entry):
             return True  # All are business in test graph
 
-        result_all = stitch_flow(loaded_test_graph, entry_method, business_only=False)
+        result_all = stitch_flow(
+            loaded_test_graph, entry_method, business_only=False, detail="full"
+        )
         result_business = stitch_flow(
             loaded_test_graph,
             entry_method,
             business_only=True,
             is_business_entry=is_business,
+            detail="full",
         )
 
         # Both should be valid
@@ -122,7 +125,7 @@ class TestStitchFlow:
     def test_stitch_flow_tiered_views(self, loaded_test_graph, simple_test_graph):
         """Test tiered flow views."""
         entry_method = simple_test_graph.methods[0]
-        result = stitch_flow(loaded_test_graph, entry_method)
+        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
 
         assert "likely_primary" in result or "primary_flow" in result
         assert "supporting" in result or "supporting_flow" in result
@@ -133,7 +136,7 @@ class TestStitchFlow:
     ):
         """Test backward-compatible aliases."""
         entry_method = simple_test_graph.methods[0]
-        result = stitch_flow(loaded_test_graph, entry_method)
+        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
 
         # Check both new names and old aliases exist
         assert "likely_primary" in result or "primary_flow" in result
