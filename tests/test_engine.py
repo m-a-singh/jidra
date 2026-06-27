@@ -53,6 +53,15 @@ class TestGetFlow:
 
         assert "error" not in result
         assert "entry" in result
+        assert "agent_view" in result  # default summary mode
+        assert "summary" in result
+
+    def test_get_flow_full_detail(self, test_graph_file):
+        engine = JidraEngine(test_graph_file)
+        result = engine.get_flow("handleRequest", detail="full")
+
+        assert "error" not in result
+        assert "entry" in result
         assert "nodes" in result
         assert "edges" in result
         assert "uncertain_edges" in result
@@ -103,7 +112,7 @@ class TestGetAgentFlow:
 
     def test_agent_flow_is_compact(self, test_graph_file):
         engine = JidraEngine(test_graph_file)
-        flow = engine.get_flow("handleRequest")
+        flow = engine.get_flow("handleRequest", detail="full")
         agent_flow = engine.get_agent_flow("handleRequest")
 
         # Agent flow should have fewer nodes than full flow

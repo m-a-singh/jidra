@@ -2074,7 +2074,9 @@ def _up() -> None:
 
 
 def _index_docs_path(
-    db_path: Path, path: Path, extensions: tuple[str, ...] = (".md", ".mdx", ".txt", ".pdf")
+    db_path: Path,
+    path: Path,
+    extensions: tuple[str, ...] = (".md", ".mdx", ".txt", ".pdf"),
 ) -> int:
     """Index every matching file under `path` into the doc graph at `db_path`.
 
