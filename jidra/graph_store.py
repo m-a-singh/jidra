@@ -302,6 +302,21 @@ def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
     return any(r[1] == column for r in cur.fetchall())
 
 
+def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
+    """Set a key-value pair in schema_meta."""
+    conn.execute(
+        "INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)", (key, value)
+    )
+    conn.commit()
+
+
+def get_meta(conn: sqlite3.Connection, key: str) -> str | None:
+    """Get a value from schema_meta, or None if not found."""
+    cur = conn.execute("SELECT value FROM schema_meta WHERE key = ?", (key,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
 def _run_migrations(conn: sqlite3.Connection) -> None:
     """Idempotent, additive upgrades applied on every `connect()`.
 
@@ -1035,17 +1050,29 @@ def load_graph(
     )
 
 
+_CAMEL_SPLIT_RE = re.compile(r"[A-Z][a-z0-9]+|[A-Z]+(?=[A-Z]|$)|[a-z0-9]+")
+
+
 def _fts_query(text: str) -> str:
     """Turn free text into a safe FTS5 MATCH expression.
 
-    Each alphanumeric token is double-quoted (so FTS5 treats it as a literal,
-    neutralizing operators like `-`, `*`, `:` in identifiers) with a trailing
-    prefix `*`, and the tokens are OR-ed so partial overlaps still rank.
+    Each alphanumeric token is double-quoted with a trailing prefix `*` and
+    OR-ed.  CamelCase identifiers are also split into sub-tokens so that
+    e.g. "getSearchFilters" matches even if the FTS index tokenised it as
+    separate words ("get", "search", "filters").
     """
-    tokens = re.findall(r"[A-Za-z0-9_]+", text)
-    if not tokens:
+    raw_tokens = re.findall(r"[A-Za-z0-9_]+", text)
+    if not raw_tokens:
         return ""
-    return " OR ".join(f'"{t}"*' for t in tokens)
+    token_set: list[str] = []
+    seen: set[str] = set()
+    for tok in raw_tokens:
+        for part in [tok] + _CAMEL_SPLIT_RE.findall(tok):
+            low = part.lower()
+            if low and low not in seen:
+                seen.add(low)
+                token_set.append(part)
+    return " OR ".join(f'"{t}"*' for t in token_set)
 
 
 def search_methods(
@@ -1085,6 +1112,24 @@ def search_methods(
         # FTS table missing (e.g. very old DB the migration didn't touch) —
         # let the caller fall back to an in-memory scan.
         return []
+    return [dict(r) for r in cur.fetchall()]
+
+
+def fetch_methods_by_ids(
+    conn: sqlite3.Connection,
+    method_ids: list[str],
+    variant: str = "main",
+) -> list[dict]:
+    """Fetch method metadata rows for a list of IDs."""
+    if not method_ids:
+        return []
+    conn.row_factory = sqlite3.Row
+    placeholders = ",".join("?" * len(method_ids))
+    cur = conn.execute(
+        f"SELECT id, method_name, signature, class_full_name, file_path, language "
+        f"FROM methods WHERE id IN ({placeholders}) AND variant = ?",
+        method_ids + [variant],
+    )
     return [dict(r) for r in cur.fetchall()]
 
 

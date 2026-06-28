@@ -38,6 +38,12 @@ jidra mcp --graph /path/to/graph.db
 
 `jidra up` writes an `.mcp.json` that launches the server in `--mode proxy`.
 
+## Environment Variables
+
+| Variable | Default | Behavior |
+|----------|---------|----------|
+| `JIDRA_FULL_TOOLS` | unset | If set to `1`, exposes all 25+ tools. By default only the **primary tier** (5 high-confidence tools) are visible: `jidra_explore`, `jidra_get_method_source`, `jidra_find_callers`, `jidra_get_implementations`, `jidra_analyze_stack_trace`. Full surface includes lower-precision variants (`jidra_get_flow`, `jidra_search`, etc.) and the two new grounding tools (`jidra_query_by_annotation`, `jidra_field_access`). Reversible — toggle any time. |
+
 ## Exposed Tools
 
 **Discovery / search**
@@ -50,21 +56,36 @@ jidra mcp --graph /path/to/graph.db
 **Retrieval / tracing**
 - `jidra_get_method_context` — per-method context (resolved/unresolved calls, source excerpt, class hierarchy).
 - `jidra_get_method_source` — source location + text for a selected method.
+- `jidra_find_callers` — reverse call lookup: all methods that call the given method. `depth` walks N levels up the call graph (default 1 = direct callers).
 - `jidra_get_flow` — full stitched flow for a method entrypoint.
 - `jidra_get_agent_flow` — compact ranked flow view for agent triage.
 - `jidra_get_call_chain` — verifies a path exists between two methods within a depth bound.
 - `jidra_analyze_stack_trace` — matches stack-trace frames (Java/Python/TypeScript) to graph methods and returns deterministic debug locations + focused flow summary.
 
+**Structure / resolution**
+- `jidra_get_implementations` — list ALL concrete implementations of an interface/abstract class in one call (optional `transitive` to follow the subtype chain). Use instead of repeated searches for "what implements X".
+- `jidra_get_class_members` — list every method and field of a class in one call. Use before repeated `jidra_get_method_source` calls on the same class.
+- `jidra_query_by_annotation` — find classes/methods by annotation. `kind`: 'class', 'method', or 'any' (default). Example: `query_by_annotation("RestController")`, `query_by_annotation("async_task", kind="method")`.
+- `jidra_field_access` — find field access patterns. Query by field name or method signature. Field format: "ClassName#fieldName" or just "fieldName" to search all classes. Returns readers (methods that read the field) and writers (methods that write it). Example: `field_access(field="Cache#config")`, `field_access(method="processData(String)")`.
+
 **Impact analysis**
 - `jidra_get_file_dependents` — blast radius: which files break if you change this one, ranked by call-site count.
 - `jidra_get_file_dependencies` — which files this one depends on (via call edges + class inheritance).
+
+**Smithy (when the codebase uses it)**
+- `jidra_get_operation_graph` — Smithy operation lookup: the operation's contract (service, HTTP binding, input/output shape ids, errors) plus the real handler class implementing it.
+- `jidra_list_operations` — list all Smithy operations in the graph; optional `service` filter.
+
+**Docs / spec**
+- `jidra_get_docs` — search indexed spec/design documents for context relevant to a query or class.
+- `jidra_index_docs` — index a document or directory (MD, PDF, DOCX) into the doc store for later retrieval via `jidra_get_docs`.
 
 **Maintenance**
 - `jidra_graph_health` — resolved/unresolved/external call-site breakdown.
 - `jidra_check_staleness` — whether the graph is stale vs. source.
 - `jidra_reindex` — incrementally update the graph after file changes.
 
-All tools are graph-backed and deterministic for a fixed graph input. They do not run LLM diagnosis and do not mutate graph structure (except `jidra_reindex`, which rebuilds it).
+All tools are graph-backed and deterministic for a fixed graph input. They do not run LLM diagnosis and do not mutate state (except `jidra_reindex`, which rebuilds the graph, and `jidra_index_docs`, which writes to the doc store).
 
 ## Budget-Tiered Output
 

@@ -276,7 +276,7 @@ class JidraDaemon:
             if method == "ping":
                 return {"id": rid, "result": "pong"}
             if method == "tools/list":
-                return {"id": rid, "result": list(mcp_server.TOOL_NAMES)}
+                return {"id": rid, "result": mcp_server.visible_tool_names()}
             if method == "jidra/reload":
                 return {"id": rid, "result": self.reload()}
             if method == "tools/call":

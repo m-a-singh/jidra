@@ -241,6 +241,7 @@ def stitch_flow(
     business_only: bool = True,
     is_business_entry: Callable[[dict], bool] | None = None,
     flow_config: dict | None = None,
+    detail: str = "summary",
 ) -> dict:
     flow_config = flow_config or {}
     method_by_id = {m.id: m for m in graph.methods}
@@ -691,17 +692,6 @@ def stitch_flow(
             "signature": entry_method.signature,
         },
         "depth": max_depth,
-        "nodes": kept_nodes,
-        "edges": filtered_edges,
-        "uncertain_edges": uncertain_edges,
-        "stopped_paths": stopped_paths,
-        "likely_primary": likely_primary,
-        "supporting": supporting,
-        "low_priority": low_priority,
-        # backward-compatible aliases
-        "primary_flow": likely_primary,
-        "supporting_flow": supporting,
-        "utility_flow": low_priority,
         "agent_view": {
             "entry": {
                 "method_id": entry_method.id,
@@ -727,4 +717,16 @@ def stitch_flow(
             "excluded_count": len(exclude_ids),
         },
     }
+    if detail == "full":
+        result["nodes"] = kept_nodes
+        result["edges"] = filtered_edges
+        result["uncertain_edges"] = uncertain_edges
+        result["stopped_paths"] = stopped_paths
+        result["likely_primary"] = likely_primary
+        result["supporting"] = supporting
+        result["low_priority"] = low_priority
+        # backward-compatible aliases
+        result["primary_flow"] = likely_primary
+        result["supporting_flow"] = supporting
+        result["utility_flow"] = low_priority
     return result
