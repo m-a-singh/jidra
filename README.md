@@ -101,6 +101,73 @@ Every index, reindex, and doc-index run is recorded to a local telemetry dashboa
   <img src="docs/assets/jidra_telemetry_2.jpg" alt="JIDRA telemetry — full index events and doc index events tables" width="800">
 </p>
 
+## Web UI (`jidra ui`)
+
+Everything above also runs as a single-page app — one process, no separate static HTML reports to regenerate. Pick a repo once, then move between seven tabs without re-entering anything:
+
+```bash
+cd ui && npm install && npm run build   # one-time, builds ui/dist
+jidra ui --port 7474                    # serves the React app + FastAPI backend
+```
+
+| Tab | What it does |
+|---|---|
+| **IDX** | Run the index/validate/doc-index pipeline, trigger incremental reindex, install git hooks — all from one form, with a live streaming output log |
+| **GRF** | Interactive call graph: search-to-jump, depth control, node inspector with callers/callees, endpoint filter, JSON export |
+| **SQL** | Query `graph.db` / telemetry.db directly against a live schema browser |
+| **MCP** | Call any MCP tool by hand — fill the JSON schema, see the raw result, browse the session log |
+| **TRC** | Hit the underlying graph functions directly (trace / context / flow / route / flow-doc / error-doc) without going through MCP tool-call plumbing |
+| **DOC** | Doc-to-code linkage graph — which README/spec chunks reference which classes, click through to see the actual linked classes |
+| **HIST** | Telemetry dashboard across *all* indexed repos — stat cards, growth/elapsed charts, full index/reindex/doc-index event tables |
+
+Pick a repository — the same picker drives every tab:
+
+<p align="center">
+  <img src="docs/assets/jidra-ui-repo-picker.jpg" alt="JIDRA UI — repository picker" width="800">
+</p>
+
+**IDX** — pipeline configuration as label/control rows, live output log, plus incremental reindex and git-hook install:
+
+<p align="center">
+  <img src="docs/assets/jidra-ui-index-config.jpg" alt="JIDRA UI — index pipeline configuration" width="800">
+  <img src="docs/assets/jidra-ui-index-running.jpg" alt="JIDRA UI — index pipeline running, live output log" width="800">
+</p>
+
+**GRF** — full interactive graph, fuzzy search-to-jump, and a node inspector with callers/callees:
+
+<p align="center">
+  <img src="docs/assets/jidra-ui-graph-overview.jpg" alt="JIDRA UI — graph overview" width="800">
+  <img src="docs/assets/jidra-ui-graph-search.jpg" alt="JIDRA UI — graph method search dropdown" width="800">
+  <img src="docs/assets/jidra-ui-graph-inspector.jpg" alt="JIDRA UI — graph node inspector with callers" width="800">
+</p>
+
+**SQL** — schema browser plus a real query editor against `graph.db`:
+
+<p align="center">
+  <img src="docs/assets/jidra-ui-sql-editor.jpg" alt="JIDRA UI — SQL editor and schema browser" width="800">
+</p>
+
+**MCP** — call any tool by hand and watch the session log fill in:
+
+<p align="center">
+  <img src="docs/assets/jidra-ui-mcp-explore.jpg" alt="JIDRA UI — MCP tool call (jidra_explore) with live result" width="800">
+</p>
+
+**DOC** — doc-to-code linkage graph; click a chunk or doc to see exactly which classes it links to:
+
+<p align="center">
+  <img src="docs/assets/jidra-ui-doc-graph-overview.jpg" alt="JIDRA UI — doc graph overview" width="800">
+  <img src="docs/assets/jidra-ui-doc-graph-physics.jpg" alt="JIDRA UI — doc graph force layout settling" width="800">
+  <img src="docs/assets/jidra-ui-doc-graph-inspector.jpg" alt="JIDRA UI — doc graph inspector showing linked classes" width="800">
+</p>
+
+**HIST** — telemetry is top-level, not scoped to one repo: stat cards and charts across everything you've indexed:
+
+<p align="center">
+  <img src="docs/assets/jidra-ui-history-dashboard.jpg" alt="JIDRA UI — telemetry dashboard, stat cards and charts" width="800">
+  <img src="docs/assets/jidra-ui-history-tables.jpg" alt="JIDRA UI — telemetry event tables" width="800">
+</p>
+
 ## What JIDRA Does
 
 - **Indexes** Scala, Java, TypeScript, Python, and Go source into deterministic call graphs
@@ -603,6 +670,17 @@ delimited `# BEGIN JIDRA` / `# END JIDRA` blocks, so they compose with other hoo
 (Husky, lefthook) and `uninstall` removes only JIDRA's block. When running the MCP server
 in `--mode proxy`, the shared daemon also runs a debounced filesystem watcher that hot-reloads
 the graph on save — so on most setups you get fresh graphs with no manual reindex at all.
+
+## `ui`
+
+```bash
+jidra ui [--host 127.0.0.1] [--port 7474] [--reload]
+```
+
+Serves the React web UI (see [Web UI](#web-ui-jidra-ui) above) plus its FastAPI backend on
+one port. Requires `ui/dist` to exist — build it once with `cd ui && npm install && npm run build`.
+`--reload` enables uvicorn auto-reload for backend development; it does not rebuild the frontend
+(run `npm run dev` in `ui/` separately for frontend hot-reload during UI development).
 
 ## `trace`
 

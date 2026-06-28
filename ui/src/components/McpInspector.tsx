@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { JsonView } from "./JsonView";
 import type { RepoState } from "../hooks/useRepo";
 
 interface Tool {
@@ -203,9 +204,9 @@ export function McpInspector({ repoPath, outputPath }: RepoState) {
 
             {/* result — fills remaining space */}
             {result && (
-              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", borderTop: "1px solid var(--border)" }}>
+              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", borderTop: "1px solid var(--border)", overflow: "auto" }}>
                 <div style={{ fontSize: "var(--sz-xs)", color: "var(--text-dim)", letterSpacing: "0.1em", padding: "6px 20px 4px" }}>RESULT</div>
-                <JsonResult value={result} />
+                <JsonView value={result} />
               </div>
             )}
           </>
@@ -233,47 +234,6 @@ export function McpInspector({ repoPath, outputPath }: RepoState) {
         </div>
       </div>
     </div>
-  );
-}
-
-function JsonResult({ value }: { value: string }) {
-  const lines = value.split("\n");
-  return (
-    <pre style={{
-      background: "var(--bg)", border: "none", borderTop: "none",
-      padding: "10px 20px", fontSize: "var(--sz-sm)", lineHeight: 1.7,
-      overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all",
-      flex: 1, minHeight: 0, margin: 0,
-    }}>
-      {lines.map((line, i) => {
-        // key highlight
-        const keyMatch = line.match(/^(\s*)"([^"]+)"(\s*:)(.*)$/);
-        if (keyMatch) {
-          const [, indent, key, colon, rest] = keyMatch;
-          const valColor = rest.trim().startsWith('"') ? "var(--text)"
-            : /^[\d.-]+/.test(rest.trim()) ? "#6ab0f5"
-            : rest.trim() === "true" || rest.trim() === "false" ? "#c49a2a"
-            : rest.trim() === "null," || rest.trim() === "null" ? "var(--text-dim)"
-            : "var(--text)";
-          return (
-            <span key={i}>
-              {indent}
-              <span style={{ color: "var(--cyan-dim)" }}>"{key}"</span>
-              <span style={{ color: "var(--text-dim)" }}>{colon}</span>
-              <span style={{ color: valColor }}>{rest}</span>
-              {"\n"}
-            </span>
-          );
-        }
-        // string value lines / structural
-        const isStructural = /^\s*[{}\[\],]*\s*$/.test(line);
-        return (
-          <span key={i} style={{ color: isStructural ? "var(--border-strong)" : "var(--text-muted)" }}>
-            {line}{"\n"}
-          </span>
-        );
-      })}
-    </pre>
   );
 }
 

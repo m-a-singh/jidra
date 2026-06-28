@@ -61,7 +61,7 @@ export function SqlEditor({ repoPath, outputPath }: RepoState) {
           <option value="graph">graph.db</option>
           <option value="telemetry">telemetry.db</option>
         </select>
-        {schema.length === 0 && <div style={{ fontSize: "var(--sz-xs)", color: "var(--text-dim)" }}>{repoPath ? "loading schema…" : "not indexed — index first"}</div>}
+        {schema.length === 0 && <div style={{ fontSize: "var(--sz-xs)", color: "var(--text-faint)" }}>{repoPath ? "loading schema…" : "not indexed — index first"}</div>}
         {schema.map((t) => (
           <div key={t.table}>
             <div className="schema-table-name">{t.table}</div>

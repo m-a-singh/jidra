@@ -76,55 +76,59 @@ export function ExplorePanel({ repoPath, outputPath }: RepoState) {
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 20 }}>
+      <div className="field-group" style={{ marginBottom: 20, maxWidth: 720 }}>
         {needsMethod && (
-          <div className="config-card">
-            <div className="config-card-label">method selector</div>
-            <input className="field-input" placeholder="Class#method, signature, or method id" value={method} onChange={(e) => setMethod(e.target.value)} />
+          <div className="field-row">
+            <div className="field-row-label">method selector</div>
+            <div className="field-row-control">
+              <input className="field-input" placeholder="Class#method, signature, or method id" value={method} onChange={(e) => setMethod(e.target.value)} />
+            </div>
           </div>
         )}
         {needsRoute && (
-          <div className="config-card">
-            <div className="config-card-label">route path</div>
-            <input className="field-input" placeholder="/api/v1/users" value={route} onChange={(e) => setRoute(e.target.value)} />
+          <div className="field-row">
+            <div className="field-row-label">route path</div>
+            <div className="field-row-control">
+              <input className="field-input" placeholder="/api/v1/users" value={route} onChange={(e) => setRoute(e.target.value)} />
+            </div>
           </div>
         )}
         {mode !== "error-doc" && (
-          <div className="config-card">
-            <div className="config-card-label">depth</div>
-            <input className="field-input" type="number" value={depth} onChange={(e) => setDepth(+e.target.value)} />
+          <div className="field-row compact">
+            <div className="field-row-label">depth</div>
+            <div className="field-row-control">
+              <input className="field-input" type="number" value={depth} onChange={(e) => setDepth(+e.target.value)} />
+            </div>
           </div>
         )}
         {(mode === "trace" || mode === "context" || mode === "flow") && (
-          <div className="config-card" style={{ display: "flex", alignItems: "center" }}>
+          <div className="field-row-toggles">
             <label className="check-row">
               <input type="checkbox" checked={businessOnly} onChange={(e) => setBusinessOnly(e.target.checked)} />
               business only (hide logging/metrics noise)
             </label>
           </div>
         )}
+        {needsStack && (
+          <div className="field-row" style={{ gridTemplateColumns: "168px 1fr", alignItems: "start" }}>
+            <div className="field-row-label" style={{ paddingTop: 7 }}>stack trace</div>
+            <textarea
+              className="field-textarea"
+              rows={8}
+              placeholder="Paste a Java stack trace…"
+              value={stackTrace}
+              onChange={(e) => setStackTrace(e.target.value)}
+            />
+          </div>
+        )}
       </div>
-
-      {needsStack && (
-        <div style={{ marginBottom: 20 }}>
-          <div className="config-card-label" style={{ marginBottom: 8 }}>stack trace</div>
-          <textarea
-            className="field-textarea"
-            rows={8}
-            placeholder="Paste a Java stack trace…"
-            value={stackTrace}
-            onChange={(e) => setStackTrace(e.target.value)}
-          />
-        </div>
-      )}
 
       <div className="panel-row">
         <button className={`btn primary run-btn${running ? " running" : ""}`} onClick={run} disabled={running || !repoPath}>
           <span className="run-btn-content">
-            <span className="run-btn-icon">{running ? "⚡" : "▶"}</span>
-            <span className="run-btn-text">{running ? "running" : "run"}</span>
+            <span className="run-btn-icon">{running ? "◐" : "▶"}</span>
+            <span>{running ? "running" : "run"}</span>
           </span>
-          {running && <span className="run-btn-shimmer" />}
         </button>
         {error && <span className="inline-error">{error}</span>}
       </div>
@@ -141,7 +145,7 @@ export function ExplorePanel({ repoPath, outputPath }: RepoState) {
       )}
       {result == null && !markdown && !error && (
         <div className="log-pane" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 160 }}>
-          <span style={{ color: "var(--text-dim)" }}>configure above and run</span>
+          <span style={{ color: "var(--text-faint)" }}>configure above and run</span>
         </div>
       )}
     </div>

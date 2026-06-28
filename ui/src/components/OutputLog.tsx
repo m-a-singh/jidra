@@ -7,7 +7,7 @@ export function OutputLog({ logs }: { logs: LogLine[] }) {
   if (logs.length === 0) {
     return (
       <div className="log-pane" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 160 }}>
-        <span style={{ color: "var(--text-dim)", fontSize: 13 }}>configure above and run the pipeline</span>
+        <span style={{ color: "var(--text-faint)", fontSize: 13 }}>configure above and run the pipeline</span>
       </div>
     );
   }
@@ -25,7 +25,7 @@ export function OutputLog({ logs }: { logs: LogLine[] }) {
             alignItems: "flex-start",
             fontSize: 13,
             lineHeight: 1.5,
-            animation: `slideInLeft 0.3s ease-out ${i * 0.05}s backwards`,
+            animation: `fade-left 0.25s var(--ease-out-quart) ${Math.min(i, 8) * 0.04}s backwards`,
           }}
         >
           <div style={{ minWidth: 20, paddingTop: 2 }}>

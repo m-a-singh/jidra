@@ -309,7 +309,7 @@ export function GraphViewer({ repoPath, outputPath }: RepoState) {
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <div style={{ fontSize: "var(--sz-sm)", color: "var(--text)" }}>{n.label}</div>
-                  <div style={{ fontSize: "var(--sz-xs)", color: "var(--text-dim)" }}>{n.class_name}</div>
+                  <div style={{ fontSize: "var(--sz-xs)", color: "var(--text-faint)" }}>{n.class_name}</div>
                 </div>
               ))}
             </div>
@@ -414,7 +414,7 @@ export function GraphViewer({ repoPath, outputPath }: RepoState) {
                 )}
               </>
             ) : (
-              <div style={{ color: "var(--text-dim)", fontSize: "var(--sz-sm)" }}>Click a node to inspect it.</div>
+              <div style={{ color: "var(--text-faint)", fontSize: "var(--sz-sm)" }}>Click a node to inspect it.</div>
             )}
           </div>
 
