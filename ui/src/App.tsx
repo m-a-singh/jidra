@@ -26,12 +26,13 @@ export default function App() {
   const repo = useRepo();
   const [tab, setTab] = useState<Tab>(null);
 
-  if (!repo.repoPath) {
+  if (!repo.repoPath && tab !== "history") {
     return (
       <HomePage
         {...repo}
         onSelectRepo={(path) => repo.setRepoPath(path)}
         onSelectAction={(action) => setTab((action as Tab) || "index")}
+        onViewHistory={() => setTab("history")}
       />
     );
   }

@@ -84,71 +84,63 @@ export function IndexPanel({ repoPath, outputPath }: RepoState) {
     <div className="panel-body">
       <div className="section-label">pipeline configuration</div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: 24 }}>
+      <div className="field-group" style={{ marginBottom: 20, maxWidth: 720 }}>
+        <div className="field-row">
+          <div className="field-row-label">actuator url</div>
+          <div className="field-row-control">
+            <input
+              className="field-input"
+              placeholder="http://localhost:8080/actuator — leave blank for static analysis"
+              value={actuatorUrl}
+              onChange={(e) => setActuatorUrl(e.target.value)}
+            />
+          </div>
+        </div>
 
-        <ConfigCard label="actuator url">
-          <input
-            className="field-input"
-            placeholder="http://localhost:8080/actuator — leave blank for static analysis"
-            value={actuatorUrl}
-            onChange={(e) => setActuatorUrl(e.target.value)}
-          />
-        </ConfigCard>
+        <div className="field-row">
+          <div className="field-row-label">build directory</div>
+          <div className="field-row-control">
+            <input
+              className="field-input"
+              placeholder="relative to repo root  ·  default: ."
+              value={buildDir}
+              onChange={(e) => setBuildDir(e.target.value)}
+            />
+          </div>
+        </div>
 
-        <ConfigCard label="build directory">
-          <input
-            className="field-input"
-            placeholder="relative to repo root  ·  default: ."
-            value={buildDir}
-            onChange={(e) => setBuildDir(e.target.value)}
-          />
-        </ConfigCard>
+        <div className="field-row compact">
+          <div className="field-row-label">actuator port</div>
+          <div className="field-row-control">
+            <input className="field-input" type="number" value={port} onChange={(e) => setPort(+e.target.value)} />
+          </div>
+        </div>
 
-        <ConfigCard label="actuator port">
-          <input
-            className="field-input"
-            type="number"
-            value={port}
-            onChange={(e) => setPort(+e.target.value)}
-          />
-        </ConfigCard>
+        <div className="field-row compact">
+          <div className="field-row-label">timeout (seconds)</div>
+          <div className="field-row-control">
+            <input className="field-input" type="number" value={timeout} onChange={(e) => setTimeout_(+e.target.value)} />
+          </div>
+        </div>
 
-        <ConfigCard label="timeout (s)">
-          <input
-            className="field-input"
-            type="number"
-            value={timeout}
-            onChange={(e) => setTimeout_(+e.target.value)}
-          />
-        </ConfigCard>
-
-        <ConfigCard label="skip build" variant="checkbox">
+        <div className="field-row-toggles">
           <label className="check-row">
             <input type="checkbox" checked={skipBuild} onChange={(e) => setSkipBuild(e.target.checked)} />
-            skip build step
+            skip build
           </label>
-        </ConfigCard>
-
-        <ConfigCard label="use docker" variant="checkbox">
           <label className="check-row">
             <input type="checkbox" checked={useDocker} onChange={(e) => setUseDocker(e.target.checked)} />
-            run in docker
+            use docker
           </label>
-        </ConfigCard>
-
-        <ConfigCard label="write mcp.json" variant="checkbox">
           <label className="check-row">
             <input type="checkbox" checked={writeMcp} onChange={(e) => setWriteMcp(e.target.checked)} />
-            generate config
+            write .mcp.json
           </label>
-        </ConfigCard>
-
-        <ConfigCard label="index docs" variant="checkbox">
           <label className="check-row">
             <input type="checkbox" checked={indexDocs} onChange={(e) => setIndexDocs(e.target.checked)} />
-            md · pdf · docx · txt
+            index docs (md · pdf · docx · txt)
           </label>
-        </ConfigCard>
+        </div>
       </div>
 
       <div className="panel-row">
@@ -156,45 +148,33 @@ export function IndexPanel({ repoPath, outputPath }: RepoState) {
           className={`btn primary run-btn${running ? " running" : ""}`}
           disabled={running || !repoPath}
           onClick={run}
-          style={{ padding: "8px 24px", position: "relative", overflow: "hidden" }}
+          style={{ padding: "8px 24px" }}
         >
           <span className="run-btn-content">
-            <span className="run-btn-icon">{running ? "⚡" : "▶"}</span>
-            <span className="run-btn-text">{running ? "running pipeline" : "run pipeline"}</span>
+            <span className="run-btn-icon">{running ? "◐" : "▶"}</span>
+            <span>{running ? "running pipeline" : "run pipeline"}</span>
           </span>
-          {running && <span className="run-btn-shimmer" />}
         </button>
-        {running && <span style={{ fontSize: "var(--sz-xs)", color: "var(--text-dim)", animation: "fadeIn 0.4s ease" }}>
+        {running && <span style={{ fontSize: "var(--sz-xs)", color: "var(--text-faint)", animation: "fade-in 0.4s var(--ease-out-quart)" }}>
           indexing · validating · generating graph — may take several minutes
         </span>}
       </div>
 
-      <div className="panel-row" style={{ marginTop: -4 }}>
+      <div className="panel-row" style={{ marginTop: 4, marginBottom: 24 }}>
         <button className="btn" disabled={reindexing || !repoPath} onClick={reindex} style={{ padding: "5px 16px", fontSize: "var(--sz-sm)" }}>
           {reindexing ? "reindexing…" : "↻ incremental reindex"}
         </button>
         <button className="btn" disabled={hooking || !repoPath} onClick={installHooks} style={{ padding: "5px 16px", fontSize: "var(--sz-sm)" }}>
           {hooking ? "installing…" : "⚓ install git hooks"}
         </button>
-        <span style={{ fontSize: "var(--sz-xs)", color: "var(--text-dim)" }}>
+        <span style={{ fontSize: "var(--sz-xs)", color: "var(--text-faint)" }}>
           reindex updates graph for changed files only · hooks auto-reindex on commit
         </span>
       </div>
 
-      <div className="section-label" style={{ marginTop: 28 }}>output log</div>
+      <div className="section-label">output log</div>
 
       <OutputLog logs={log} />
-    </div>
-  );
-}
-
-function ConfigCard({ label, children, variant = "default" }: { label: string; children: React.ReactNode; variant?: "default" | "checkbox" }) {
-  return (
-    <div className="config-card">
-      <div className="config-card-label">{label}</div>
-      <div className={`config-card-content${variant === "checkbox" ? " checkbox-variant" : ""}`}>
-        {children}
-      </div>
     </div>
   );
 }

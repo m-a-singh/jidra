@@ -15,6 +15,7 @@
     "@codemirror/theme-one-dark": "^6.1.2",
     "@codemirror/view": "^6.36.3",
     "@tanstack/react-table": "^8.21.3",
+    "chart.js": "^4.5.1",
     "codemirror": "^6.0.2",
     "cytoscape": "^3.30.2",
     "cytoscape-fcose": "^2.2.0",

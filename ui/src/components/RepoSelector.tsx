@@ -62,8 +62,8 @@ export function RepoSelector({ repoPath, outputPath, setRepoPath, setOutputPath 
       <div style={{ flex: 1 }} />
       {status && (
         <div className="status-badge">
-          <div className="status-dot" style={{ background: status.indexed ? "var(--success)" : "var(--text-dim)" }} />
-          <span style={{ color: status.indexed ? "var(--success)" : "var(--text-dim)" }}>
+          <div className="status-dot" style={{ background: status.indexed ? "var(--success)" : "var(--text-faint)" }} />
+          <span style={{ color: status.indexed ? "var(--success)" : "var(--text-faint)" }}>
             {status.indexed
               ? `${status.node_count?.toLocaleString()} methods · ${status.class_count?.toLocaleString()} classes${status.doc_count ? ` · ${status.doc_count} doc${status.doc_count === 1 ? "" : "s"}` : ""} · ${status.validated ? "validated" : "main"}`
               : "not indexed — index first"}
