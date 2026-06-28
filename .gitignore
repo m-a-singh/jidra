@@ -12,7 +12,6 @@ flow_docs/
 CLAUDE.md
 .java_code_intel_cache.json
 .codegraph/
-jidra/
 
 # UI
 ui/node_modules/
