@@ -17,15 +17,22 @@ class TestFtsSync:
 
     def test_search_methods_matches_name_and_source(self, test_graph_file):
         conn = graph_store.connect(Path(test_graph_file))
-        rows = graph_store.search_methods(conn, "handleRequest")
+        rows = graph_store.search_methods(conn, "handleRequest", variant="validated")
         assert any(r["method_name"] == "handleRequest" for r in rows)
 
     def test_search_methods_language_filter(self, test_graph_file):
         conn = graph_store.connect(Path(test_graph_file))
         # Fixture methods carry the default language ("unknown").
-        assert graph_store.search_methods(conn, "process", language="python") == []
-        assert graph_store.search_methods(conn, "process")
-        assert graph_store.search_methods(conn, "process", language="unknown")
+        assert (
+            graph_store.search_methods(
+                conn, "process", language="python", variant="validated"
+            )
+            == []
+        )
+        assert graph_store.search_methods(conn, "process", variant="validated")
+        assert graph_store.search_methods(
+            conn, "process", language="unknown", variant="validated"
+        )
 
     def test_fts_stays_in_sync_after_rewrite(self, simple_test_graph, tmp_path):
         db = tmp_path / "graph.db"

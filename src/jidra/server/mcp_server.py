@@ -308,7 +308,11 @@ def _dispatch_get_docs(
 def _dispatch_index_docs(graph_path: str, path: str) -> dict:
     from ..indexing import doc_store
     from ..graph import graph_store as gs
-    from ..indexing.doc_indexer import extract_graph_names, index_directory, index_document
+    from ..indexing.doc_indexer import (
+        extract_graph_names,
+        index_directory,
+        index_document,
+    )
 
     conn = gs.connect(Path(graph_path))
     doc_store.migrate(conn)

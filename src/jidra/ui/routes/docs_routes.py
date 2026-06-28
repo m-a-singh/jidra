@@ -14,7 +14,9 @@ def _connect(repo_path: str, output_path: str | None):
     out_dir = Path(output_path) if output_path else _repo_output_dir(Path(repo_path))
     db_path = graph_store.resolve_graph_db_path(out_dir)
     if not db_path.exists():
-        raise HTTPException(status_code=404, detail="Repository not indexed. Run the pipeline first.")
+        raise HTTPException(
+            status_code=404, detail="Repository not indexed. Run the pipeline first."
+        )
     conn = graph_store.connect(db_path)
     return conn, db_path
 
@@ -41,7 +43,10 @@ async def doc_graph(repo_path: str, output_path: str | None = None) -> dict:
     sources = doc_store.list_sources(conn)
     if not sources:
         conn.close()
-        raise HTTPException(status_code=404, detail="No documents indexed yet. Enable 'index docs' on the IDX tab and run the pipeline.")
+        raise HTTPException(
+            status_code=404,
+            detail="No documents indexed yet. Enable 'index docs' on the IDX tab and run the pipeline.",
+        )
     graph = graph_store.load_graph(conn, variant="main")
     data = build_doc_graph_data(conn, graph)
     conn.close()

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,14 +11,16 @@ router = APIRouter()
 def _pick_folder_macos() -> str | None:
     script = (
         'tell application "System Events"\n'
-        '  activate\n'
-        'end tell\n'
+        "  activate\n"
+        "end tell\n"
         'set chosen to choose folder with prompt "Select repository folder"\n'
-        'return POSIX path of chosen'
+        "return POSIX path of chosen"
     )
     result = subprocess.run(
         ["osascript", "-e", script],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
     if result.returncode != 0:
         return None
@@ -30,6 +31,7 @@ def _pick_folder_tkinter() -> str | None:
     try:
         import tkinter as tk
         from tkinter import filedialog
+
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)

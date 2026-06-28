@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sqlite3
 import time
-from pathlib import Path
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +59,7 @@ def migrate(conn: sqlite3.Connection) -> None:
 
 # ── Write ─────────────────────────────────────────────────────────────────────
 
+
 def upsert_chunks(conn: sqlite3.Connection, chunks: list[dict]) -> None:
     """Insert or replace doc chunks. Each dict must have keys matching doc_chunks columns."""
     conn.executemany(
@@ -71,8 +71,13 @@ def upsert_chunks(conn: sqlite3.Connection, chunks: list[dict]) -> None:
     conn.commit()
 
 
-def upsert_source(conn: sqlite3.Connection, source_path: str, source_type: str,
-                  title: str | None, chunk_count: int) -> None:
+def upsert_source(
+    conn: sqlite3.Connection,
+    source_path: str,
+    source_type: str,
+    title: str | None,
+    chunk_count: int,
+) -> None:
     conn.execute(
         """INSERT OR REPLACE INTO doc_sources (source_path, source_type, title, chunk_count, indexed_at)
            VALUES (?, ?, ?, ?, ?)""",
@@ -89,7 +94,10 @@ def delete_source(conn: sqlite3.Connection, source_path: str) -> None:
 
 # ── Query ─────────────────────────────────────────────────────────────────────
 
-def query_by_class(conn: sqlite3.Connection, class_name: str, limit: int = 5) -> list[dict]:
+
+def query_by_class(
+    conn: sqlite3.Connection, class_name: str, limit: int = 5
+) -> list[dict]:
     """Return chunks explicitly linked to a class name."""
     rows = conn.execute(
         """SELECT id, source_path, source_type, title, content, linked_classes, chunk_index
@@ -145,11 +153,21 @@ def list_sources(conn: sqlite3.Connection) -> list[dict]:
         "SELECT source_path, source_type, title, chunk_count, indexed_at FROM doc_sources ORDER BY indexed_at DESC"
     ).fetchall()
     return [
-        dict(zip(["source_path", "source_type", "title", "chunk_count", "indexed_at"], r))
+        dict(
+            zip(["source_path", "source_type", "title", "chunk_count", "indexed_at"], r)
+        )
         for r in rows
     ]
 
 
 def _row_to_dict(row) -> dict:
-    keys = ["id", "source_path", "source_type", "title", "content", "linked_classes", "chunk_index"]
-    return dict(zip(keys, row[:len(keys)]))
+    keys = [
+        "id",
+        "source_path",
+        "source_type",
+        "title",
+        "content",
+        "linked_classes",
+        "chunk_index",
+    ]
+    return dict(zip(keys, row[: len(keys)]))

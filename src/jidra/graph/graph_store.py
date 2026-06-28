@@ -303,7 +303,9 @@ def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
 
 def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
     """Set a key-value pair in schema_meta."""
-    conn.execute("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)", (key, value))
+    conn.execute(
+        "INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)", (key, value)
+    )
     conn.commit()
 
 
@@ -486,9 +488,7 @@ def _callsite_row(c: CallSite, variant: str, module_id: str | None) -> tuple:
     )
 
 
-def _inheritance_row(
-    e: InheritanceEdge, variant: str, module_id: str | None
-) -> tuple:
+def _inheritance_row(e: InheritanceEdge, variant: str, module_id: str | None) -> tuple:
     return (
         e.id,
         variant,
@@ -736,10 +736,7 @@ def _insert_graph(
 
     conn.executemany(
         "INSERT INTO classes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        [
-            _class_row(c, variant_of(c.file_path), module_id)
-            for c in graph.classes
-        ],
+        [_class_row(c, variant_of(c.file_path), module_id) for c in graph.classes],
     )
     conn.executemany(
         "INSERT INTO methods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -754,10 +751,7 @@ def _insert_graph(
     )
     conn.executemany(
         "INSERT INTO callsites VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        [
-            _callsite_row(c, variant_of(c.file_path), module_id)
-            for c in graph.callsites
-        ],
+        [_callsite_row(c, variant_of(c.file_path), module_id) for c in graph.callsites],
     )
     conn.executemany(
         "INSERT INTO inheritance_edges VALUES (?,?,?,?,?,?,?)",

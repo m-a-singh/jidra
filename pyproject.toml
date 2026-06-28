@@ -29,6 +29,7 @@ jidra = "jidra.cli:main"
 [project.optional-dependencies]
 mcp = ["mcp"]
 ui = ["fastapi>=0.111.0", "uvicorn[standard]>=0.29.0"]
+test = ["pytest>=8.0.0", "ruff>=0.13.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

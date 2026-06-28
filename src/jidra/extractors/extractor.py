@@ -311,8 +311,14 @@ def _synthesize_spring_repository_methods(cls: ClassEntry) -> list[MethodEntry]:
         return []
     return [
         _make_synthetic_method(
-            cls.full_name, cls.id, cls.file_path, cls.start_line,
-            name, param_types, return_type, cls.language,
+            cls.full_name,
+            cls.id,
+            cls.file_path,
+            cls.start_line,
+            name,
+            param_types,
+            return_type,
+            cls.language,
         )
         for name, param_types, return_type in SPRING_DATA_REPOSITORY_METHODS
     ]
@@ -395,8 +401,13 @@ def _synthesize_lombok_artifacts(
         for f in instance_fields:
             methods.append(
                 _make_synthetic_method(
-                    cls.full_name, cls.id, cls.file_path, cls.start_line,
-                    _lombok_getter_name(f.name, f.type_name), [], f.type_name,
+                    cls.full_name,
+                    cls.id,
+                    cls.file_path,
+                    cls.start_line,
+                    _lombok_getter_name(f.name, f.type_name),
+                    [],
+                    f.type_name,
                     cls.language,
                 )
             )
@@ -407,8 +418,13 @@ def _synthesize_lombok_artifacts(
                 continue
             methods.append(
                 _make_synthetic_method(
-                    cls.full_name, cls.id, cls.file_path, cls.start_line,
-                    _lombok_setter_name(f.name), [f.type_name], "void",
+                    cls.full_name,
+                    cls.id,
+                    cls.file_path,
+                    cls.start_line,
+                    _lombok_setter_name(f.name),
+                    [f.type_name],
+                    "void",
                     cls.language,
                 )
             )
@@ -431,21 +447,39 @@ def _synthesize_lombok_artifacts(
         )
         methods.append(
             _make_synthetic_method(
-                cls.full_name, cls.id, cls.file_path, cls.start_line,
-                "builder", [], builder_full_name, cls.language,
+                cls.full_name,
+                cls.id,
+                cls.file_path,
+                cls.start_line,
+                "builder",
+                [],
+                builder_full_name,
+                cls.language,
             )
         )
         for f in instance_fields:
             methods.append(
                 _make_synthetic_method(
-                    builder_full_name, builder_id, cls.file_path, cls.start_line,
-                    f.name, [f.type_name], builder_full_name, cls.language,
+                    builder_full_name,
+                    builder_id,
+                    cls.file_path,
+                    cls.start_line,
+                    f.name,
+                    [f.type_name],
+                    builder_full_name,
+                    cls.language,
                 )
             )
         methods.append(
             _make_synthetic_method(
-                builder_full_name, builder_id, cls.file_path, cls.start_line,
-                "build", [], cls.full_name, cls.language,
+                builder_full_name,
+                builder_id,
+                cls.file_path,
+                cls.start_line,
+                "build",
+                [],
+                cls.full_name,
+                cls.language,
             )
         )
 
@@ -1222,7 +1256,11 @@ def _resolve_dotted_receiver(
     if first == "this":
         current_type: str | None = caller_class.full_name
     else:
-        raw = local_types.get(first) or params_map.get(first) or fields_by_class.get(caller_class.full_name, {}).get(first)
+        raw = (
+            local_types.get(first)
+            or params_map.get(first)
+            or fields_by_class.get(caller_class.full_name, {}).get(first)
+        )
         if not raw:
             return None, None
         current_type, _, _ = _normalize_type(raw, caller_class, all_class_full_names)
@@ -1238,7 +1276,9 @@ def _resolve_dotted_receiver(
         raw_field_type = fields_by_class.get(current_type, {}).get(part)
         if not raw_field_type:
             return None, None
-        current_type, _, _ = _normalize_type(raw_field_type, owner, all_class_full_names)
+        current_type, _, _ = _normalize_type(
+            raw_field_type, owner, all_class_full_names
+        )
         if current_type is None:
             return None, None
 
@@ -1402,7 +1442,9 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                     impl_candidates = methods_by_full_class_and_name.get(
                         (sole_implementers[0], call.callee_name), []
                     )
-                    sole_impl_matches = _arity_filter(impl_candidates) or impl_candidates
+                    sole_impl_matches = (
+                        _arity_filter(impl_candidates) or impl_candidates
+                    )
                     if len(sole_impl_matches) == 1:
                         sole_implementer = sole_implementers[0]
 
@@ -1565,7 +1607,9 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         graph.resolved_call_edges = sorted(kept + edges, key=lambda e: e.id)
 
 
-def _build_java_graph(codebase_root: Path, on_progress=None, extra_java_roots: list[Path] | None = None) -> Graph:
+def _build_java_graph(
+    codebase_root: Path, on_progress=None, extra_java_roots: list[Path] | None = None
+) -> Graph:
     all_classes: list[ClassEntry] = []
     all_methods: list[MethodEntry] = []
     all_fields: list[FieldEntry] = []
@@ -1685,7 +1729,9 @@ def build_graph(
         graphs.append(build_go_graph(codebase_root, on_progress=on_progress))
 
     if "java" in langs:
-        java_graph = _build_java_graph(codebase_root, on_progress=on_progress, extra_java_roots=extra_java_roots)
+        java_graph = _build_java_graph(
+            codebase_root, on_progress=on_progress, extra_java_roots=extra_java_roots
+        )
         for cls in java_graph.classes:
             cls.language = "java"
         for m in java_graph.methods:

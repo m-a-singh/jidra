@@ -66,8 +66,11 @@ def _run_sidecar(
         raise TsExtractorError("Docker is not available on PATH") from e
 
     cmd = [
-        "docker", "run", "--rm",
-        "-v", f"{codebase_root}:/repo:ro",
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{codebase_root}:/repo:ro",
         DOCKER_IMAGE,
         "/repo",
     ]
@@ -120,21 +123,23 @@ def _build_graph_from_records(records: list[dict]) -> Graph:
         t = r.get("_type")
 
         if t == "class":
-            classes.append(ClassEntry(
-                id=r["id"],
-                package_name=r["package_name"],
-                name=r["name"],
-                full_name=r["full_name"],
-                file_path=r["file_path"],
-                start_line=r["start_line"],
-                end_line=r["end_line"],
-                modifiers=r.get("modifiers", []),
-                annotations=r.get("annotations", []),
-                extends=r.get("extends"),
-                implements=r.get("implements", []),
-                imports=r.get("imports", []),
-                stereotypes=r.get("stereotypes", []),
-            ))
+            classes.append(
+                ClassEntry(
+                    id=r["id"],
+                    package_name=r["package_name"],
+                    name=r["name"],
+                    full_name=r["full_name"],
+                    file_path=r["file_path"],
+                    start_line=r["start_line"],
+                    end_line=r["end_line"],
+                    modifiers=r.get("modifiers", []),
+                    annotations=r.get("annotations", []),
+                    extends=r.get("extends"),
+                    implements=r.get("implements", []),
+                    imports=r.get("imports", []),
+                    stereotypes=r.get("stereotypes", []),
+                )
+            )
 
         elif t == "method":
             methods.append(
@@ -167,53 +172,61 @@ def _build_graph_from_records(records: list[dict]) -> Graph:
             )
 
         elif t == "field":
-            fields.append(FieldEntry(
-                id=r["id"],
-                class_id=r["class_id"],
-                name=r["name"],
-                type_name=r["type_name"],
-                modifiers=r.get("modifiers", []),
-                file_path=r["file_path"],
-                line=r["line"],
-            ))
+            fields.append(
+                FieldEntry(
+                    id=r["id"],
+                    class_id=r["class_id"],
+                    name=r["name"],
+                    type_name=r["type_name"],
+                    modifiers=r.get("modifiers", []),
+                    file_path=r["file_path"],
+                    line=r["line"],
+                )
+            )
 
         elif t == "callsite":
-            callsites.append(CallSite(
-                id=r["id"],
-                caller_method_id=r["caller_method_id"],
-                callee_name=r["callee_name"],
-                receiver=r.get("receiver"),
-                argument_count=r.get("argument_count", 0),
-                file_path=r["file_path"],
-                line=r["line"],
-                column=r["column"],
-                text=r.get("text", ""),
-                receiver_type_raw=r.get("receiver_type_raw"),
-                receiver_type_normalized=r.get("receiver_type_normalized"),
-                receiver_resolution_source=r.get("receiver_resolution_source"),
-                receiver_type=r.get("receiver_type"),
-                resolved_candidates=r.get("resolved_candidates", []),
-                resolution_status=r.get("resolution_status", "unresolved"),
-                resolution_reason=r.get("resolution_reason", ""),
-                candidate_count=r.get("candidate_count", 0),
-            ))
+            callsites.append(
+                CallSite(
+                    id=r["id"],
+                    caller_method_id=r["caller_method_id"],
+                    callee_name=r["callee_name"],
+                    receiver=r.get("receiver"),
+                    argument_count=r.get("argument_count", 0),
+                    file_path=r["file_path"],
+                    line=r["line"],
+                    column=r["column"],
+                    text=r.get("text", ""),
+                    receiver_type_raw=r.get("receiver_type_raw"),
+                    receiver_type_normalized=r.get("receiver_type_normalized"),
+                    receiver_resolution_source=r.get("receiver_resolution_source"),
+                    receiver_type=r.get("receiver_type"),
+                    resolved_candidates=r.get("resolved_candidates", []),
+                    resolution_status=r.get("resolution_status", "unresolved"),
+                    resolution_reason=r.get("resolution_reason", ""),
+                    candidate_count=r.get("candidate_count", 0),
+                )
+            )
 
         elif t == "inheritance_edge":
-            inheritance_edges.append(InheritanceEdge(
-                id=r["id"],
-                source_class_id=r["source_class_id"],
-                source_class=r["source_class"],
-                target_class=r["target_class"],
-                relation=r["relation"],
-            ))
+            inheritance_edges.append(
+                InheritanceEdge(
+                    id=r["id"],
+                    source_class_id=r["source_class_id"],
+                    source_class=r["source_class"],
+                    target_class=r["target_class"],
+                    relation=r["relation"],
+                )
+            )
 
         elif t == "resolved_call_edge":
-            resolved_call_edges.append(ResolvedCallEdge(
-                id=r["id"],
-                callsite_id=r["callsite_id"],
-                caller_method_id=r["caller_method_id"],
-                callee_method_id=r["callee_method_id"],
-            ))
+            resolved_call_edges.append(
+                ResolvedCallEdge(
+                    id=r["id"],
+                    callsite_id=r["callsite_id"],
+                    caller_method_id=r["caller_method_id"],
+                    callee_method_id=r["callee_method_id"],
+                )
+            )
 
     for cls in classes:
         cls.language = "typescript"
@@ -267,7 +280,7 @@ def build_ts_graph(
     if on_progress:
         on_progress(0)
 
-    records = _run_sidecar(codebase_root, files=files, timeout=timeout)
+    records = _run_sidecar(codebase_root, timeout=timeout)
 
     if on_progress:
         on_progress(len([r for r in records if r.get("_type") == "class"]))

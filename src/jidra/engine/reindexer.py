@@ -9,7 +9,9 @@ from ..models import Graph
 MANIFEST_FILENAME = "file_manifest.json"
 
 
-def compute_fingerprints(codebase_root: Path, extensions: list[str] | None = None) -> dict[str, dict]:
+def compute_fingerprints(
+    codebase_root: Path, extensions: list[str] | None = None
+) -> dict[str, dict]:
     """Compute mtime_ns + size fingerprints for all source files.
 
     Returns: {abs_path_str: {"mtime_ns": int, "size": int}}
@@ -40,7 +42,9 @@ def load_manifest(graph_dir: Path) -> dict:
         return {}
 
 
-def save_manifest(graph_dir: Path, fingerprints: dict[str, dict], last_indexed_at_ns: int) -> None:
+def save_manifest(
+    graph_dir: Path, fingerprints: dict[str, dict], last_indexed_at_ns: int
+) -> None:
     """Atomically save manifest (fingerprints + timestamp)."""
     graph_dir.mkdir(parents=True, exist_ok=True)
     path = graph_dir / MANIFEST_FILENAME
@@ -56,7 +60,9 @@ def save_manifest(graph_dir: Path, fingerprints: dict[str, dict], last_indexed_a
     temp_path.replace(path)
 
 
-def diff_fingerprints(current: dict[str, dict], stored: dict) -> tuple[set[str], set[str]]:
+def diff_fingerprints(
+    current: dict[str, dict], stored: dict
+) -> tuple[set[str], set[str]]:
     """Compare current fingerprints against stored manifest entries.
 
     Returns: (changed_or_new_files, deleted_files)
@@ -69,8 +75,9 @@ def diff_fingerprints(current: dict[str, dict], stored: dict) -> tuple[set[str],
     for path_str, fp in current.items():
         if path_str not in stored_entries:
             changed_or_new.add(path_str)
-        elif (fp.get("mtime_ns") != stored_entries[path_str].get("mtime_ns") or
-              fp.get("size") != stored_entries[path_str].get("size")):
+        elif fp.get("mtime_ns") != stored_entries[path_str].get("mtime_ns") or fp.get(
+            "size"
+        ) != stored_entries[path_str].get("size"):
             changed_or_new.add(path_str)
 
     deleted = set()
@@ -155,11 +162,18 @@ def diff_graph_records(
                 removed_ids.append(m.id)
 
     # Determine overall change type
-    if not added_ids and not removed_ids and not line_shifted and not callsite_changed_ids:
+    if (
+        not added_ids
+        and not removed_ids
+        and not line_shifted
+        and not callsite_changed_ids
+    ):
         change_type = "no_change"
     elif not removed_ids and not added_ids and callsite_changed_ids:
         change_type = "callsite_change"
-    elif not removed_ids and not added_ids and line_shifted and not callsite_changed_ids:
+    elif (
+        not removed_ids and not added_ids and line_shifted and not callsite_changed_ids
+    ):
         change_type = "metadata_only"
     else:
         change_type = "structural"
@@ -212,6 +226,7 @@ def check_staleness(codebase_root: Path, graph_path: Path) -> dict:
     last_indexed_at = None
     if last_indexed_at_ns:
         from datetime import datetime, timezone
+
         dt = datetime.fromtimestamp(last_indexed_at_ns / 1_000_000_000, tz=timezone.utc)
         last_indexed_at = dt.isoformat()
 
@@ -221,7 +236,9 @@ def check_staleness(codebase_root: Path, graph_path: Path) -> dict:
         "deleted_files_count": len(deleted_files),
         "oldest_changed_file": oldest_changed,
         "last_indexed_at": last_indexed_at,
-        "hint": "Call jidra_reindex() to update the graph." if is_stale else "Graph is current.",
+        "hint": "Call jidra_reindex() to update the graph."
+        if is_stale
+        else "Graph is current.",
     }
 
 
@@ -348,6 +365,7 @@ def incremental_reindex(
 
     # Build mini-graph for changed files
     from ..extractors.extractor import build_graph_for_files
+
     changed_files_paths = {Path(f) for f in changed_files_set if Path(f).exists()}
 
     if not changed_files_paths:
@@ -381,17 +399,24 @@ def incremental_reindex(
 
     # Bean filtering for Java (if applicable)
     from ..graph.graph_validator import load_confirmed_beans_for_reindex
-    confirmed_beans, bean_source = load_confirmed_beans_for_reindex(graph_dir, result_graph)
+
+    confirmed_beans, bean_source = load_confirmed_beans_for_reindex(
+        graph_dir, result_graph
+    )
     actuator_warning = None
     if bean_source == "static_annotation":
-        actuator_warning = "Using static bean detection fallback (no cached actuator response)"
+        actuator_warning = (
+            "Using static bean detection fallback (no cached actuator response)"
+        )
 
     if confirmed_beans:
         # Filter edges
-        from ..models import ResolvedCallEdge
-        confirmed_ids = {c.id for c in result_graph.classes if c.full_name in confirmed_beans}
+        confirmed_ids = {
+            c.id for c in result_graph.classes if c.full_name in confirmed_beans
+        }
         result_graph.resolved_call_edges = [
-            e for e in result_graph.resolved_call_edges
+            e
+            for e in result_graph.resolved_call_edges
             if any(
                 m.class_id in confirmed_ids
                 for m in result_graph.methods
@@ -452,9 +477,7 @@ def incremental_reindex(
             methods=[
                 m for m in result_graph.methods if m.file_path in changed_files_set
             ],
-            fields=[
-                f for f in result_graph.fields if f.file_path in changed_files_set
-            ],
+            fields=[f for f in result_graph.fields if f.file_path in changed_files_set],
             callsites=[
                 c for c in result_graph.callsites if c.file_path in changed_files_set
             ],
@@ -462,7 +485,11 @@ def incremental_reindex(
                 e
                 for e in result_graph.inheritance_edges
                 if e.source_class_id
-                in {c.id for c in result_graph.classes if c.file_path in changed_files_set}
+                in {
+                    c.id
+                    for c in result_graph.classes
+                    if c.file_path in changed_files_set
+                }
             ],
             resolved_call_edges=[],
         )
@@ -494,7 +521,9 @@ def _patch_metadata_only(
     line_shifted_methods: list[tuple[str, int, int]],
 ):
     """Patch start_line/end_line/source in-place for line-shifted methods."""
-    line_shift_map = {old_id: (new_line, delta) for old_id, new_line, delta in line_shifted_methods}
+    line_shift_map = {
+        old_id: (new_line, delta) for old_id, new_line, delta in line_shifted_methods
+    }
 
     # Update methods
     for method in existing_graph.methods:
@@ -531,7 +560,9 @@ def _update_callsite_edges(
             c for c in existing_graph.callsites if c.caller_method_id != method_id
         ]
         # Remove old method
-        existing_graph.methods = [m for m in existing_graph.methods if m.id != method_id]
+        existing_graph.methods = [
+            m for m in existing_graph.methods if m.id != method_id
+        ]
 
         # Add updated method and callsites from mini_graph
         for m in mini_graph.methods:

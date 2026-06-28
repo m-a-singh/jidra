@@ -5,12 +5,11 @@ import re
 import sqlite3
 import time
 from pathlib import Path
-from typing import Iterator
 
 # ── Chunking ──────────────────────────────────────────────────────────────────
 
-_CHUNK_TARGET_CHARS = 1800   # ~450 tokens
-_CHUNK_MAX_CHARS    = 3000
+_CHUNK_TARGET_CHARS = 1800  # ~450 tokens
+_CHUNK_MAX_CHARS = 3000
 
 
 def _stable_id(source_path: str, chunk_index: int) -> str:
@@ -55,7 +54,10 @@ def _split_markdown(text: str) -> list[tuple[str | None, str]]:
             paragraphs = re.split(r"\n{2,}", body)
             chunk_lines: list[str] = []
             for para in paragraphs:
-                if sum(len(l) for l in chunk_lines) + len(para) > _CHUNK_TARGET_CHARS and chunk_lines:
+                if (
+                    sum(len(ln) for ln in chunk_lines) + len(para) > _CHUNK_TARGET_CHARS
+                    and chunk_lines
+                ):
                     result.append((heading, "\n\n".join(chunk_lines).strip()))
                     chunk_lines = []
                 chunk_lines.append(para)
@@ -91,12 +93,15 @@ def _link_chunks_to_graph(
         matches = sorted(identifiers & graph_class_names)
         # Also match method names (less common in specs, but useful)
         method_matches = sorted(identifiers & graph_method_names)
-        all_matches = list(dict.fromkeys(matches + method_matches))  # dedupe, preserve order
+        all_matches = list(
+            dict.fromkeys(matches + method_matches)
+        )  # dedupe, preserve order
         linked.append(",".join(all_matches))
     return linked
 
 
 # ── MarkItDown conversion ─────────────────────────────────────────────────────
+
 
 def _to_markdown(source: str) -> tuple[str, str]:
     """
@@ -118,6 +123,7 @@ def _to_markdown(source: str) -> tuple[str, str]:
 
     try:
         from markitdown import MarkItDown
+
         # No llm_client passed — image conversion stays local (exiftool only)
         md = MarkItDown()
         result = md.convert(source)
@@ -136,6 +142,7 @@ def _to_markdown(source: str) -> tuple[str, str]:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def index_document(
     conn: sqlite3.Connection,
@@ -178,16 +185,18 @@ def index_document(
     records = []
     for i, ((heading, body), linked_classes) in enumerate(zip(chunks, linked)):
         chunk_title = heading or title
-        records.append({
-            "id": _stable_id(source, i),
-            "source_path": source,
-            "source_type": source_type,
-            "title": chunk_title,
-            "content": body,
-            "linked_classes": linked_classes,
-            "chunk_index": i,
-            "ts": ts,
-        })
+        records.append(
+            {
+                "id": _stable_id(source, i),
+                "source_path": source,
+                "source_type": source_type,
+                "title": chunk_title,
+                "content": body,
+                "linked_classes": linked_classes,
+                "chunk_index": i,
+                "ts": ts,
+            }
+        )
         if on_progress:
             on_progress(i + 1, len(chunks))
 
@@ -212,7 +221,9 @@ def index_directory(
     Returns {source_path: chunk_count}.
     """
     root = Path(directory)
-    files = [f for f in root.rglob("*") if f.suffix.lower() in extensions and f.is_file()]
+    files = [
+        f for f in root.rglob("*") if f.suffix.lower() in extensions and f.is_file()
+    ]
     results: dict[str, int] = {}
     for i, f in enumerate(files):
         if on_progress:
@@ -220,7 +231,7 @@ def index_directory(
         try:
             n = index_document(conn, str(f), graph_class_names, graph_method_names)
             results[str(f)] = n
-        except Exception as e:
+        except Exception:
             results[str(f)] = -1  # -1 = failed
     return results
 

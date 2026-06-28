@@ -8,8 +8,6 @@ searched in the wrong text span) that a hand-written toy fixture wouldn't
 have surfaced.
 """
 
-from pathlib import Path
-
 from jidra.graph import graph_store
 from jidra.engine.engine import JidraEngine
 from jidra.models import ClassEntry
@@ -149,9 +147,9 @@ class TestSmithyBridge:
             language="scala",
         )
         links = link_operations([impl], self._operations())
-        op_ids = {l.operation_id for l in links}
+        op_ids = {link.operation_id for link in links}
         assert op_ids == {"smithy.example#GetBeer", "smithy.example#AddBeer"}
-        assert all(l.codegen_profile == "smithy4s" for l in links)
+        assert all(link.codegen_profile == "smithy4s" for link in links)
 
     def test_unrelated_class_produces_no_link(self):
         unrelated = ClassEntry(
@@ -245,7 +243,9 @@ class TestSmithyPersistence:
         # Tables exist and are queryable post-upgrade (empty is fine -- the
         # migration only needs to make them queryable, not backfill them,
         # since there's no prior smithy data to have lost).
-        assert conn2.execute("SELECT count(*) FROM smithy_operations").fetchone()[0] == 0
+        assert (
+            conn2.execute("SELECT count(*) FROM smithy_operations").fetchone()[0] == 0
+        )
 
 
 class TestEngineOperationGraph:

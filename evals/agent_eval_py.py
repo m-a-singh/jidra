@@ -14,6 +14,7 @@ Run:
         --graph /tmp/jidra_py.db --codebase . [--model claude-haiku-4-5-20251001]
     ./venv/bin/python scripts/agent_eval_py.py --graph /tmp/jidra_py.db --selfcheck
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,11 +55,13 @@ def make_python_tasks() -> list[Task]:
     def py1(ans: str, o: Oracle) -> tuple[bool, str]:
         callers = {c.split(".")[-1].lower() for c in o.callers_of("load_graph")}
         callers |= {  # also accept the raw caller method names
-            r[0].lower() for r in o.conn.execute(
+            r[0].lower()
+            for r in o.conn.execute(
                 """SELECT DISTINCT cm.method_name FROM resolved_call_edges e
                    JOIN methods callee ON callee.id=e.callee_method_id AND callee.variant=e.variant
                    JOIN methods cm ON cm.id=e.caller_method_id AND cm.variant=e.variant
-                   WHERE e.variant='validated' AND callee.method_name='load_graph'""").fetchall()
+                   WHERE e.variant='validated' AND callee.method_name='load_graph'"""
+            ).fetchall()
         }
         if not callers:
             return False, "no GT callers"
@@ -66,9 +69,15 @@ def make_python_tasks() -> list[Task]:
         hit = {c for c in callers if len(c) > 4 and c in a}
         ok = len(hit) >= 2
         return ok, f"caller_hit {len(hit)} (need>=2)"
-    tasks.append(Task("PY1",
-        "In this Python codebase, which functions call `load_graph`? "
-        "List the calling functions — this is impact analysis before changing it.", py1))
+
+    tasks.append(
+        Task(
+            "PY1",
+            "In this Python codebase, which functions call `load_graph`? "
+            "List the calling functions — this is impact analysis before changing it.",
+            py1,
+        )
+    )
 
     # PY2 — flow / direct callees of build_mcp.
     def py2(ans: str, o: Oracle) -> tuple[bool, str]:
@@ -79,46 +88,87 @@ def make_python_tasks() -> list[Task]:
         hit = {c for c in callees if len(c) > 4 and c in a}
         ok = len(hit) >= 1
         return ok, f"callee_hit {len(hit)}/{len(callees)}"
-    tasks.append(Task("PY2",
-        "Trace the `build_mcp` function: what functions does it call directly? "
-        "List the downstream functions it invokes.", py2))
+
+    tasks.append(
+        Task(
+            "PY2",
+            "Trace the `build_mcp` function: what functions does it call directly? "
+            "List the downstream functions it invokes.",
+            py2,
+        )
+    )
 
     # PY3 — negative / hallucination resistance. Function does not exist.
     def py3(ans: str, o: Oracle) -> tuple[bool, str]:
         exists = "reindex_all_tenants" in o.method_names
         a = _lc(ans).replace("*", "").replace("_", "")  # strip md emphasis
-        says_absent = any(k in a for k in (
-            "does not exist", "doesn't exist", "no such", "not found",
-            "could not find", "couldn't find", "no function", "not present",
-            "no method", "unable to find", "did not find"))
+        says_absent = any(
+            k in a
+            for k in (
+                "does not exist",
+                "doesn't exist",
+                "no such",
+                "not found",
+                "could not find",
+                "couldn't find",
+                "no function",
+                "not present",
+                "no method",
+                "unable to find",
+                "did not find",
+            )
+        )
         ok = (not exists) and says_absent
         return ok, f"exists={exists} says_absent={says_absent}"
-    tasks.append(Task("PY3",
-        "Explain what the function `reindex_all_tenants()` does in this codebase "
-        "and what it calls. If it is not present, say so explicitly.", py3))
+
+    tasks.append(
+        Task(
+            "PY3",
+            "Explain what the function `reindex_all_tenants()` does in this codebase "
+            "and what it calls. If it is not present, say so explicitly.",
+            py3,
+        )
+    )
 
     # PY4 — definition / resolution. query_by_annotation lives on JidraEngine in engine.py.
     def py4(ans: str, o: Oracle) -> tuple[bool, str]:
         exists = "query_by_annotation" in o.method_names
         a = _lc(ans)
         located = any(k in a for k in ("engine.py", "jidraengine", "engine"))
-        purpose = any(k in a for k in ("annotation", "framework_role", "framework role", "decorator"))
+        purpose = any(
+            k in a
+            for k in ("annotation", "framework_role", "framework role", "decorator")
+        )
         ok = exists and located and purpose
         return ok, f"exists={exists} located={located} purpose={purpose}"
-    tasks.append(Task("PY4",
-        "Where is the `query_by_annotation` method defined (which file/class) and "
-        "what does it do? Be specific about the file.", py4))
+
+    tasks.append(
+        Task(
+            "PY4",
+            "Where is the `query_by_annotation` method defined (which file/class) and "
+            "what does it do? Be specific about the file.",
+            py4,
+        )
+    )
 
     # PY5 — get_method_source bare-name selector resolution
     def py5(ans: str, o: Oracle) -> tuple[bool, str]:
         exists = "_resolve_calls" in o.method_names
         a = _lc(ans)
-        has_source = any(k in a for k in ("callsite", "resolve", "candidate", "method", "receiver"))
+        has_source = any(
+            k in a for k in ("callsite", "resolve", "candidate", "method", "receiver")
+        )
         ok = exists and has_source
         return ok, f"exists={exists} has_source={has_source}"
-    tasks.append(Task("PY5",
-        "Use the code graph tool to fetch the source of `_resolve_calls` directly. "
-        "Show the implementation — what does it resolve and how does it build edges?", py5))
+
+    tasks.append(
+        Task(
+            "PY5",
+            "Use the code graph tool to fetch the source of `_resolve_calls` directly. "
+            "Show the implementation — what does it resolve and how does it build edges?",
+            py5,
+        )
+    )
 
     return tasks
 
@@ -130,12 +180,21 @@ def selfcheck(graph: str) -> bool:
     checks = [
         ("PY1 load_graph callers >=2", len(load_callers) >= 2, f"{len(load_callers)}"),
         ("PY2 build_mcp callees >0", len(build_callees) > 0, f"{len(build_callees)}"),
-        ("PY3 reindex_all_tenants ABSENT", "reindex_all_tenants" not in o.method_names,
-         "absent" if "reindex_all_tenants" not in o.method_names else "PRESENT!"),
-        ("PY4 query_by_annotation PRESENT", "query_by_annotation" in o.method_names,
-         "found" if "query_by_annotation" in o.method_names else "missing"),
-        ("PY5 _resolve_calls source fetchable", "_resolve_calls" in o.method_names,
-         "found" if "_resolve_calls" in o.method_names else "missing"),
+        (
+            "PY3 reindex_all_tenants ABSENT",
+            "reindex_all_tenants" not in o.method_names,
+            "absent" if "reindex_all_tenants" not in o.method_names else "PRESENT!",
+        ),
+        (
+            "PY4 query_by_annotation PRESENT",
+            "query_by_annotation" in o.method_names,
+            "found" if "query_by_annotation" in o.method_names else "missing",
+        ),
+        (
+            "PY5 _resolve_calls source fetchable",
+            "_resolve_calls" in o.method_names,
+            "found" if "_resolve_calls" in o.method_names else "missing",
+        ),
     ]
     print("=== deterministic self-check (no LLM) — Python ===")
     all_ok = True
@@ -149,8 +208,10 @@ def selfcheck(graph: str) -> bool:
 async def run_async(args) -> None:
     oracle = Oracle.load(args.graph)
     client = ae.make_client()
-    backends = [ae.jidra_backend(args.graph, args.codebase),
-                ae.codegraph_backend(args.codebase)]
+    backends = [
+        ae.jidra_backend(args.graph, args.codebase),
+        ae.codegraph_backend(args.codebase),
+    ]
     tasks = make_python_tasks()
     if args.tasks:
         want = set(args.tasks.split(","))
@@ -159,9 +220,12 @@ async def run_async(args) -> None:
     results: list[dict] = []
     for task in tasks:
         for be in backends:
-            print(f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True)
-            rr = await ae.run_agent(client, args.model, be, task.prompt,
-                                    label=f"{task.id}/{be.name}")
+            print(
+                f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
+            )
+            rr = await ae.run_agent(
+                client, args.model, be, task.prompt, label=f"{task.id}/{be.name}"
+            )
             rr.task = task.id
             if not rr.error:
                 try:
@@ -176,8 +240,11 @@ async def run_async(args) -> None:
             d["check_note"] = note
             results.append(d)
             tag = "ERR" if rr.error else ("OK " if rr.correct else "XX ")
-            print(f"    {tag} {be.name:9} calls={rr.tool_calls:2} tok={rr.total_tokens:5} "
-                  f"halluc={len(rr.hallucinated)} {note}", flush=True)
+            print(
+                f"    {tag} {be.name:9} calls={rr.tool_calls:2} tok={rr.total_tokens:5} "
+                f"halluc={len(rr.hallucinated)} {note}",
+                flush=True,
+            )
 
     Path(args.out).write_text(json.dumps(results, indent=2, default=str))
     ae._summary(results)
@@ -185,8 +252,12 @@ async def run_async(args) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Agent-in-loop eval (Python): JIDRA vs CodeGraph")
-    ap.add_argument("--graph", required=True, help="JIDRA python graph.db (also GT oracle)")
+    ap = argparse.ArgumentParser(
+        description="Agent-in-loop eval (Python): JIDRA vs CodeGraph"
+    )
+    ap.add_argument(
+        "--graph", required=True, help="JIDRA python graph.db (also GT oracle)"
+    )
     ap.add_argument("--codebase", help="repo root (CG reads its .codegraph here)")
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
     ap.add_argument("--tasks", default="", help="comma list e.g. PY1,PY2")

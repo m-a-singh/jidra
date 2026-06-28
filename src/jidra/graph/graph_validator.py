@@ -115,9 +115,17 @@ def validate_graph(
     # Spring-managed classes: only these can produce phantom edges when absent.
     # Plain Java classes (no bean annotation) are always real call targets.
     _SPRING_BEAN_ANNOTATIONS = {
-        "Service", "Repository", "Controller", "RestController",
-        "Component", "Configuration", "Entity", "Bean",
-        "EventListener", "Scheduled", "Async",
+        "Service",
+        "Repository",
+        "Controller",
+        "RestController",
+        "Component",
+        "Configuration",
+        "Entity",
+        "Bean",
+        "EventListener",
+        "Scheduled",
+        "Async",
     }
 
     def _ann_name(a: str) -> str:
@@ -160,7 +168,9 @@ def validate_graph(
 
     if no_filter:
         edges_to_remove = [
-            edge for edge in graph.resolved_call_edges if _is_phantom_edge(edge.callee_method_id)
+            edge
+            for edge in graph.resolved_call_edges
+            if _is_phantom_edge(edge.callee_method_id)
         ]
         report.edges_removed = len(edges_to_remove)
         report.removed_edges = [
@@ -171,7 +181,9 @@ def validate_graph(
 
     # Filter edges: remove only phantom Spring-DI edges.
     filtered_edges = [
-        edge for edge in graph.resolved_call_edges if not _is_phantom_edge(edge.callee_method_id)
+        edge
+        for edge in graph.resolved_call_edges
+        if not _is_phantom_edge(edge.callee_method_id)
     ]
     report.edges_removed = len(graph.resolved_call_edges) - len(filtered_edges)
     report.removed_edges = [
@@ -185,9 +197,7 @@ def validate_graph(
     for callsite in graph.callsites:
         if not callsite.resolved_candidates:
             filtered_callsites.append(callsite)
-        elif any(
-            not _is_phantom_edge(mid) for mid in callsite.resolved_candidates
-        ):
+        elif any(not _is_phantom_edge(mid) for mid in callsite.resolved_candidates):
             filtered_callsites.append(callsite)
         # else: every candidate is a phantom Spring bean — drop
 

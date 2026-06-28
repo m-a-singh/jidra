@@ -9,6 +9,7 @@ Usage:
 Requires: pip install rich mcp  (already in jidra venv)
 Codegraph index must exist: npx @colbymchenry/codegraph init <codebase>
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,6 +52,7 @@ def truncate(text: str, max_chars: int = 2000) -> str:
 # Result type
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class BackendResult:
     name: str
@@ -68,12 +70,22 @@ class BackendResult:
 # Backend: Jidra (MCP stdio)
 # ---------------------------------------------------------------------------
 
+
 async def run_jidra(query: str, graph: str, codebase: str, mode: str) -> BackendResult:
     result = BackendResult(name="JIDRA")
     tool = "jidra_explore" if mode == "explore" else "jidra_search"
     params = StdioServerParameters(
         command=VENV_PYTHON,
-        args=["-m", "jidra.mcp_server", "--mode", "direct", "--graph", graph, "--codebase", codebase],
+        args=[
+            "-m",
+            "jidra.mcp_server",
+            "--mode",
+            "direct",
+            "--graph",
+            graph,
+            "--codebase",
+            codebase,
+        ],
         cwd=str(Path(__file__).parent.parent),
     )
     t0 = time.perf_counter()
@@ -108,6 +120,7 @@ def _extract_mcp_text(resp: Any) -> str:
 # Backend: Codegraph (CLI subprocess)
 # ---------------------------------------------------------------------------
 
+
 async def run_codegraph(query: str, codebase: str, mode: str) -> BackendResult:
     result = BackendResult(name="CODEGRAPH")
     npx = shutil.which("npx")
@@ -129,8 +142,13 @@ async def run_codegraph(query: str, codebase: str, mode: str) -> BackendResult:
         result.elapsed_ms = (time.perf_counter() - t0) * 1000
         if proc.returncode != 0:
             err_text = stderr.decode("utf-8", errors="replace").strip()
-            if "No CodeGraph index" in err_text or "not initialized" in err_text.lower():
-                result.error = "No index — run: npx @colbymchenry/codegraph init " + codebase
+            if (
+                "No CodeGraph index" in err_text
+                or "not initialized" in err_text.lower()
+            ):
+                result.error = (
+                    "No index — run: npx @colbymchenry/codegraph init " + codebase
+                )
             else:
                 result.error = err_text or f"exit {proc.returncode}"
         else:
@@ -150,12 +168,14 @@ async def run_codegraph(query: str, codebase: str, mode: str) -> BackendResult:
 # Backend: Graph RAG (FTS seeds + BFS graph walk, no LLM)
 # ---------------------------------------------------------------------------
 
+
 def run_graph_rag(query: str, graph: str) -> BackendResult:
     result = BackendResult(name="GRAPH-RAG")
     t0 = time.perf_counter()
     try:
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from jidra.graph.graph_rag import graph_rag_query
+
         data = graph_rag_query(query, graph, hops=2, seed_limit=10, max_nodes=150)
         lines = [
             f"seeds={data['seed_count']}  nodes={data['node_count']}",
@@ -163,7 +183,9 @@ def run_graph_rag(query: str, graph: str) -> BackendResult:
         ]
         for r in data["results"][:30]:
             fname = Path(r["file_path"]).name
-            lines.append(f"[hop {r['hop']}] {r['method_name']}  ({fname}:{r.get('start_line','')})")
+            lines.append(
+                f"[hop {r['hop']}] {r['method_name']}  ({fname}:{r.get('start_line', '')})"
+            )
         raw = "\n".join(lines)
         result.elapsed_ms = (time.perf_counter() - t0) * 1000
         result.output = raw
@@ -178,7 +200,10 @@ def run_graph_rag(query: str, graph: str) -> BackendResult:
 # Fan-out
 # ---------------------------------------------------------------------------
 
-async def compare(query: str, graph: str, codebase: str, mode: str) -> list[BackendResult]:
+
+async def compare(
+    query: str, graph: str, codebase: str, mode: str
+) -> list[BackendResult]:
     loop = asyncio.get_event_loop()
     rag_future = loop.run_in_executor(None, run_graph_rag, query, graph)
     jidra_task = asyncio.ensure_future(run_jidra(query, graph, codebase, mode))
@@ -236,6 +261,7 @@ def render_summary_row(results: list[BackendResult], console: Console) -> None:
 # REPL
 # ---------------------------------------------------------------------------
 
+
 def repl(graph: str, codebase: str, mode: str) -> None:
     console = Console()
     console.print(
@@ -270,11 +296,14 @@ def repl(graph: str, codebase: str, mode: str) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Compare jidra / codegraph search side-by-side"
     )
-    parser.add_argument("--graph", required=True, help="Path to jidra graph.db (or .jsonl)")
+    parser.add_argument(
+        "--graph", required=True, help="Path to jidra graph.db (or .jsonl)"
+    )
     parser.add_argument("--codebase", required=True, help="Path to the codebase root")
     parser.add_argument(
         "--mode",
