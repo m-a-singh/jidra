@@ -134,8 +134,8 @@ class TestProxyForwarding:
             codebase_path=None,
         )
         # Both should return comparable structures
-        assert ("hits" in via_proxy or "results" in via_proxy)
-        assert ("hits" in direct or "results" in direct)
+        assert "hits" in via_proxy or "results" in via_proxy
+        assert "hits" in direct or "results" in direct
 
     def test_build_mcp_with_proxy_invoke(self, running_daemon):
         _, graph_db = running_daemon

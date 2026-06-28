@@ -9,14 +9,24 @@ router = APIRouter()
 
 # Mirrors render_interactive_html color/shape logic exactly
 _STEREO_COLORS: dict[str, str] = {
-    "controller": "#2196f3", "service": "#34d399", "repository": "#f59e0b",
-    "component": "#a78bfa", "configuration": "#67e8f9", "entity": "#fb7185",
-    "http_handler": "#2196f3", "flask_route": "#34d399", "fastapi_route": "#34d399",
-    "django_handler": "#34d399", "unknown": "#4d6173",
+    "controller": "#2196f3",
+    "service": "#34d399",
+    "repository": "#f59e0b",
+    "component": "#a78bfa",
+    "configuration": "#67e8f9",
+    "entity": "#fb7185",
+    "http_handler": "#2196f3",
+    "flask_route": "#34d399",
+    "fastapi_route": "#34d399",
+    "django_handler": "#34d399",
+    "unknown": "#4d6173",
 }
 _HTTP_COLORS: dict[str, str] = {
-    "GET": "#34d399", "POST": "#f59e0b", "PUT": "#38bdf8",
-    "DELETE": "#fb7185", "PATCH": "#a78bfa",
+    "GET": "#34d399",
+    "POST": "#f59e0b",
+    "PUT": "#38bdf8",
+    "DELETE": "#fb7185",
+    "PATCH": "#a78bfa",
 }
 
 
@@ -30,7 +40,13 @@ def _vis_shape(n: dict) -> str:
     if n.get("is_endpoint"):
         return "diamond"
     grp = (n.get("group") or "").lower()
-    if grp in ("controller", "http_handler", "flask_route", "fastapi_route", "django_handler"):
+    if grp in (
+        "controller",
+        "http_handler",
+        "flask_route",
+        "fastapi_route",
+        "django_handler",
+    ):
         return "diamond"
     if grp == "service":
         return "ellipse"
@@ -71,6 +87,7 @@ def _get_engine(repo_path: str, output_path: str | None = None):
 
     out_dir = Path(output_path) if output_path else _repo_output_dir(Path(repo_path))
     import sqlite3 as _sq
+
     db = resolve_graph_db_path(out_dir)
     # prefer validated if it has records, else fall back to main
     conn = _sq.connect(str(db))
@@ -127,7 +144,9 @@ async def get_nodes(
 
 
 @router.get("/node/{node_id:path}")
-async def get_node(node_id: str, repo_path: str, output_path: str | None = None) -> dict:
+async def get_node(
+    node_id: str, repo_path: str, output_path: str | None = None
+) -> dict:
     try:
         engine = _get_engine(repo_path, output_path)
     except Exception as exc:
@@ -149,10 +168,16 @@ async def graph_html(
     from ...cli import _repo_output_dir
 
     out_dir = Path(output_path) if output_path else _repo_output_dir(Path(repo_path))
-    name = "graph_visualization_raw.html" if variant == "raw" else "graph_visualization.html"
+    name = (
+        "graph_visualization_raw.html"
+        if variant == "raw"
+        else "graph_visualization.html"
+    )
     html_path = out_dir / name
     if not html_path.exists():
-        raise HTTPException(status_code=404, detail=f"{name} not found — run the pipeline first")
+        raise HTTPException(
+            status_code=404, detail=f"{name} not found — run the pipeline first"
+        )
     html = html_path.read_text(encoding="utf-8")
     # vis-network requires a concrete pixel height on its container.
     # In an iframe the flex chain may not resolve, so we force it.
@@ -165,9 +190,7 @@ async def graph_html(
     )
     # Inject fit() call inside the same script block where `const network` lives.
     # Can't access it from an external script due to block scoping.
-    fit_call = (
-        "\nsetTimeout(function(){network.fit({animation:false});},200);\n"
-    )
+    fit_call = "\nsetTimeout(function(){network.fit({animation:false});},200);\n"
     # Replace the LAST </script> before </body> — that's the one containing network
     last_script_close = html.rfind("</script>")
     html = html[:last_script_close] + fit_call + html[last_script_close:]

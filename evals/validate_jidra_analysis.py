@@ -6,10 +6,9 @@ of having tools available vs raw queries.
 """
 
 import sys
-import json
 import time
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any
 
 try:
     from tabulate import tabulate
@@ -27,6 +26,7 @@ except ImportError:
 @dataclass
 class QueryMetrics:
     """Metrics from a single Claude API call."""
+
     name: str
     input_tokens: int
     output_tokens: int
@@ -42,6 +42,7 @@ class QueryMetrics:
 @dataclass
 class ComparisonResult:
     """Side-by-side comparison of with-tools vs without-tools."""
+
     query: str
     with_tools_metrics: QueryMetrics
     without_tools_metrics: QueryMetrics
@@ -53,21 +54,38 @@ class ComparisonResult:
 
         reduction_pct = (
             (n.input_tokens - w.input_tokens) / n.input_tokens * 100
-            if n.input_tokens > 0 else 0.0
+            if n.input_tokens > 0
+            else 0.0
         )
         savings = n.cost - w.cost
         savings_pct = (savings / n.cost * 100) if n.cost > 0 else 0.0
 
         rows = [
-            ["Input Tokens", f"{w.input_tokens:,}", f"{n.input_tokens:,}",
-             f"{w.input_tokens - n.input_tokens:,} ({reduction_pct:.1f}%)"],
-            ["Output Tokens", f"{w.output_tokens:,}", f"{n.output_tokens:,}",
-             f"{w.output_tokens - n.output_tokens:,}"],
+            [
+                "Input Tokens",
+                f"{w.input_tokens:,}",
+                f"{n.input_tokens:,}",
+                f"{w.input_tokens - n.input_tokens:,} ({reduction_pct:.1f}%)",
+            ],
+            [
+                "Output Tokens",
+                f"{w.output_tokens:,}",
+                f"{n.output_tokens:,}",
+                f"{w.output_tokens - n.output_tokens:,}",
+            ],
             ["Tool Calls", f"{w.tool_calls}", f"{n.tool_calls}", "-"],
-            ["Cost", f"${w.cost:.6f}", f"${n.cost:.6f}",
-             f"${savings:.6f} ({savings_pct:.1f}%)"],
-            ["Latency (s)", f"{w.latency_s:.2f}s", f"{n.latency_s:.2f}s",
-             f"{w.latency_s - n.latency_s:.2f}s"],
+            [
+                "Cost",
+                f"${w.cost:.6f}",
+                f"${n.cost:.6f}",
+                f"${savings:.6f} ({savings_pct:.1f}%)",
+            ],
+            [
+                "Latency (s)",
+                f"{w.latency_s:.2f}s",
+                f"{n.latency_s:.2f}s",
+                f"{w.latency_s - n.latency_s:.2f}s",
+            ],
         ]
 
         headers = ["Metric", "With Tools", "Without Tools", "Difference"]
@@ -86,7 +104,9 @@ def get_llm_pricing(model: str) -> dict[str, float]:
     return pricing[model]
 
 
-def calculate_cost(model: str, input_tokens: int, output_tokens: int, thinking_tokens: int = 0) -> float:
+def calculate_cost(
+    model: str, input_tokens: int, output_tokens: int, thinking_tokens: int = 0
+) -> float:
     """Calculate cost in USD."""
     pricing = get_llm_pricing(model)
     thinking_cost = (thinking_tokens * pricing["output"] * 3) if thinking_tokens else 0
@@ -108,11 +128,11 @@ def get_jidra_tools() -> list[dict[str, Any]]:
                 "properties": {
                     "method": {
                         "type": "string",
-                        "description": "Method identifier or qualified name"
+                        "description": "Method identifier or qualified name",
                     }
                 },
-                "required": ["method"]
-            }
+                "required": ["method"],
+            },
         },
         {
             "name": "jidra_get_flow",
@@ -120,13 +140,10 @@ def get_jidra_tools() -> list[dict[str, Any]]:
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "method": {
-                        "type": "string",
-                        "description": "Method identifier"
-                    }
+                    "method": {"type": "string", "description": "Method identifier"}
                 },
-                "required": ["method"]
-            }
+                "required": ["method"],
+            },
         },
         {
             "name": "jidra_get_call_chain",
@@ -135,22 +152,24 @@ def get_jidra_tools() -> list[dict[str, Any]]:
                 "type": "object",
                 "properties": {
                     "from_method": {"type": "string", "description": "Starting method"},
-                    "to_method": {"type": "string", "description": "Target method"}
+                    "to_method": {"type": "string", "description": "Target method"},
                 },
-                "required": ["from_method", "to_method"]
-            }
-        }
+                "required": ["from_method", "to_method"],
+            },
+        },
     ]
 
 
-def call_claude(client: Anthropic, model: str, query: str, use_tools: bool = True) -> QueryMetrics:
+def call_claude(
+    client: Anthropic, model: str, query: str, use_tools: bool = True
+) -> QueryMetrics:
     """Make Claude API call, optionally WITH JIDRA tools available."""
     start = time.time()
 
     kwargs = {
         "model": model,
         "max_tokens": 2048,
-        "messages": [{"role": "user", "content": query}]
+        "messages": [{"role": "user", "content": query}],
     }
 
     if use_tools:
@@ -163,7 +182,7 @@ def call_claude(client: Anthropic, model: str, query: str, use_tools: bool = Tru
 
     input_tokens = usage.input_tokens
     output_tokens = usage.output_tokens
-    thinking_tokens = int(getattr(usage, 'thinking_tokens', 0) or 0)
+    thinking_tokens = int(getattr(usage, "thinking_tokens", 0) or 0)
 
     cost = calculate_cost(model, input_tokens, output_tokens, thinking_tokens)
 
@@ -172,10 +191,10 @@ def call_claude(client: Anthropic, model: str, query: str, use_tools: bool = Tru
     tool_calls = 0
 
     for block in message.content:
-        if hasattr(block, 'text'):
+        if hasattr(block, "text"):
             response_full = block.text
             response_preview = block.text[:150]
-        elif hasattr(block, 'type') and block.type == 'tool_use':
+        elif hasattr(block, "type") and block.type == "tool_use":
             tool_calls += 1
 
     return QueryMetrics(
@@ -194,19 +213,23 @@ def call_claude(client: Anthropic, model: str, query: str, use_tools: bool = Tru
 
 def validate_query(client: Anthropic, model: str, query: str) -> ComparisonResult:
     """Run query WITH and WITHOUT tools, compare results."""
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"Query: {query[:80]}...")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     print("[1/2] Calling Claude WITH JIDRA tools available...")
     with_tools = call_claude(client, model, query, use_tools=True)
-    print(f"      ✓ {with_tools.input_tokens:,} input, {with_tools.output_tokens:,} output, "
-          f"{with_tools.tool_calls} tool call(s), ${with_tools.cost:.6f}")
+    print(
+        f"      ✓ {with_tools.input_tokens:,} input, {with_tools.output_tokens:,} output, "
+        f"{with_tools.tool_calls} tool call(s), ${with_tools.cost:.6f}"
+    )
 
     print("\n[2/2] Calling Claude WITHOUT tools...")
     without_tools = call_claude(client, model, query, use_tools=False)
-    print(f"      ✓ {without_tools.input_tokens:,} input, {without_tools.output_tokens:,} output, "
-          f"${without_tools.cost:.6f}")
+    print(
+        f"      ✓ {without_tools.input_tokens:,} input, {without_tools.output_tokens:,} output, "
+        f"${without_tools.cost:.6f}"
+    )
 
     return ComparisonResult(
         query=query,
@@ -238,13 +261,13 @@ def main():
     parser.add_argument(
         "--codebase",
         type=Path,
-        help="Path to codebase to analyze (e.g., /path/to/ai_watchtower)"
+        help="Path to codebase to analyze (e.g., /path/to/ai_watchtower)",
     )
     parser.add_argument(
         "--model",
         default="claude-opus-4-7",
         choices=["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"],
-        help="LLM model to use"
+        help="LLM model to use",
     )
     args = parser.parse_args()
 
@@ -264,9 +287,9 @@ def main():
     if args.codebase:
         codebase_info = f"\nCodebase: {args.codebase}"
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("JIDRA Tool Effectiveness Validator")
-    print("="*70)
+    print("=" * 70)
     print(f"\nModel: {model}")
     print(f"Endpoint: {base_url}")
     print(codebase_info)
@@ -307,35 +330,55 @@ def main():
                     print("\nNo results yet. Run some queries first.")
                     continue
 
-                print("\n" + "="*70)
+                print("\n" + "=" * 70)
                 print("RESULTS SUMMARY")
-                print("="*70 + "\n")
+                print("=" * 70 + "\n")
 
                 summary_rows = []
                 for i, result in enumerate(results, 1):
                     w = result.with_tools_metrics
                     n = result.without_tools_metrics
-                    reduction = (n.input_tokens - w.input_tokens) / n.input_tokens * 100 if n.input_tokens > 0 else 0
+                    reduction = (
+                        (n.input_tokens - w.input_tokens) / n.input_tokens * 100
+                        if n.input_tokens > 0
+                        else 0
+                    )
                     savings = n.cost - w.cost
 
-                    summary_rows.append([
-                        i,
-                        result.query[:35] + "...",
-                        f"{w.input_tokens:,}",
-                        f"{n.input_tokens:,}",
-                        f"{reduction:.1f}%",
-                        f"{w.tool_calls}",
-                        f"${savings:.6f}",
-                    ])
+                    summary_rows.append(
+                        [
+                            i,
+                            result.query[:35] + "...",
+                            f"{w.input_tokens:,}",
+                            f"{n.input_tokens:,}",
+                            f"{reduction:.1f}%",
+                            f"{w.tool_calls}",
+                            f"${savings:.6f}",
+                        ]
+                    )
 
-                headers = ["#", "Query", "With Tools", "Without", "Reduction", "Tools Used", "Savings"]
+                headers = [
+                    "#",
+                    "Query",
+                    "With Tools",
+                    "Without",
+                    "Reduction",
+                    "Tools Used",
+                    "Savings",
+                ]
                 print(tabulate(summary_rows, headers=headers, tablefmt="grid"))
 
                 total_reduction = sum(
-                    (r.without_tools_metrics.input_tokens - r.with_tools_metrics.input_tokens)
+                    (
+                        r.without_tools_metrics.input_tokens
+                        - r.with_tools_metrics.input_tokens
+                    )
                     for r in results
                 )
-                total_savings = sum(r.without_tools_metrics.cost - r.with_tools_metrics.cost for r in results)
+                total_savings = sum(
+                    r.without_tools_metrics.cost - r.with_tools_metrics.cost
+                    for r in results
+                )
                 total_tool_calls = sum(r.with_tools_metrics.tool_calls for r in results)
 
                 print(f"\nTotal input tokens saved: {total_reduction:,}")

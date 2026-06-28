@@ -10,6 +10,7 @@ Flow:
 Returns same dict shape as engine.search() so compare_chat / eval_chat
 can treat it as a drop-in third backend.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -23,6 +24,7 @@ from .graph_store import search_methods, connect
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
+
 
 def graph_rag_query(
     query: str,
@@ -56,7 +58,9 @@ def graph_rag_query(
         return {"query": query, "seed_count": 0, "node_count": 0, "results": []}
 
     seed_ids: set[str] = {r["id"] for r in seed_rows}
-    seed_score: dict[str, float] = {r["id"]: float(r.get("score", 0.0)) for r in seed_rows}
+    seed_score: dict[str, float] = {
+        r["id"]: float(r.get("score", 0.0)) for r in seed_rows
+    }
 
     # --- Step 2: BFS over call + inheritance edges ---------------------------
     # visited: method_id → (hop_distance, bm25_score)
@@ -90,16 +94,18 @@ def graph_rag_query(
     for row in method_meta:
         mid = row["id"]
         hop, bm25 = visited.get(mid, (hops + 1, 0.0))
-        results.append({
-            "method_id": mid,
-            "method_name": row["method_name"],
-            "signature": row["signature"],
-            "class_full_name": row["class_full_name"],
-            "file_path": row["file_path"],
-            "language": row["language"],
-            "hop": hop,
-            "bm25_score": round(bm25, 4),
-        })
+        results.append(
+            {
+                "method_id": mid,
+                "method_name": row["method_name"],
+                "signature": row["signature"],
+                "class_full_name": row["class_full_name"],
+                "file_path": row["file_path"],
+                "language": row["language"],
+                "hop": hop,
+                "bm25_score": round(bm25, 4),
+            }
+        )
 
     results.sort(key=lambda r: (r["hop"], r["bm25_score"]))
 
@@ -114,6 +120,7 @@ def graph_rag_query(
 # ---------------------------------------------------------------------------
 # Graph traversal helpers
 # ---------------------------------------------------------------------------
+
 
 def _call_neighbors(conn: sqlite3.Connection, method_id: str, variant: str) -> set[str]:
     """Callers + callees of method_id via resolved_call_edges."""

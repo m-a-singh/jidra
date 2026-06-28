@@ -27,6 +27,7 @@ Usage:
 Auth: uses ANTHROPIC_AUTH_TOKEN + ANTHROPIC_BASE_URL from env (proxy), falling
 back to ANTHROPIC_API_KEY.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -126,7 +127,9 @@ class Oracle:
         ).fetchall()
         return {r[0] for r in rows}
 
-    def method_exists(self, class_short: str, method: str, variant: str = "validated") -> bool:
+    def method_exists(
+        self, class_short: str, method: str, variant: str = "validated"
+    ) -> bool:
         r = self.conn.execute(
             "SELECT 1 FROM methods WHERE variant=? AND method_name=? "
             "AND (class_full_name=? OR class_full_name LIKE ?) LIMIT 1",
@@ -148,7 +151,9 @@ class Oracle:
             parent = head.rsplit(".", 1)[0]
             if parent in self.class_full_names:
                 continue  # Class.method or Class.FIELD reference
-            if any(c == head or c.startswith(head + ".") for c in self.class_full_names):
+            if any(
+                c == head or c.startswith(head + ".") for c in self.class_full_names
+            ):
                 continue  # a package prefix
             bad.append(m)
         # *.java basenames
@@ -157,7 +162,10 @@ class Oracle:
                 bad.append(m)
         # Interface/impl short names e.g. "[REDACTED_INTERFACE]", "SearchServiceImpl"
         # Extract PascalCase identifiers that sound like classes (not common words)
-        for m in re.findall(r"\b[A-Z][a-zA-Z0-9]*(?:Service|Controller|Repository|Manager|Factory|Handler|Listener|Helper|Util|Impl|Interface|Abstract)(?:Impl)?\b", text):
+        for m in re.findall(
+            r"\b[A-Z][a-zA-Z0-9]*(?:Service|Controller|Repository|Manager|Factory|Handler|Listener|Helper|Util|Impl|Interface|Abstract)(?:Impl)?\b",
+            text,
+        ):
             short = m.split("#")[0].rstrip(".")
             # Check if any known class ends with this short name
             if not any(c.endswith("." + short) for c in self.class_full_names):
@@ -179,8 +187,16 @@ def jidra_backend(graph: str, codebase: str) -> Backend:
         "jidra",
         StdioServerParameters(
             command=VENV_PY,
-            args=["-m", "jidra.mcp_server", "--mode", "direct",
-                  "--graph", graph, "--codebase", codebase],
+            args=[
+                "-m",
+                "jidra.mcp_server",
+                "--mode",
+                "direct",
+                "--graph",
+                graph,
+                "--codebase",
+                codebase,
+            ],
             cwd=str(REPO_ROOT),
         ),
     )
@@ -189,7 +205,9 @@ def jidra_backend(graph: str, codebase: str) -> Backend:
 def codegraph_backend(codebase: str) -> Backend:
     return Backend(
         "codegraph",
-        StdioServerParameters(command="codegraph", args=["serve", "--mcp"], cwd=codebase),
+        StdioServerParameters(
+            command="codegraph", args=["serve", "--mcp"], cwd=codebase
+        ),
     )
 
 
@@ -205,11 +223,13 @@ def _mcp_text(result: Any) -> str:
 def _to_anthropic_tools(mcp_tools: list) -> list[dict]:
     out = []
     for t in mcp_tools:
-        out.append({
-            "name": t.name,
-            "description": (t.description or "")[:1024],
-            "input_schema": t.inputSchema or {"type": "object", "properties": {}},
-        })
+        out.append(
+            {
+                "name": t.name,
+                "description": (t.description or "")[:1024],
+                "input_schema": t.inputSchema or {"type": "object", "properties": {}},
+            }
+        )
     return out
 
 
@@ -249,8 +269,9 @@ SYSTEM = (
 )
 
 
-async def run_agent(client, model: str, backend: Backend, task_prompt: str,
-                    label: str = "") -> RunResult:
+async def run_agent(
+    client, model: str, backend: Backend, task_prompt: str, label: str = ""
+) -> RunResult:
     label = label or backend.name
     rr = RunResult(backend=backend.name, task="")
     t0 = time.perf_counter()
@@ -265,21 +286,30 @@ async def run_agent(client, model: str, backend: Backend, task_prompt: str,
 
                 for it in range(1, MAX_ITERS + 1):
                     resp = await client.messages.create(
-                        model=model, max_tokens=AGENT_MAX_TOKENS,
-                        system=SYSTEM, tools=tools, messages=messages,
+                        model=model,
+                        max_tokens=AGENT_MAX_TOKENS,
+                        system=SYSTEM,
+                        tools=tools,
+                        messages=messages,
                     )
                     rr.in_tokens += resp.usage.input_tokens
                     rr.out_tokens += resp.usage.output_tokens
 
                     tool_uses = [b for b in resp.content if b.type == "tool_use"]
                     text = "".join(b.text for b in resp.content if b.type == "text")
-                    log(label, f"iter {it}: +{resp.usage.output_tokens}out tok "
-                               f"(cum {rr.total_tokens}) · {len(tool_uses)} tool-call(s)"
-                               + (f" · thinks: {_compact(text, 80)}" if text.strip() else ""))
+                    log(
+                        label,
+                        f"iter {it}: +{resp.usage.output_tokens}out tok "
+                        f"(cum {rr.total_tokens}) · {len(tool_uses)} tool-call(s)"
+                        + (f" · thinks: {_compact(text, 80)}" if text.strip() else ""),
+                    )
 
                     if not tool_uses:
                         rr.answer = text.strip()
-                        log(label, f"FINAL ({rr.tool_calls} calls): {_compact(rr.answer, 160)}")
+                        log(
+                            label,
+                            f"FINAL ({rr.tool_calls} calls): {_compact(rr.answer, 160)}",
+                        )
                         break
 
                     messages.append({"role": "assistant", "content": resp.content})
@@ -293,15 +323,20 @@ async def run_agent(client, model: str, backend: Backend, task_prompt: str,
                                 session.call_tool(tu.name, tu.input or {}), 60
                             )
                             payload = _mcp_text(out)[:8000]
-                            log(label, f"  ← {len(payload)} chars · {_compact(payload, 110)}")
+                            log(
+                                label,
+                                f"  ← {len(payload)} chars · {_compact(payload, 110)}",
+                            )
                         except Exception as e:  # noqa: BLE001
                             payload = f"TOOL_ERROR: {e!r}"
                             log(label, f"  ← ERROR {_compact(repr(e), 110)}")
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tu.id,
-                            "content": payload or "(empty)",
-                        })
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tu.id,
+                                "content": payload or "(empty)",
+                            }
+                        )
                     messages.append({"role": "user", "content": tool_results})
                 else:
                     rr.answer = "(max iterations reached without final answer)"
@@ -339,30 +374,59 @@ def make_tasks() -> list[Task]:
         impls = o.implementers("[REDACTED_INTERFACE]")
         n = len(impls)
         a = _lc(ans)
-        signals_many = any(k in a for k in ("multiple", "many", "several",
-                          "implementations", "strategy", "dozens", str(n)))
+        signals_many = any(
+            k in a
+            for k in (
+                "multiple",
+                "many",
+                "several",
+                "implementations",
+                "strategy",
+                "dozens",
+                str(n),
+            )
+        )
         # fail if it confidently names ONE as "the" implementation
         named = [c.split(".")[-1] for c in impls if c.split(".")[-1].lower() in a]
-        confident_single = bool(re.search(r"\bthe (single |sole )?implementation\b", a)) and len(named) <= 1
+        confident_single = (
+            bool(re.search(r"\bthe (single |sole )?implementation\b", a))
+            and len(named) <= 1
+        )
         ok = signals_many and not confident_single
-        return ok, f"impls={n} named={len(named)} many={signals_many} single={confident_single}"
-    tasks.append(Task("T1",
-        "The interface `[REDACTED_INTERFACE]` is implemented in this codebase. "
-        "How many concrete implementations are there, and is there a single class "
-        "that 'is' the [REDACTED_INTERFACE], or many? Answer precisely.", t1))
+        return (
+            ok,
+            f"impls={n} named={len(named)} many={signals_many} single={confident_single}",
+        )
+
+    tasks.append(
+        Task(
+            "T1",
+            "The interface `[REDACTED_INTERFACE]` is implemented in this codebase. "
+            "How many concrete implementations are there, and is there a single class "
+            "that 'is' the [REDACTED_INTERFACE], or many? Answer precisely.",
+            t1,
+        )
+    )
 
     # T2 — interface -> concrete impl resolution.
     def t2(ans: str, o: Oracle) -> tuple[bool, str]:
         ok = "[REDACTED_INTERFACE]" in _lc(ans)
         return ok, "names [REDACTED_INTERFACE]" if ok else "missed [REDACTED_INTERFACE]"
-    tasks.append(Task("T2",
-        "Which concrete class implements the `REDACTED_INTERFACE` interface, and "
-        "where is the `templateSearch` method actually implemented? Name the class.", t2))
+
+    tasks.append(
+        Task(
+            "T2",
+            "Which concrete class implements the `REDACTED_INTERFACE` interface, and "
+            "where is the `templateSearch` method actually implemented? Name the class.",
+            t2,
+        )
+    )
 
     # T3 — caller / impact analysis. `REDACTED_INTERFACE` has many real
     # internal callers (unlike an HTTP endpoint, which has none). Pass = surfaces
     # >=3 genuine caller classes; fabricated callers are caught by hallucinated_refs.
     T3_METHOD = "REDACTED_INTERFACE"
+
     def t3(ans: str, o: Oracle) -> tuple[bool, str]:
         callers = {c.split(".")[-1].lower() for c in o.callers_of(T3_METHOD)}
         if not callers:
@@ -370,22 +434,45 @@ def make_tasks() -> list[Task]:
         hit = {c for c in callers if len(c) > 4 and c in _lc(ans)}
         ok = len(hit) >= 3  # impact analysis: found a real, non-trivial caller set
         return ok, f"caller_hit {len(hit)}/{len(callers)} (need>=3)"
-    tasks.append(Task("T3",
-        f"Which classes call the `{T3_METHOD}` method? List the calling classes — "
-        "this is impact analysis before changing it. Name the actual callers.", t3))
+
+    tasks.append(
+        Task(
+            "T3",
+            f"Which classes call the `{T3_METHOD}` method? List the calling classes — "
+            "this is impact analysis before changing it. Name the actual callers.",
+            t3,
+        )
+    )
 
     # T4 — negative / hallucination resistance. Method does not exist.
     def t4(ans: str, o: Oracle) -> tuple[bool, str]:
         exists = o.method_exists("REDACTED_INTERFACE", "reindexAllTenants")
         a = _lc(ans)
-        says_absent = any(k in a for k in (
-            "does not exist", "doesn't exist", "no such", "not found",
-            "could not find", "couldn't find", "no method", "not present", "no `reindex"))
+        says_absent = any(
+            k in a
+            for k in (
+                "does not exist",
+                "doesn't exist",
+                "no such",
+                "not found",
+                "could not find",
+                "couldn't find",
+                "no method",
+                "not present",
+                "no `reindex",
+            )
+        )
         ok = (not exists) and says_absent
         return ok, f"exists={exists} says_absent={says_absent}"
-    tasks.append(Task("T4",
-        "Explain what the method `reindexAllTenants()` on `REDACTED_INTERFACE` "
-        "does and what it calls. If it is not present, say so explicitly.", t4))
+
+    tasks.append(
+        Task(
+            "T4",
+            "Explain what the method `reindexAllTenants()` on `REDACTED_INTERFACE` "
+            "does and what it calls. If it is not present, say so explicitly.",
+            t4,
+        )
+    )
 
     # T5 — flow trace: immediate downstream of the search endpoint.
     def t5(ans: str, o: Oracle) -> tuple[bool, str]:
@@ -404,25 +491,51 @@ def make_tasks() -> list[Task]:
         hit = {c for c in callees if len(c) > 3 and c in _lc(ans)}
         ok = len(hit) >= 1
         return ok, f"callee_hit {len(hit)}/{len(callees)}"
-    tasks.append(Task("T5",
-        "Trace the method `REDACTED` in `REDACTED`: what does "
-        "it call directly? List the downstream methods/services it invokes.", t5))
+
+    tasks.append(
+        Task(
+            "T5",
+            "Trace the method `REDACTED` in `REDACTED`: what does "
+            "it call directly? List the downstream methods/services it invokes.",
+            t5,
+        )
+    )
 
     # T6 — hallucination bait: an interface that DOES NOT EXIST. A grounded tool
     # forces "not found"; a name-matching backend may fabricate implementations.
     FAKE_IFACE = "TenantRoutingStrategy"
+
     def t6(ans: str, o: Oracle) -> tuple[bool, str]:
         exists = any(c.rsplit(".", 1)[-1] == FAKE_IFACE for c in o.class_full_names)
         a = _lc(ans)
-        says_absent = any(k in a for k in (
-            "does not exist", "doesn't exist", "no such", "not found", "could not find",
-            "couldn't find", "no interface", "not present", "no implementations",
-            "no class", "did not find", "unable to find"))
+        says_absent = any(
+            k in a
+            for k in (
+                "does not exist",
+                "doesn't exist",
+                "no such",
+                "not found",
+                "could not find",
+                "couldn't find",
+                "no interface",
+                "not present",
+                "no implementations",
+                "no class",
+                "did not find",
+                "unable to find",
+            )
+        )
         ok = (not exists) and says_absent
         return ok, f"exists={exists} says_absent={says_absent}"
-    tasks.append(Task("T6",
-        f"Describe the `{FAKE_IFACE}` interface and list its implementations. "
-        "If it does not exist in this codebase, say so explicitly.", t6))
+
+    tasks.append(
+        Task(
+            "T6",
+            f"Describe the `{FAKE_IFACE}` interface and list its implementations. "
+            "If it does not exist in this codebase, say so explicitly.",
+            t6,
+        )
+    )
 
     # T7 — multi-impl pick trap. REDACTED has 101 impls; one (REDACTED)
     # matches the described purpose. Pass = narrows to the right impl OR honestly
@@ -430,25 +543,49 @@ def make_tasks() -> list[Task]:
     def t7(ans: str, o: Oracle) -> tuple[bool, str]:
         a = _lc(ans)
         right = "REDACTED" in a
-        hedges = any(k in a for k in ("ambiguous", "multiple", "several", "many",
-                     "cannot determine", "can't determine", "depends"))
+        hedges = any(
+            k in a
+            for k in (
+                "ambiguous",
+                "multiple",
+                "several",
+                "many",
+                "cannot determine",
+                "can't determine",
+                "depends",
+            )
+        )
         ok = right or hedges
         return ok, f"named_right={right} hedged={hedges}"
-    tasks.append(Task("T7",
-        "Among the implementations of `REDACTED`, which single class is "
-        "responsible for matching on a channel's NAME? Name it, or say if it can't "
-        "be determined.", t7))
+
+    tasks.append(
+        Task(
+            "T7",
+            "Among the implementations of `REDACTED`, which single class is "
+            "responsible for matching on a channel's NAME? Name it, or say if it can't "
+            "be determined.",
+            t7,
+        )
+    )
 
     # T8 — get_method_source bare-name selector resolution
     def t8(ans: str, o: Oracle) -> tuple[bool, str]:
         a = _lc(ans)
-        has_source = any(k in a for k in ("query", "request", "index", "result", "return"))
+        has_source = any(
+            k in a for k in ("query", "request", "index", "result", "return")
+        )
         located = any(k in a for k in ("searchservice", "service", "search"))
         ok = has_source and located
         return ok, f"has_source={has_source} located={located}"
-    tasks.append(Task("T8",
-        "Use the code graph tool to fetch the source of the `search` method on `REDACTED` directly. "
-        "Show its implementation — what parameters does it take and what does it return?", t8))
+
+    tasks.append(
+        Task(
+            "T8",
+            "Use the code graph tool to fetch the source of the `search` method on `REDACTED` directly. "
+            "Show its implementation — what parameters does it take and what does it return?",
+            t8,
+        )
+    )
 
     return tasks
 
@@ -458,6 +595,7 @@ def make_tasks() -> list[Task]:
 # ---------------------------------------------------------------------------
 def make_client():
     from anthropic import AsyncAnthropic
+
     tok = os.environ.get("ANTHROPIC_AUTH_TOKEN")
     base = os.environ.get("ANTHROPIC_BASE_URL")
     if tok:
@@ -468,7 +606,10 @@ def make_client():
 async def main_async(args) -> None:
     oracle = Oracle.load(args.graph)
     client = make_client()
-    backends = [jidra_backend(args.graph, args.codebase), codegraph_backend(args.codebase)]
+    backends = [
+        jidra_backend(args.graph, args.codebase),
+        codegraph_backend(args.codebase),
+    ]
     tasks = make_tasks()
     if args.tasks:
         want = set(args.tasks.split(","))
@@ -477,9 +618,12 @@ async def main_async(args) -> None:
     results: list[dict] = []
     for task in tasks:
         for be in backends:
-            print(f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True)
-            rr = await run_agent(client, args.model, be, task.prompt,
-                                 label=f"{task.id}/{be.name}")
+            print(
+                f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
+            )
+            rr = await run_agent(
+                client, args.model, be, task.prompt, label=f"{task.id}/{be.name}"
+            )
             rr.task = task.id
             if not rr.error:
                 try:
@@ -496,8 +640,11 @@ async def main_async(args) -> None:
             tag = "OK " if rr.correct else "XX "
             if rr.error:
                 tag = "ERR"
-            print(f"    {tag} {be.name:9} calls={rr.tool_calls:2} tok={rr.total_tokens:5} "
-                  f"halluc={len(rr.hallucinated)} {note}", flush=True)
+            print(
+                f"    {tag} {be.name:9} calls={rr.tool_calls:2} tok={rr.total_tokens:5} "
+                f"halluc={len(rr.hallucinated)} {note}",
+                flush=True,
+            )
 
     Path(args.out).write_text(json.dumps(results, indent=2, default=str))
     _summary(results)
@@ -506,7 +653,9 @@ async def main_async(args) -> None:
 
 def _summary(results: list[dict]) -> None:
     print("\n" + "=" * 72)
-    print(f"{'':12}{'correct':>9}{'tool_calls':>12}{'tokens':>10}{'halluc':>9}{'wall_ms':>10}")
+    print(
+        f"{'':12}{'correct':>9}{'tool_calls':>12}{'tokens':>10}{'halluc':>9}{'wall_ms':>10}"
+    )
     for name in ("jidra", "codegraph"):
         rs = [r for r in results if r["backend"] == name and not r["error"]]
         if not rs:
@@ -518,9 +667,13 @@ def _summary(results: list[dict]) -> None:
         tok = sum(r["in_tokens"] + r["out_tokens"] for r in rs) / n
         hal = sum(1 for r in rs if r["hallucinated"])
         wall = sum(r["wall_ms"] for r in rs) / n
-        print(f"{name:12}{corr:>4}/{n:<4}{tc:>12.1f}{tok:>10.0f}{hal:>6}/{n:<2}{wall:>10.0f}")
+        print(
+            f"{name:12}{corr:>4}/{n:<4}{tc:>12.1f}{tok:>10.0f}{hal:>6}/{n:<2}{wall:>10.0f}"
+        )
     print("=" * 72)
-    print("correct=task solved · tool_calls/tokens/wall=avg per task · halluc=#runs citing a fake project symbol")
+    print(
+        "correct=task solved · tool_calls/tokens/wall=avg per task · halluc=#runs citing a fake project symbol"
+    )
 
 
 def selfcheck(graph: str) -> bool:
@@ -535,8 +688,11 @@ def selfcheck(graph: str) -> bool:
            JOIN methods caller ON caller.id=e.caller_method_id AND caller.variant=e.variant
            JOIN methods callee ON callee.id=e.callee_method_id AND callee.variant=e.variant
            WHERE e.variant='validated' AND caller.method_name='REDACTED'
-             AND caller.class_full_name LIKE '%REDACTED'""").fetchall()
-    fake_absent = not any(c.rsplit(".", 1)[-1] == "TenantRoutingStrategy" for c in o.class_full_names)
+             AND caller.class_full_name LIKE '%REDACTED'"""
+    ).fetchall()
+    fake_absent = not any(
+        c.rsplit(".", 1)[-1] == "TenantRoutingStrategy" for c in o.class_full_names
+    )
     chan = any(c.rsplit(".", 1)[-1] == "REDACTED" for c in impls_cf)
     t4_absent = not o.method_exists("REDACTED", "reindexAllTenants")
 
@@ -544,32 +700,52 @@ def selfcheck(graph: str) -> bool:
         ("T1 REDACTED impls == 101", len(impls_cf) == 101, f"{len(impls_cf)}"),
         ("T2 REDACTED in impls", "REDACTED" in impls_os, str(sorted(impls_os))),
         ("T3 REDACTED callers >=3", len(callers_t3) >= 3, f"{len(callers_t3)} callers"),
-        ("T4 reindexAllTenants ABSENT", t4_absent, "absent" if t4_absent else "PRESENT!"),
+        (
+            "T4 reindexAllTenants ABSENT",
+            t4_absent,
+            "absent" if t4_absent else "PRESENT!",
+        ),
         ("T5 REDACTED callees >0", len(callees_t5) > 0, f"{len(callees_t5)} callees"),
-        ("T6 TenantRoutingStrategy ABSENT", fake_absent, "absent" if fake_absent else "PRESENT!"),
+        (
+            "T6 TenantRoutingStrategy ABSENT",
+            fake_absent,
+            "absent" if fake_absent else "PRESENT!",
+        ),
         ("T7 REDACTED is a CF impl", chan, "found" if chan else "missing"),
-        ("T8 REDACTED fetchable", o.method_exists("REDACTED", "search"),
-         "found" if o.method_exists("REDACTED", "search") else "missing"),
+        (
+            "T8 REDACTED fetchable",
+            o.method_exists("REDACTED", "search"),
+            "found" if o.method_exists("REDACTED", "search") else "missing",
+        ),
     ]
     print("=== deterministic self-check (no LLM) ===")
     all_ok = True
     for name, ok, detail in checks:
         all_ok &= ok
         print(f"  [{'ok ' if ok else 'BAD'}] {name:42} {detail}")
-    print("=== ALL GT RESOLVES — safe to run ===" if all_ok else "=== FIX TASKS BEFORE PAID RUN ===")
+    print(
+        "=== ALL GT RESOLVES — safe to run ==="
+        if all_ok
+        else "=== FIX TASKS BEFORE PAID RUN ==="
+    )
     return all_ok
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Agent-in-loop eval: JIDRA vs CodeGraph")
-    ap.add_argument("--graph", required=True, help="path to JIDRA graph.db (also the GT oracle)")
+    ap.add_argument(
+        "--graph", required=True, help="path to JIDRA graph.db (also the GT oracle)"
+    )
     ap.add_argument("--codebase", help="repo root (CG reads its .codegraph here)")
     ap.add_argument("--model", default="claude-sonnet-4-6")
     ap.add_argument("--tasks", default="", help="comma list e.g. T1,T2 (default all)")
     ap.add_argument("--out", default="agent_eval_results.json")
     ap.add_argument("--quiet", action="store_true", help="suppress live per-step logs")
-    ap.add_argument("--selfcheck", action="store_true",
-                    help="validate all task ground-truth deterministically (no LLM) and exit")
+    ap.add_argument(
+        "--selfcheck",
+        action="store_true",
+        help="validate all task ground-truth deterministically (no LLM) and exit",
+    )
     args = ap.parse_args()
     if args.selfcheck:
         raise SystemExit(0 if selfcheck(args.graph) else 1)

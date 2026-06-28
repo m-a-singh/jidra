@@ -27,16 +27,12 @@ _NAMESPACE_RE = re.compile(r"^\s*namespace\s+([\w.]+)", re.MULTILINE)
 _SHAPE_HEADER_RE = re.compile(
     r"(?:@\w+(?:\([^)]*\))?\s*)*\b(service|operation|structure|union)\s+(\w+)\s*\{"
 )
-_HTTP_TRAIT_RE = re.compile(
-    r'@http\(\s*method:\s*"(\w+)"\s*,\s*uri:\s*"([^"]+)"\s*\)'
-)
+_HTTP_TRAIT_RE = re.compile(r'@http\(\s*method:\s*"(\w+)"\s*,\s*uri:\s*"([^"]+)"\s*\)')
 _OPERATIONS_LIST_RE = re.compile(r"operations\s*:\s*\[([^\]]*)\]", re.DOTALL)
 _INPUT_NAMED_RE = re.compile(r"\binput\s*:\s*(\w+)")
 _OUTPUT_NAMED_RE = re.compile(r"\boutput\s*:\s*(\w+)")
 _ERRORS_RE = re.compile(r"\berrors\s*:\s*\[([^\]]*)\]", re.DOTALL)
-_MEMBER_RE = re.compile(
-    r"(@required\s*)?\b(\w+)\s*:\s*([\w.#]+)", re.MULTILINE
-)
+_MEMBER_RE = re.compile(r"(@required\s*)?\b(\w+)\s*:\s*([\w.#]+)", re.MULTILINE)
 
 
 def _strip_comments(text: str) -> str:
@@ -88,9 +84,9 @@ def _line_of(text: str, index: int) -> int:
     return text.count("\n", 0, index) + 1
 
 
-def parse_smithy_text(text: str, file_path: str) -> tuple[
-    list[SmithyShapeEntry], list[SmithyOperationEntry]
-]:
+def parse_smithy_text(
+    text: str, file_path: str
+) -> tuple[list[SmithyShapeEntry], list[SmithyOperationEntry]]:
     """Parse one `.smithy` file's text. Best-effort: malformed or unsupported
     constructs are skipped rather than raised on, since a model file mixing
     supported and unsupported shapes should still yield what it can."""

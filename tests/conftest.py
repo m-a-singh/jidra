@@ -1,7 +1,5 @@
 import pytest
-import tempfile
 from pathlib import Path
-import json
 
 from jidra.models import Graph, MethodEntry, ClassEntry, CallSite, ResolvedCallEdge
 from jidra.graph import graph_store

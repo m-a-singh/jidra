@@ -1,5 +1,5 @@
 """Regression tests for JidraEngine public API."""
-import pytest
+
 from jidra.engine.engine import JidraEngine
 
 
@@ -17,7 +17,10 @@ class TestGetMethodContext:
         result = engine.get_method_context("handleRequest")
 
         assert "error" not in result
-        assert result.get("method_signature") == "com.example.TestController#handleRequest(String)"
+        assert (
+            result.get("method_signature")
+            == "com.example.TestController#handleRequest(String)"
+        )
         assert result.get("method_source") is not None
         assert "resolved_callees" in result or "business_flow" in result
 
@@ -140,7 +143,10 @@ class TestGetMethodSource:
 
         assert "error" not in result
         assert result.get("method_id") == "m_1"
-        assert result.get("signature") == "com.example.TestController#handleRequest(String)"
+        assert (
+            result.get("signature")
+            == "com.example.TestController#handleRequest(String)"
+        )
         assert result.get("source") is not None
         assert "file_path" in result
         assert "line_start" in result

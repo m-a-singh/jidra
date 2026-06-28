@@ -15,7 +15,9 @@ def _get_graph(repo_path: str, output_path: str | None, graph_type: str = "main"
     out_dir = Path(output_path) if output_path else _repo_output_dir(Path(repo_path))
     db_path = graph_store.resolve_graph_db_path(out_dir)
     if not db_path.exists():
-        raise HTTPException(status_code=404, detail="Repository not indexed. Run the pipeline first.")
+        raise HTTPException(
+            status_code=404, detail="Repository not indexed. Run the pipeline first."
+        )
     conn = graph_store.connect(db_path)
     graph = graph_store.load_graph(conn, variant=graph_type)
     return graph, db_path
@@ -29,7 +31,9 @@ def _resolve_method(graph, selector: str):
     if not candidates:
         raise HTTPException(status_code=404, detail=_method_not_found_error(selector))
     if len(candidates) > 1:
-        raise HTTPException(status_code=409, detail=_method_ambiguous_error(selector, candidates))
+        raise HTTPException(
+            status_code=409, detail=_method_ambiguous_error(selector, candidates)
+        )
     return candidates[0]
 
 
@@ -171,17 +175,28 @@ class ErrorDocRequest(BaseModel):
 
 @router.post("/error-doc")
 async def error_doc(req: ErrorDocRequest) -> dict:
-    from ...cli import _is_error_doc_noise_call, _is_meaningful_signature, _match_stack_frames_to_methods, _parse_stack_trace
+    from ...cli import (
+        _is_error_doc_noise_call,
+        _is_meaningful_signature,
+        _match_stack_frames_to_methods,
+        _parse_stack_trace,
+    )
     from ...engine.engine import JidraEngine
     from ...flow.flow_doc_agent import FlowDocAgent
 
     graph, db_path = _get_graph(req.repo_path, req.output_path)
     frames = _parse_stack_trace(req.stack_trace)
     if not frames:
-        raise HTTPException(status_code=400, detail="No Java stack frames parsed from stack trace input.")
+        raise HTTPException(
+            status_code=400,
+            detail="No Java stack frames parsed from stack trace input.",
+        )
     matched_rows, anchor = _match_stack_frames_to_methods(graph, frames)
     if anchor is None:
-        raise HTTPException(status_code=400, detail="No project frame matched/ambiguous for primary failure anchor.")
+        raise HTTPException(
+            status_code=400,
+            detail="No project frame matched/ambiguous for primary failure anchor.",
+        )
 
     method_selector = (
         anchor["ambiguous_method_ids"][0]
@@ -204,7 +219,9 @@ async def error_doc(req: ErrorDocRequest) -> dict:
 
     method_by_id = {m.id: m for m in graph.methods}
     failing_row = anchor
-    caller_row = matched_rows[anchor["frame_index"] - 1] if anchor["frame_index"] > 0 else None
+    caller_row = (
+        matched_rows[anchor["frame_index"] - 1] if anchor["frame_index"] > 0 else None
+    )
 
     neighbors = []
     if failing_row.get("matched_method_id"):
@@ -220,8 +237,12 @@ async def error_doc(req: ErrorDocRequest) -> dict:
                     neighbors.append(src.signature)
     neighbors = sorted(set(neighbors))[:10]
 
-    unresolved_near_all = (flow_result.get("mind_map", {}) or {}).get("unresolved_calls", [])
-    unresolved_near = [c for c in unresolved_near_all if not _is_error_doc_noise_call(c)][:10]
+    unresolved_near_all = (flow_result.get("mind_map", {}) or {}).get(
+        "unresolved_calls", []
+    )
+    unresolved_near = [
+        c for c in unresolved_near_all if not _is_error_doc_noise_call(c)
+    ][:10]
 
     anchor_id = failing_row.get("matched_method_id")
     meaningful_downstream = []
@@ -264,7 +285,9 @@ async def error_doc(req: ErrorDocRequest) -> dict:
     lines.append("## Suggested Debug Locations")
     lines.append("| priority | location | reason |")
     lines.append("|---:|---|---|")
-    failing_location = failing_row.get("matched_method_id") or ",".join(failing_row.get("ambiguous_method_ids", []))
+    failing_location = failing_row.get("matched_method_id") or ",".join(
+        failing_row.get("ambiguous_method_ids", [])
+    )
     if failing_row.get("matched_method_id"):
         m = method_by_id.get(failing_row["matched_method_id"])
         if m:
@@ -286,4 +309,8 @@ async def error_doc(req: ErrorDocRequest) -> dict:
         for sig in neighbors[:10]:
             lines.append(f"| 4 | `{sig}` | callee graph neighbor of failing method |")
 
-    return {"markdown": "\n".join(lines) + "\n", "anchor_method": method_selector, "frames": len(matched_rows)}
+    return {
+        "markdown": "\n".join(lines) + "\n",
+        "anchor_method": method_selector,
+        "frames": len(matched_rows),
+    }

@@ -23,6 +23,7 @@ def _db_path(repo_path: str, db: str) -> Path:
     out_dir = _repo_output_dir(Path(repo_path))
     if db == "telemetry":
         from ...llm.telemetry import _TELEMETRY_DB
+
         return _TELEMETRY_DB
     return out_dir / "graph.db"
 
@@ -63,9 +64,11 @@ async def get_schema(repo_path: str, db: str = "graph") -> list[dict]:
     result = []
     for (table,) in tables:
         cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
-        result.append({
-            "table": table,
-            "columns": [{"name": c[1], "type": c[2]} for c in cols],
-        })
+        result.append(
+            {
+                "table": table,
+                "columns": [{"name": c[1], "type": c[2]} for c in cols],
+            }
+        )
     conn.close()
     return result

@@ -182,7 +182,20 @@ def fetch_index_history(repo: str | None = None, limit: int = 100) -> list[dict]
             ).fetchall()
         conn.close()
         return [
-            dict(zip(["ts", "repo", "languages", "classes", "methods", "lines", "elapsed_ms"], r))
+            dict(
+                zip(
+                    [
+                        "ts",
+                        "repo",
+                        "languages",
+                        "classes",
+                        "methods",
+                        "lines",
+                        "elapsed_ms",
+                    ],
+                    r,
+                )
+            )
             for r in rows
         ]
     except Exception:
@@ -193,10 +206,20 @@ def fetch_reindex_history(repo: str | None = None, limit: int = 200) -> list[dic
     try:
         conn = _connect()
         cols = [
-            "ts", "repo", "changed_file", "language", "change_type",
-            "classes_added", "classes_modified", "classes_deleted",
-            "methods_added", "methods_modified", "methods_deleted",
-            "lines_added", "lines_deleted", "elapsed_ms",
+            "ts",
+            "repo",
+            "changed_file",
+            "language",
+            "change_type",
+            "classes_added",
+            "classes_modified",
+            "classes_deleted",
+            "methods_added",
+            "methods_modified",
+            "methods_deleted",
+            "lines_added",
+            "lines_deleted",
+            "elapsed_ms",
         ]
         if repo:
             rows = conn.execute(
@@ -231,8 +254,17 @@ def record_doc_index_event(
             """INSERT INTO doc_index_events
                (ts, source_path, source_type, chunks, linked_classes, file_size_bytes, elapsed_ms, status, error)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (int(time.time() * 1000), source_path, source_type, chunks,
-             linked_classes, file_size_bytes, elapsed_ms, status, error),
+            (
+                int(time.time() * 1000),
+                source_path,
+                source_type,
+                chunks,
+                linked_classes,
+                file_size_bytes,
+                elapsed_ms,
+                status,
+                error,
+            ),
         )
         conn.commit()
         conn.close()
@@ -244,8 +276,17 @@ def record_doc_index_event(
 def fetch_doc_index_history(limit: int = 200) -> list[dict]:
     try:
         conn = _connect()
-        cols = ["ts", "source_path", "source_type", "chunks", "linked_classes",
-                "file_size_bytes", "elapsed_ms", "status", "error"]
+        cols = [
+            "ts",
+            "source_path",
+            "source_type",
+            "chunks",
+            "linked_classes",
+            "file_size_bytes",
+            "elapsed_ms",
+            "status",
+            "error",
+        ]
         rows = conn.execute(
             f"SELECT {', '.join(cols)} FROM doc_index_events ORDER BY ts DESC LIMIT ?",
             (limit,),
@@ -263,6 +304,7 @@ def refresh_html() -> None:
         reindex_rows = fetch_reindex_history(limit=500)
         doc_rows = fetch_doc_index_history(limit=200)
         from jidra.cli import _render_history_html
+
         html = _render_history_html(index_rows, reindex_rows, doc_rows)
         out = _TELEMETRY_DIR / "telemetry.html"
         out.write_text(html, encoding="utf-8")
@@ -273,8 +315,14 @@ def refresh_html() -> None:
 def list_repos() -> list[str]:
     try:
         conn = _connect()
-        index_repos = {r[0] for r in conn.execute("SELECT DISTINCT repo FROM index_events").fetchall()}
-        reindex_repos = {r[0] for r in conn.execute("SELECT DISTINCT repo FROM reindex_events").fetchall()}
+        index_repos = {
+            r[0]
+            for r in conn.execute("SELECT DISTINCT repo FROM index_events").fetchall()
+        }
+        reindex_repos = {
+            r[0]
+            for r in conn.execute("SELECT DISTINCT repo FROM reindex_events").fetchall()
+        }
         conn.close()
         return sorted(index_repos | reindex_repos)
     except Exception:

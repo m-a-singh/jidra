@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SymbolTable:
     """Tracks variable types and scopes."""
+
     scope_stack: list[dict[str, str]] = field(default_factory=list)
 
     def __init__(self):
@@ -78,7 +79,9 @@ class ASTExtractor(ast.NodeVisitor):
         self.file_path = str(file_path.relative_to(root))
         self.root = root
         self.module_namespace = module_namespace
-        self.source_lines = file_path.read_text(encoding="utf-8", errors="replace").split("\n")
+        self.source_lines = file_path.read_text(
+            encoding="utf-8", errors="replace"
+        ).split("\n")
 
         self.classes: list[ClassEntry] = []
         self.methods: list[MethodEntry] = []
@@ -189,7 +192,9 @@ class ASTExtractor(ast.NodeVisitor):
             self._ensure_module_class()
             self._extract_method(node, self.current_class)
         self.generic_visit(node)
-        self.current_class = prev_class  # Restore so sibling functions are also extracted
+        self.current_class = (
+            prev_class  # Restore so sibling functions are also extracted
+        )
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         """Extract async function."""
@@ -198,7 +203,9 @@ class ASTExtractor(ast.NodeVisitor):
             self._ensure_module_class()
             self._extract_method(node, self.current_class)
         self.generic_visit(node)
-        self.current_class = prev_class  # Restore so sibling functions are also extracted
+        self.current_class = (
+            prev_class  # Restore so sibling functions are also extracted
+        )
 
     def _extract_field(self, node: ast.AnnAssign, class_entry: ClassEntry):
         """Extract field from annotated assignment."""
@@ -207,7 +214,9 @@ class ASTExtractor(ast.NodeVisitor):
             type_name = self._get_annotation_name(node.annotation)
 
             field_entry = FieldEntry(
-                id=field_id(class_entry.full_name, field_name, self.file_path, node.lineno),
+                id=field_id(
+                    class_entry.full_name, field_name, self.file_path, node.lineno
+                ),
                 class_id=class_entry.id,
                 name=field_name,
                 type_name=type_name or "unknown",
@@ -219,7 +228,9 @@ class ASTExtractor(ast.NodeVisitor):
             # Track in symbol table
             self.symbol_table.set_type(field_name, type_name or "unknown")
 
-    def _extract_method(self, node: ast.FunctionDef | ast.AsyncFunctionDef, class_entry: ClassEntry):
+    def _extract_method(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef, class_entry: ClassEntry
+    ):
         """Extract method definition."""
         method_name = node.name
         param_types = []
@@ -233,7 +244,9 @@ class ASTExtractor(ast.NodeVisitor):
             param_names.append(param_name)
 
             if param.annotation:
-                param_types.append(self._get_annotation_name(param.annotation) or "unknown")
+                param_types.append(
+                    self._get_annotation_name(param.annotation) or "unknown"
+                )
             else:
                 param_types.append("unknown")
 
@@ -423,7 +436,9 @@ class ASTExtractor(ast.NodeVisitor):
             dec_name = ""
             if isinstance(decorator, ast.Name):
                 dec_name = decorator.id
-            elif isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Name):
+            elif isinstance(decorator, ast.Call) and isinstance(
+                decorator.func, ast.Name
+            ):
                 dec_name = decorator.func.id
 
             if "dataclass" in dec_name.lower():
@@ -734,7 +749,9 @@ def build_py_graph(
     if validator is not None and validator.metrics.failures == 0:
         type_hints = validator.get_type_hints()
         if type_hints:
-            enriched = _apply_pyright_type_hints(all_callsites, type_hints, codebase_root)
+            enriched = _apply_pyright_type_hints(
+                all_callsites, type_hints, codebase_root
+            )
             if enriched:
                 logger.info(f"Pyright type pre-pass: enriched {enriched} call sites")
 

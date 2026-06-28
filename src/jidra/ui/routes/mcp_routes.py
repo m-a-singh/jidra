@@ -48,6 +48,7 @@ async def call_tool(req: CallRequest) -> dict:
         graph_path = req.output_path
     elif req.repo_path:
         from ...graph.graph_store import resolve_graph_db_path
+
         graph_path = str(resolve_graph_db_path(_repo_output_dir(Path(req.repo_path))))
     else:
         graph_path = None

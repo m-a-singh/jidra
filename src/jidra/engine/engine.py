@@ -17,7 +17,9 @@ from ..utils.selector import (
 
 # Default graph path used when no explicit graph is provided.
 # Keep this relative so the project is portable and doesn't leak a developer machine path.
-DEFAULT_MAIN_GRAPH = str(Path(__file__).resolve().parents[3] / "output" / "database" / "graph.db")
+DEFAULT_MAIN_GRAPH = str(
+    Path(__file__).resolve().parents[3] / "output" / "database" / "graph.db"
+)
 
 
 # Output-size budget tiers keyed on the number of methods in the graph (a proxy
@@ -84,8 +86,15 @@ _BUDGET_TIERS: list[tuple[int | None, dict]] = [
 _CAMEL_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 # Path markers that demote generated/mock code in explore ranking.
 _GENERATED_MARKERS = (
-    ".pb.", "_generated", "/generated/", "mock_", "/mocks/",
-    "/build/generated", "generated-src", "/build/classes", "/out/production",
+    ".pb.",
+    "_generated",
+    "/generated/",
+    "mock_",
+    "/mocks/",
+    "/build/generated",
+    "generated-src",
+    "/build/classes",
+    "/out/production",
 )
 
 
@@ -166,11 +175,14 @@ def _summarize_stopped_paths(paths: list[dict]) -> dict:
     }
 
 
-def _call_neighbors_batch(conn: Any, method_ids: set[str], variant: str = "main") -> set[str]:
+def _call_neighbors_batch(
+    conn: Any, method_ids: set[str], variant: str = "main"
+) -> set[str]:
     """Return all direct callers + callees of a set of method IDs via resolved_call_edges."""
     if not method_ids:
         return set()
     import sqlite3 as _sq3
+
     placeholders = ",".join("?" * len(method_ids))
     ids = list(method_ids)
     out: set[str] = set()
@@ -216,7 +228,7 @@ class JidraEngine:
                     candidate = Path(*[p.parts[0] for p in paths if p.parts])
                     for i in range(1, min(len(p.parts) for p in paths)):
                         if all(p.parts[i] == paths[0].parts[i] for p in paths):
-                            candidate = Path(*paths[0].parts[:i+1])
+                            candidate = Path(*paths[0].parts[: i + 1])
                         else:
                             break
 
@@ -280,7 +292,8 @@ class JidraEngine:
                 class_part, _, method_part = selector.rpartition(sep)
                 cls_short = class_part.rsplit(".", 1)[-1]
                 cls_methods = [
-                    m for m in self.graph.methods
+                    m
+                    for m in self.graph.methods
                     if m.class_full_name == class_part
                     or m.class_full_name.rsplit(".", 1)[-1] == cls_short
                 ]
@@ -375,7 +388,11 @@ class JidraEngine:
         return self._with_budget(result)
 
     def get_flow(
-        self, method: str, depth: int | None = None, top_n: int | None = None, detail: str = "summary"
+        self,
+        method: str,
+        depth: int | None = None,
+        top_n: int | None = None,
+        detail: str = "summary",
     ) -> dict:
         _ = top_n
         if depth is None:
@@ -393,7 +410,9 @@ class JidraEngine:
         selected = resolved["method"]
         if not hasattr(selected, "id"):
             return {"error": "invalid_method_selector_result"}
-        result = self._with_budget(stitch_flow(self.graph, selected, max_depth=depth, detail=detail))
+        result = self._with_budget(
+            stitch_flow(self.graph, selected, max_depth=depth, detail=detail)
+        )
         if self.repo_root:
             result["repo_root"] = str(self.repo_root)
         return result
@@ -510,8 +529,12 @@ class JidraEngine:
         # Build reverse adjacency: callee_id → [caller_id, ...]
         reverse: dict[str, list[str]] = {}
         for edge in self.graph.resolved_call_edges:
-            caller_id = getattr(edge, "caller_method_id", None) or getattr(edge, "from_method_id", None)
-            callee_id = getattr(edge, "callee_method_id", None) or getattr(edge, "to_method_id", None)
+            caller_id = getattr(edge, "caller_method_id", None) or getattr(
+                edge, "from_method_id", None
+            )
+            callee_id = getattr(edge, "callee_method_id", None) or getattr(
+                edge, "to_method_id", None
+            )
             if caller_id and callee_id:
                 reverse.setdefault(callee_id, []).append(caller_id)
 
@@ -529,12 +552,14 @@ class JidraEngine:
                     visited.add(caller_id)
                     next_frontier.append(caller_id)
                     m = method_by_id.get(caller_id)
-                    level.append({
-                        "method_id": caller_id,
-                        "signature": m.signature if m else caller_id,
-                        "file_path": getattr(m, "file_path", None) if m else None,
-                        "start_line": getattr(m, "start_line", None) if m else None,
-                    })
+                    level.append(
+                        {
+                            "method_id": caller_id,
+                            "signature": m.signature if m else caller_id,
+                            "file_path": getattr(m, "file_path", None) if m else None,
+                            "start_line": getattr(m, "start_line", None) if m else None,
+                        }
+                    )
             if level:
                 callers_by_depth.append(level)
             frontier = next_frontier
@@ -711,7 +736,14 @@ class JidraEngine:
         result["edges"] = edges_out
         return result
 
-    def get_implementations(self, interface: str, *, transitive: bool = False, limit: int = 30, detail: str = "summary") -> dict:
+    def get_implementations(
+        self,
+        interface: str,
+        *,
+        transitive: bool = False,
+        limit: int = 30,
+        detail: str = "summary",
+    ) -> dict:
         """Resolve interface to full name, walk inheritance_edges where target matches,
         return direct (or transitive) implementers with signatures, file paths, stereotypes."""
         class_by_full_name = {c.full_name: c for c in self.graph.classes}
@@ -722,11 +754,17 @@ class JidraEngine:
         # name too. Prefer an exact short-name class, favouring interface/abstract
         # stereotypes over a same-named *Impl/*Service when both exist.
         sel_short = interface.split("#")[0].split("(")[0].rsplit(".", 1)[-1]
-        candidates = [c for c in self.graph.classes if c.full_name.rsplit(".", 1)[-1] == sel_short
-                      or c.full_name == interface]
+        candidates = [
+            c
+            for c in self.graph.classes
+            if c.full_name.rsplit(".", 1)[-1] == sel_short or c.full_name == interface
+        ]
         if not candidates:
-            return {"error": "interface_class_not_found", "selector": interface,
-                    "hint": "no class with that name; pass the interface's simple or full name"}
+            return {
+                "error": "interface_class_not_found",
+                "selector": interface,
+                "hint": "no class with that name; pass the interface's simple or full name",
+            }
 
         def _iface_rank(c) -> int:
             st = set(getattr(c, "stereotypes", []) or [])
@@ -735,6 +773,7 @@ class JidraEngine:
             if {"abstract"} & st:
                 return 1
             return 2
+
         interface_class = sorted(candidates, key=_iface_rank)[0]
         target_short = interface_class.full_name.rsplit(".", 1)[-1]
 
@@ -759,7 +798,11 @@ class JidraEngine:
             for source_full_name, _relation in adjacency.get(current, []):
                 impl_class = class_by_full_name.get(source_full_name)
                 if impl_class:
-                    methods = [m for m in self.graph.methods if m.class_full_name == source_full_name]
+                    methods = [
+                        m
+                        for m in self.graph.methods
+                        if m.class_full_name == source_full_name
+                    ]
                     item = {
                         "class_full_name": impl_class.full_name,
                         "file_path": self._rel(impl_class.file_path),
@@ -819,8 +862,15 @@ class JidraEngine:
         if not cls:
             return {"error": "class_not_found"}
 
-        methods = [m for m in self.graph.methods if m.class_full_name == class_full_name]
-        fields = [f for f in self.graph.fields if getattr(f, "class_full_name", None) == class_full_name or f.class_id == cls.id]
+        methods = [
+            m for m in self.graph.methods if m.class_full_name == class_full_name
+        ]
+        fields = [
+            f
+            for f in self.graph.fields
+            if getattr(f, "class_full_name", None) == class_full_name
+            or f.class_id == cls.id
+        ]
 
         return {
             "class_full_name": cls.full_name,
@@ -843,7 +893,13 @@ class JidraEngine:
             ],
         }
 
-    def query_by_annotation(self, annotation: str, kind: str = "any", limit: int = 30, detail: str = "summary") -> dict:
+    def query_by_annotation(
+        self,
+        annotation: str,
+        kind: str = "any",
+        limit: int = 30,
+        detail: str = "summary",
+    ) -> dict:
         """Find classes/methods by annotation or framework_role.
         kind: 'class', 'method', or 'any'. Matching is lenient: leading '@',
         annotation parameters (``@RequestMapping("/x")``), and case are ignored,
@@ -1053,7 +1109,9 @@ class JidraEngine:
         rows = sorted(rows, key=_fts_sort_key)
 
         # If all top results are generated, fetch more rows to find real source
-        if rows and all(any(m in r.get("file_path", "") for m in _GENERATED_MARKERS) for r in rows):
+        if rows and all(
+            any(m in r.get("file_path", "") for m in _GENERATED_MARKERS) for r in rows
+        ):
             with self._conn_lock:
                 extended = graph_store.search_methods(
                     self.conn, query, limit=limit * 5, language=language
@@ -1067,7 +1125,9 @@ class JidraEngine:
         neighbor_rows: list = []
         if neighbor_ids:
             with self._conn_lock:
-                neighbor_rows = graph_store.fetch_methods_by_ids(self.conn, list(neighbor_ids))
+                neighbor_rows = graph_store.fetch_methods_by_ids(
+                    self.conn, list(neighbor_ids)
+                )
 
         tokens = _tokenize_query(query)
 
@@ -1076,35 +1136,43 @@ class JidraEngine:
         seen: set[str] = set()
         for r in rows:
             seen.add(r["id"])
-            results.append({
-                "method_id": r["id"],
-                "method_name": r["method_name"],
-                "signature": r["signature"],
-                "class_full_name": r["class_full_name"],
-                "file_path": r["file_path"],
-                "language": r["language"],
-                "score": round(-float(r.get("score", 0.0)), 6),
-                "source": "fts",
-            })
+            results.append(
+                {
+                    "method_id": r["id"],
+                    "method_name": r["method_name"],
+                    "signature": r["signature"],
+                    "class_full_name": r["class_full_name"],
+                    "file_path": r["file_path"],
+                    "language": r["language"],
+                    "score": round(-float(r.get("score", 0.0)), 6),
+                    "source": "fts",
+                }
+            )
 
         # Neighbors appended after all seeds, sorted by heuristic score
         scored_neighbors = sorted(
-            ((_score_hit(dict(r), tokens), r) for r in neighbor_rows if r["id"] not in seen),
+            (
+                (_score_hit(dict(r), tokens), r)
+                for r in neighbor_rows
+                if r["id"] not in seen
+            ),
             key=lambda p: p[0],
             reverse=True,
         )
         for score, r in scored_neighbors:
             seen.add(r["id"])
-            results.append({
-                "method_id": r["id"],
-                "method_name": r["method_name"],
-                "signature": r["signature"],
-                "class_full_name": r["class_full_name"],
-                "file_path": r["file_path"],
-                "language": r["language"],
-                "score": round(score, 6),
-                "source": "graph",
-            })
+            results.append(
+                {
+                    "method_id": r["id"],
+                    "method_name": r["method_name"],
+                    "signature": r["signature"],
+                    "class_full_name": r["class_full_name"],
+                    "file_path": r["file_path"],
+                    "language": r["language"],
+                    "score": round(score, 6),
+                    "source": "graph",
+                }
+            )
 
         return {"query": query, "count": len(results), "results": results}
 
@@ -1133,12 +1201,18 @@ class JidraEngine:
         # 1-2 hop graph expansion — find neighbors, re-score, append without
         # displacing seeds (they always come first)
         neighbor_ids = _call_neighbors_batch(self.conn, seed_ids)
-        hop2_ids = _call_neighbors_batch(self.conn, neighbor_ids - seed_ids) - seed_ids - neighbor_ids
+        hop2_ids = (
+            _call_neighbors_batch(self.conn, neighbor_ids - seed_ids)
+            - seed_ids
+            - neighbor_ids
+        )
         new_ids = (neighbor_ids | hop2_ids) - seed_ids
         neighbor_rows: list = []
         if new_ids:
             with self._conn_lock:
-                neighbor_rows = graph_store.fetch_methods_by_ids(self.conn, list(new_ids))
+                neighbor_rows = graph_store.fetch_methods_by_ids(
+                    self.conn, list(new_ids)
+                )
 
         # re-score neighbors; keep top_n worth of them
         scored_neighbors = sorted(

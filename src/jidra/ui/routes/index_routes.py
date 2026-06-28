@@ -44,6 +44,7 @@ def _sse(event: str, data: dict) -> str:
 
 def _out_dir(repo_path: str, output_path: str | None) -> Path:
     from ...cli import _repo_output_dir
+
     return Path(output_path) if output_path else _repo_output_dir(Path(repo_path))
 
 
@@ -53,7 +54,10 @@ async def _stream_process(req: ProcessRequest):
     out_dir = _out_dir(req.repo_path, req.output_path)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    yield _sse("status", {"msg": f"Starting pipeline for {Path(req.repo_path).name}…", "phase": "start"})
+    yield _sse(
+        "status",
+        {"msg": f"Starting pipeline for {Path(req.repo_path).name}…", "phase": "start"},
+    )
 
     loop = asyncio.get_event_loop()
     try:
@@ -76,11 +80,20 @@ async def _stream_process(req: ProcessRequest):
             repo = Path(req.repo_path).resolve()
             doc_files = _discover_doc_files(repo)
             if doc_files:
-                yield _sse("status", {"msg": f"Found {len(doc_files)} document(s) — indexing…", "phase": "docs"})
+                yield _sse(
+                    "status",
+                    {
+                        "msg": f"Found {len(doc_files)} document(s) — indexing…",
+                        "phase": "docs",
+                    },
+                )
                 try:
                     from ...graph import graph_store
                     from ...indexing import doc_store as _doc_store
-                    from ...indexing.doc_indexer import extract_graph_names, index_document
+                    from ...indexing.doc_indexer import (
+                        extract_graph_names,
+                        index_document,
+                    )
 
                     graph_path = graph_store.resolve_graph_db_path(out_dir)
                     conn = graph_store.connect(graph_path)
@@ -93,21 +106,40 @@ async def _stream_process(req: ProcessRequest):
                         try:
                             n_chunks = await loop.run_in_executor(
                                 None,
-                                lambda f=f: index_document(conn, str(f), class_names, method_names),
+                                lambda f=f: index_document(
+                                    conn, str(f), class_names, method_names
+                                ),
                             )
                             total_chunks += n_chunks
-                            yield _sse("status", {"msg": f"  {f.name} → {n_chunks} chunks", "phase": "docs"})
+                            yield _sse(
+                                "status",
+                                {
+                                    "msg": f"  {f.name} → {n_chunks} chunks",
+                                    "phase": "docs",
+                                },
+                            )
                         except Exception as doc_err:
-                            yield _sse("warn", {"msg": f"  {f.name} skipped: {doc_err}"})
+                            yield _sse(
+                                "warn", {"msg": f"  {f.name} skipped: {doc_err}"}
+                            )
                     conn.close()
-                    yield _sse("status", {"msg": f"Indexed {len(doc_files)} document(s), {total_chunks} chunks total", "phase": "docs"})
+                    yield _sse(
+                        "status",
+                        {
+                            "msg": f"Indexed {len(doc_files)} document(s), {total_chunks} chunks total",
+                            "phase": "docs",
+                        },
+                    )
                 except Exception as docs_err:
-                    yield _sse("warn", {"msg": f"Document indexing skipped: {docs_err}"})
+                    yield _sse(
+                        "warn", {"msg": f"Document indexing skipped: {docs_err}"}
+                    )
 
         if req.write_mcp_config:
             try:
                 import sys as _sys
                 from ...graph.graph_store import resolve_graph_db_path
+
                 repo = Path(req.repo_path).resolve()
                 graph_path = resolve_graph_db_path(out_dir)
                 pkg_dir = Path(__file__).resolve().parents[3]
@@ -118,14 +150,25 @@ async def _stream_process(req: ProcessRequest):
                         "jidra": {
                             "type": "stdio",
                             "command": python,
-                            "args": ["-m", "jidra.mcp_server", "--mode", "proxy",
-                                     "--graph", str(graph_path), "--codebase", str(repo)],
+                            "args": [
+                                "-m",
+                                "jidra.mcp_server",
+                                "--mode",
+                                "proxy",
+                                "--graph",
+                                str(graph_path),
+                                "--codebase",
+                                str(repo),
+                            ],
                         }
                     }
                 }
                 settings_path = repo / ".mcp.json"
                 settings_path.write_text(json.dumps(mcp_entry, indent=2))
-                yield _sse("status", {"msg": f"MCP config written → {settings_path}", "phase": "mcp"})
+                yield _sse(
+                    "status",
+                    {"msg": f"MCP config written → {settings_path}", "phase": "mcp"},
+                )
             except Exception as mcp_err:
                 yield _sse("warn", {"msg": f"MCP config skipped: {mcp_err}"})
 
@@ -155,9 +198,15 @@ async def index_status(repo_path: str, output_path: str | None = None) -> dict:
         if not db.exists():
             return {"indexed": False}
         conn = sqlite3.connect(str(db))
-        validated = conn.execute("SELECT COUNT(*) FROM methods WHERE variant='validated'").fetchone()[0]
-        main = conn.execute("SELECT COUNT(*) FROM methods WHERE variant='main'").fetchone()[0]
-        classes = conn.execute("SELECT COUNT(*) FROM classes WHERE variant='main'").fetchone()[0]
+        validated = conn.execute(
+            "SELECT COUNT(*) FROM methods WHERE variant='validated'"
+        ).fetchone()[0]
+        main = conn.execute(
+            "SELECT COUNT(*) FROM methods WHERE variant='main'"
+        ).fetchone()[0]
+        classes = conn.execute(
+            "SELECT COUNT(*) FROM classes WHERE variant='main'"
+        ).fetchone()[0]
         doc_count = 0
         try:
             doc_count = conn.execute(
@@ -194,7 +243,9 @@ async def reindex(req: ReindexRequest) -> dict:
     out_dir = _out_dir(req.repo_path, req.output_path)
     graph_path = resolve_graph_db_path(out_dir)
     codebase = Path(req.repo_path).resolve()
-    summary = incremental_reindex(codebase, graph_path, hint_changed_files=req.changed_files)
+    summary = incremental_reindex(
+        codebase, graph_path, hint_changed_files=req.changed_files
+    )
     return {"summary": summary}
 
 
