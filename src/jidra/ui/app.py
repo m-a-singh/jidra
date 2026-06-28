@@ -7,7 +7,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .routes import graph_routes, index_routes, mcp_routes, sql_routes, util_routes
+from .routes import (
+    docs_routes,
+    explore_routes,
+    graph_routes,
+    history_routes,
+    index_routes,
+    mcp_routes,
+    sql_routes,
+    util_routes,
+)
 
 _UI_DIST = Path(__file__).parent.parent.parent.parent / "ui" / "dist"
 
@@ -25,6 +34,9 @@ app.include_router(util_routes.router, prefix="/api/util", tags=["util"])
 app.include_router(graph_routes.router, prefix="/api/graph", tags=["graph"])
 app.include_router(sql_routes.router, prefix="/api/sql", tags=["sql"])
 app.include_router(mcp_routes.router, prefix="/api/mcp", tags=["mcp"])
+app.include_router(explore_routes.router, prefix="/api/explore", tags=["explore"])
+app.include_router(docs_routes.router, prefix="/api/docs", tags=["docs"])
+app.include_router(history_routes.router, prefix="/api/history", tags=["history"])
 
 
 @app.get("/api/health")

@@ -38,7 +38,12 @@ export function SqlEditor({ repoPath, outputPath }: RepoState) {
     try {
       setResult(await api.sql.query({ repo_path: repoPath, sql: viewRef.current.state.doc.toString(), db }));
     } catch (e) {
-      setError(String(e).replace("Error: ", ""));
+      const msg = String(e).replace("Error: ", "");
+      if (msg.includes("not found") || msg.includes("404") || msg.includes("No such file")) {
+        setError("Repository not indexed. Go to IDX tab and run the pipeline first.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setRunning(false);
     }
@@ -56,7 +61,7 @@ export function SqlEditor({ repoPath, outputPath }: RepoState) {
           <option value="graph">graph.db</option>
           <option value="telemetry">telemetry.db</option>
         </select>
-        {schema.length === 0 && <div style={{ fontSize: "var(--sz-xs)", color: "var(--text-dim)" }}>no schema loaded</div>}
+        {schema.length === 0 && <div style={{ fontSize: "var(--sz-xs)", color: "var(--text-dim)" }}>{repoPath ? "loading schema…" : "not indexed — index first"}</div>}
         {schema.map((t) => (
           <div key={t.table}>
             <div className="schema-table-name">{t.table}</div>
@@ -106,7 +111,7 @@ export function SqlEditor({ repoPath, outputPath }: RepoState) {
               </tbody>
             </table>
           ) : (
-            <div className="empty-state">Run a query to see results.</div>
+            <div className="empty-state">{repoPath ? "Run a query to see results." : "Repository not indexed. Go to IDX tab and run the pipeline first."}</div>
           )}
         </div>
       </div>
