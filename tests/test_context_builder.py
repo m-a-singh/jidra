@@ -1,4 +1,4 @@
-from jidra.context_builder import build_method_context
+from jidra.utils.context_builder import build_method_context
 from jidra.models import Graph, MethodEntry, ClassEntry, CallSite
 
 

@@ -1,13 +1,13 @@
 """Regression tests for flow stitcher."""
-
-from jidra.flow_stitcher import stitch_flow
+import pytest
+from jidra.flow.flow_stitcher import stitch_flow
 
 
 class TestStitchFlow:
     def test_stitch_flow_basic(self, loaded_test_graph, simple_test_graph):
         """Test basic flow stitching from entry method."""
         entry_method = simple_test_graph.methods[0]  # handleRequest
-        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
+        result = stitch_flow(loaded_test_graph, entry_method)
 
         assert "error" not in result
         assert "entry" in result
@@ -30,7 +30,7 @@ class TestStitchFlow:
     def test_stitch_flow_nodes_structure(self, loaded_test_graph, simple_test_graph):
         """Test node structure in stitched flow."""
         entry_method = simple_test_graph.methods[0]
-        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
+        result = stitch_flow(loaded_test_graph, entry_method)
 
         nodes = result.get("nodes", [])
         assert len(nodes) > 0
@@ -80,14 +80,10 @@ class TestStitchFlow:
             return True  # All are business in test graph
 
         result_all = stitch_flow(
-            loaded_test_graph, entry_method, business_only=False, detail="full"
+            loaded_test_graph, entry_method, business_only=False
         )
         result_business = stitch_flow(
-            loaded_test_graph,
-            entry_method,
-            business_only=True,
-            is_business_entry=is_business,
-            detail="full",
+            loaded_test_graph, entry_method, business_only=True, is_business_entry=is_business
         )
 
         # Both should be valid
@@ -125,21 +121,19 @@ class TestStitchFlow:
     def test_stitch_flow_tiered_views(self, loaded_test_graph, simple_test_graph):
         """Test tiered flow views."""
         entry_method = simple_test_graph.methods[0]
-        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
+        result = stitch_flow(loaded_test_graph, entry_method)
 
         assert "likely_primary" in result or "primary_flow" in result
         assert "supporting" in result or "supporting_flow" in result
         assert "low_priority" in result or "utility_flow" in result
 
-    def test_stitch_flow_backward_compat_aliases(
-        self, loaded_test_graph, simple_test_graph
-    ):
+    def test_stitch_flow_backward_compat_aliases(self, loaded_test_graph, simple_test_graph):
         """Test backward-compatible aliases."""
         entry_method = simple_test_graph.methods[0]
-        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
+        result = stitch_flow(loaded_test_graph, entry_method)
 
         # Check both new names and old aliases exist
-        assert "likely_primary" in result or "primary_flow" in result
+        assert ("likely_primary" in result or "primary_flow" in result)
         primary = result.get("likely_primary") or result.get("primary_flow")
         assert isinstance(primary, list)
 
@@ -150,7 +144,9 @@ class TestStitchFlow:
         result = stitch_flow(loaded_test_graph, entry_method)
 
         stopped = result.get("stopped_paths", [])
-        # Just verify structure is valid; stopped paths may include "cycle" reasons if they occur
+        # Stopped paths may include "cycle" reasons if they occur
+        reasons = [p.get("reason") for p in stopped]
+        # Just verify structure is valid
         assert isinstance(stopped, list)
 
     def test_stitch_flow_uncertain_edges(self, loaded_test_graph, simple_test_graph):

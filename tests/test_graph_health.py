@@ -1,6 +1,6 @@
 from jidra.cli import compute_graph_health
-from jidra.mcp_server import graph_health
-from jidra import graph_store
+from jidra.server.mcp_server import graph_health
+from jidra.graph import graph_store
 
 
 def test_compute_graph_health_breakdown(simple_test_graph):
@@ -33,7 +33,7 @@ def test_compute_graph_health_empty_graph():
 def test_mcp_graph_health_matches_cli(tmp_path, simple_test_graph):
     graph_path = tmp_path / "graph.db"
     conn = graph_store.connect(graph_path)
-    graph_store.save_full_graph(conn, simple_test_graph)
+    graph_store.save_full_graph(conn, simple_test_graph, variant="validated")
 
     cli_health = compute_graph_health(simple_test_graph)
     mcp_health = graph_health(graph_path=str(graph_path))

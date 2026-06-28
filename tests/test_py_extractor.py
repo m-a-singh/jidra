@@ -1,6 +1,6 @@
 """Regression tests for jidra.py_extractor."""
 
-from jidra.py_extractor import build_py_graph
+from jidra.extractors.py_extractor import build_py_graph
 
 
 CLASS_METHOD_SAMPLE = """from django.views import View

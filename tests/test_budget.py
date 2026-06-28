@@ -1,6 +1,6 @@
 """Phase 2 — budget-tiered context output regression tests."""
 
-from jidra.engine import JidraEngine, _BUDGET_TIERS
+from jidra.engine.engine import JidraEngine, _BUDGET_TIERS
 
 
 def _tier_for(n: int) -> str:

@@ -5,8 +5,8 @@ import time
 
 import pytest
 
-from jidra import git_hooks
-from jidra.watcher import JidraWatcher
+from jidra.utils import git_hooks
+from jidra.engine.watcher import JidraWatcher
 
 
 @pytest.fixture
@@ -80,7 +80,7 @@ class TestWatcher:
             calls["files"] = sorted(hint_changed_files or [])
             return {"change_type": "structural"}
 
-        import jidra.reindexer as reindexer
+        import jidra.engine.reindexer as reindexer
 
         monkeypatch.setattr(reindexer, "incremental_reindex", fake_reindex)
 

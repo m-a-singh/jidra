@@ -12,10 +12,11 @@ import time
 
 import pytest
 
-from jidra import graph_store, mcp_server
-from jidra.daemon import JidraDaemon, socket_path
+from jidra.graph import graph_store
+from jidra.server import mcp_server
+from jidra.engine.daemon import JidraDaemon, socket_path
 from jidra.models import ClassEntry, Graph, MethodEntry
-from jidra.proxy import JidraProxy
+from jidra.server.proxy import JidraProxy
 
 
 @pytest.fixture
@@ -133,8 +134,8 @@ class TestProxyForwarding:
             codebase_path=None,
         )
         # Both should return comparable structures
-        assert "hits" in via_proxy or "results" in via_proxy
-        assert "hits" in direct or "results" in direct
+        assert ("hits" in via_proxy or "results" in via_proxy)
+        assert ("hits" in direct or "results" in direct)
 
     def test_build_mcp_with_proxy_invoke(self, running_daemon):
         _, graph_db = running_daemon
