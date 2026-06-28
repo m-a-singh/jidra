@@ -4,7 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -21,6 +21,21 @@ class ProcessRequest(BaseModel):
     build_dir: str | None = None
     use_docker: bool = False
     write_mcp_config: bool = True
+    index_docs: bool = True
+
+
+_DOC_EXTENSIONS = (".md", ".mdx", ".txt", ".pdf", ".docx")
+_DOC_IGNORE_DIRS = ("node_modules", ".git", "venv", "__pycache__", "dist", "build")
+
+
+def _discover_doc_files(repo: Path) -> list[Path]:
+    return [
+        f
+        for f in repo.rglob("*")
+        if f.is_file()
+        and f.suffix.lower() in _DOC_EXTENSIONS
+        and not any(p in f.parts for p in _DOC_IGNORE_DIRS)
+    ]
 
 
 def _sse(event: str, data: dict) -> str:
@@ -56,6 +71,38 @@ async def _stream_process(req: ProcessRequest):
             ),
         )
         yield _sse("status", {"msg": "Graph indexed and validated", "phase": "indexed"})
+
+        if req.index_docs:
+            repo = Path(req.repo_path).resolve()
+            doc_files = _discover_doc_files(repo)
+            if doc_files:
+                yield _sse("status", {"msg": f"Found {len(doc_files)} document(s) — indexing…", "phase": "docs"})
+                try:
+                    from ...graph import graph_store
+                    from ...indexing import doc_store as _doc_store
+                    from ...indexing.doc_indexer import extract_graph_names, index_document
+
+                    graph_path = graph_store.resolve_graph_db_path(out_dir)
+                    conn = graph_store.connect(graph_path)
+                    _doc_store.migrate(conn)
+                    graph = graph_store.load_graph(conn, variant="main")
+                    class_names, method_names = extract_graph_names(graph)
+
+                    total_chunks = 0
+                    for f in doc_files:
+                        try:
+                            n_chunks = await loop.run_in_executor(
+                                None,
+                                lambda f=f: index_document(conn, str(f), class_names, method_names),
+                            )
+                            total_chunks += n_chunks
+                            yield _sse("status", {"msg": f"  {f.name} → {n_chunks} chunks", "phase": "docs"})
+                        except Exception as doc_err:
+                            yield _sse("warn", {"msg": f"  {f.name} skipped: {doc_err}"})
+                    conn.close()
+                    yield _sse("status", {"msg": f"Indexed {len(doc_files)} document(s), {total_chunks} chunks total", "phase": "docs"})
+                except Exception as docs_err:
+                    yield _sse("warn", {"msg": f"Document indexing skipped: {docs_err}"})
 
         if req.write_mcp_config:
             try:
@@ -111,6 +158,13 @@ async def index_status(repo_path: str, output_path: str | None = None) -> dict:
         validated = conn.execute("SELECT COUNT(*) FROM methods WHERE variant='validated'").fetchone()[0]
         main = conn.execute("SELECT COUNT(*) FROM methods WHERE variant='main'").fetchone()[0]
         classes = conn.execute("SELECT COUNT(*) FROM classes WHERE variant='main'").fetchone()[0]
+        doc_count = 0
+        try:
+            doc_count = conn.execute(
+                "SELECT COUNT(DISTINCT source_path) FROM doc_chunks"
+            ).fetchone()[0]
+        except sqlite3.OperationalError:
+            pass
         conn.close()
         variant = "validated" if validated > 0 else "main"
         count = validated if validated > 0 else main
@@ -120,6 +174,49 @@ async def index_status(repo_path: str, output_path: str | None = None) -> dict:
             "node_count": count,
             "class_count": classes,
             "validated": validated > 0,
+            "doc_count": doc_count,
         }
     except Exception:
         return {"indexed": False}
+
+
+class ReindexRequest(BaseModel):
+    repo_path: str
+    output_path: str | None = None
+    changed_files: list[str] | None = None
+
+
+@router.post("/reindex")
+async def reindex(req: ReindexRequest) -> dict:
+    from ...engine.reindexer import incremental_reindex
+    from ...graph.graph_store import resolve_graph_db_path
+
+    out_dir = _out_dir(req.repo_path, req.output_path)
+    graph_path = resolve_graph_db_path(out_dir)
+    codebase = Path(req.repo_path).resolve()
+    summary = incremental_reindex(codebase, graph_path, hint_changed_files=req.changed_files)
+    return {"summary": summary}
+
+
+class HooksRequest(BaseModel):
+    repo_path: str
+    output_path: str | None = None
+    action: str = "install"
+
+
+@router.post("/hooks")
+async def hooks(req: HooksRequest) -> dict:
+    from ...graph.graph_store import resolve_graph_db_path
+    from ...utils.git_hooks import install_hooks, uninstall_hooks
+
+    repo = Path(req.repo_path).resolve()
+    out_dir = _out_dir(req.repo_path, req.output_path)
+    graph_path = resolve_graph_db_path(out_dir)
+    try:
+        if req.action == "install":
+            written = install_hooks(repo, graph_path)
+            return {"action": "install", "hooks": written}
+        removed = uninstall_hooks(repo)
+        return {"action": "uninstall", "hooks": removed}
+    except SystemExit as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

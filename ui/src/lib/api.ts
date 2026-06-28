@@ -61,12 +61,17 @@ export const api = {
 
   index: {
     status: (repo_path: string, output_path?: string) =>
-      get<{ indexed: boolean; variant?: string; node_count?: number; class_count?: number; validated?: boolean }>("/index/status", { repo_path, output_path }),
+      get<{ indexed: boolean; variant?: string; node_count?: number; class_count?: number; validated?: boolean; doc_count?: number }>("/index/status", { repo_path, output_path }),
     run: (body: {
       repo_path: string; output_path?: string; actuator_url?: string;
       port?: number; timeout?: number; skip_build?: boolean;
       build_dir?: string; use_docker?: boolean; write_mcp_config?: boolean;
+      index_docs?: boolean;
     }, cb: (e: string, d: unknown) => void) => sse("/index/run", body, cb),
+    reindex: (body: { repo_path: string; output_path?: string; changed_files?: string[] }) =>
+      post<{ summary: Record<string, unknown> }>("/index/reindex", body),
+    hooks: (body: { repo_path: string; output_path?: string; action: "install" | "uninstall" }) =>
+      post<{ action: string; hooks: string[] }>("/index/hooks", body),
   },
 
   graph: {
@@ -89,5 +94,36 @@ export const api = {
     call: (body: { tool: string; params: Record<string, unknown>; repo_path?: string; output_path?: string }) =>
       post<{ result: unknown }>("/mcp/call", body),
     sessionLog: (repo_path: string, limit = 100) => get<{ tool_name: string; method_id?: string; timestamp: string }[]>("/mcp/session-log", { repo_path, limit }),
+  },
+
+  explore: {
+    trace: (body: { repo_path: string; output_path?: string; method: string; max_depth?: number; business_only?: boolean }) =>
+      post<Record<string, unknown>>("/explore/trace", body),
+    context: (body: { repo_path: string; output_path?: string; method: string; max_chars?: number; business_only?: boolean }) =>
+      post<Record<string, unknown>>("/explore/context", body),
+    flow: (body: { repo_path: string; output_path?: string; method: string; depth?: number; business_only?: boolean }) =>
+      post<Record<string, unknown>>("/explore/flow", body),
+    traceRoute: (body: { repo_path: string; output_path?: string; route: string; max_depth?: number }) =>
+      post<Record<string, unknown>>("/explore/trace-route", body),
+    flowDoc: (body: { repo_path: string; output_path?: string; method: string; depth?: number; top_n?: number; mind_map?: boolean }) =>
+      post<{ markdown: string }>("/explore/flow-doc", body),
+    errorDoc: (body: { repo_path: string; output_path?: string; stack_trace: string; depth?: number }) =>
+      post<{ markdown: string; anchor_method: string; frames: number }>("/explore/error-doc", body),
+  },
+
+  docs: {
+    sources: (repo_path: string, output_path?: string) =>
+      get<{ sources: { source_path: string; source_type: string; title: string; chunk_count: number; indexed_at: number }[] }>("/docs/sources", { repo_path, output_path }),
+    graph: (repo_path: string, output_path?: string) =>
+      get<{ nodes: Record<string, unknown>[]; edges: Record<string, unknown>[]; stats: { docs: number; chunks: number; classes: number; links: number } }>("/docs/graph", { repo_path, output_path }),
+  },
+
+  history: {
+    list: (repo_path?: string, limit = 50) =>
+      get<{
+        index_events: Record<string, unknown>[];
+        reindex_events: Record<string, unknown>[];
+        doc_events: Record<string, unknown>[];
+      }>("/history", repo_path ? { repo_path, limit } : { limit }),
   },
 };

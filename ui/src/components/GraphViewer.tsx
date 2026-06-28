@@ -139,7 +139,7 @@ export function GraphViewer({ repoPath, outputPath }: RepoState) {
   }, [physics]);
 
   async function load() {
-    if (!repoPath) { setError("Set a repo path first."); return; }
+    if (!repoPath) { setError("Repository not indexed. Go to IDX tab and run the pipeline first."); return; }
     setLoading(true);
     setLoadMsg("fetching graph data…");
     setError(null);
@@ -169,7 +169,12 @@ export function GraphViewer({ repoPath, outputPath }: RepoState) {
       buildNetwork(nodes, edges);
     } catch (e) {
       clearInterval(ticker);
-      setError(String(e).replace("Error: ", ""));
+      const msg = String(e).replace("Error: ", "");
+      if (msg.includes("not found") || msg.includes("404") || msg.includes("No such file")) {
+        setError("Repository not indexed. Go to IDX tab and run the pipeline first.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }

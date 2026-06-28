@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { RepoState } from "../hooks/useRepo";
 
-type Status = { indexed: boolean; variant?: string; node_count?: number; class_count?: number; validated?: boolean };
+type Status = { indexed: boolean; variant?: string; node_count?: number; class_count?: number; validated?: boolean; doc_count?: number };
 
 async function pickFolder(): Promise<string | null> {
   const res = await fetch("/api/util/pick-folder", { method: "POST" });
@@ -65,8 +65,8 @@ export function RepoSelector({ repoPath, outputPath, setRepoPath, setOutputPath 
           <div className="status-dot" style={{ background: status.indexed ? "var(--success)" : "var(--text-dim)" }} />
           <span style={{ color: status.indexed ? "var(--success)" : "var(--text-dim)" }}>
             {status.indexed
-              ? `${status.node_count?.toLocaleString()} methods · ${status.class_count?.toLocaleString()} classes · ${status.validated ? "validated" : "main"}`
-              : "not indexed"}
+              ? `${status.node_count?.toLocaleString()} methods · ${status.class_count?.toLocaleString()} classes${status.doc_count ? ` · ${status.doc_count} doc${status.doc_count === 1 ? "" : "s"}` : ""} · ${status.validated ? "validated" : "main"}`
+              : "not indexed — index first"}
           </span>
         </div>
       )}

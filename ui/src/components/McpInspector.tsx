@@ -95,7 +95,12 @@ export function McpInspector({ repoPath, outputPath }: RepoState) {
       setResult(JSON.stringify(res.result, null, 2));
       if (repoPath) api.mcp.sessionLog(repoPath).then(setLog).catch(() => {});
     } catch (e) {
-      setError(String(e).replace("Error: ", ""));
+      const msg = String(e).replace("Error: ", "");
+      if (msg.includes("not found") || msg.includes("404") || msg.includes("No such file")) {
+        setError("Repository not indexed. Go to IDX tab and run the pipeline first.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setCalling(false);
     }
@@ -206,8 +211,7 @@ export function McpInspector({ repoPath, outputPath }: RepoState) {
           </>
         ) : (
           <div className="empty-state">
-            Select a tool from the list.<br />
-            {!repoPath && <span style={{ color: "var(--error)" }}>Set a repo path first.</span>}
+            {repoPath ? "Select a tool from the list." : "Repository not indexed. Go to IDX tab and run the pipeline first."}
           </div>
         )}
       </div>
@@ -217,7 +221,7 @@ export function McpInspector({ repoPath, outputPath }: RepoState) {
         <div className="session-log-header">SESSION LOG</div>
         <div style={{ flex: 1, overflow: "auto" }}>
           {log.length === 0
-            ? <div className="empty-state">No tool calls yet.</div>
+            ? <div className="empty-state">{repoPath ? "No tool calls yet." : "Run the pipeline first."}</div>
             : log.map((e, i) => (
               <div key={i} className="log-entry">
                 <div className="log-entry-tool">{e.tool_name}</div>
