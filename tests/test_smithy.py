@@ -8,11 +8,13 @@ searched in the wrong text span) that a hand-written toy fixture wouldn't
 have surfaced.
 """
 
-from jidra import graph_store
-from jidra.engine import JidraEngine
+from pathlib import Path
+
+from jidra.graph import graph_store
+from jidra.engine.engine import JidraEngine
 from jidra.models import ClassEntry
-from jidra.smithy_bridge import link_operations
-from jidra.smithy_extractor import parse_smithy_text
+from jidra.smithy.smithy_bridge import link_operations
+from jidra.extractors.smithy_extractor import parse_smithy_text
 
 BEER_SERVICE_SMITHY = """
 $version: "2"
@@ -104,7 +106,7 @@ class TestSmithyParsing:
         assert beer_member.required is True
 
     def test_no_smithy_files_yields_nothing(self, tmp_path):
-        from jidra.smithy_extractor import build_smithy_graph
+        from jidra.extractors.smithy_extractor import build_smithy_graph
 
         shapes, operations = build_smithy_graph(tmp_path)
         assert shapes == []
@@ -147,9 +149,9 @@ class TestSmithyBridge:
             language="scala",
         )
         links = link_operations([impl], self._operations())
-        op_ids = {link.operation_id for link in links}
+        op_ids = {l.operation_id for l in links}
         assert op_ids == {"smithy.example#GetBeer", "smithy.example#AddBeer"}
-        assert all(link.codegen_profile == "smithy4s" for link in links)
+        assert all(l.codegen_profile == "smithy4s" for l in links)
 
     def test_unrelated_class_produces_no_link(self):
         unrelated = ClassEntry(
@@ -243,9 +245,7 @@ class TestSmithyPersistence:
         # Tables exist and are queryable post-upgrade (empty is fine -- the
         # migration only needs to make them queryable, not backfill them,
         # since there's no prior smithy data to have lost).
-        assert (
-            conn2.execute("SELECT count(*) FROM smithy_operations").fetchone()[0] == 0
-        )
+        assert conn2.execute("SELECT count(*) FROM smithy_operations").fetchone()[0] == 0
 
 
 class TestEngineOperationGraph:

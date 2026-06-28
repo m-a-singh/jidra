@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from jidra import graph_store
-from jidra.engine import JidraEngine
-from jidra.extractor import detect_frameworks
+from jidra.graph import graph_store
+from jidra.engine.engine import JidraEngine
+from jidra.extractors.extractor import detect_frameworks
 from jidra.models import ClassEntry, Graph, MethodEntry
 
 
@@ -42,7 +42,7 @@ class HomeView(View):
 @pytest.fixture
 def py_graph(tmp_path):
     (tmp_path / "app.py").write_text(PY_SAMPLE)
-    from jidra.py_extractor import build_py_graph
+    from jidra.extractors.py_extractor import build_py_graph
 
     return build_py_graph(tmp_path)
 

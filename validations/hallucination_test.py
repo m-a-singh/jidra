@@ -61,6 +61,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -785,7 +786,7 @@ def hybrid_tests(
         f"What happens after `{method_name}` returns results?",
         f"Which service organizes results after `{method_name}` finishes?",
         f"Where does the response go after `{method_name}` emits results?",
-        "What downstream step runs after the main search processor returns data?",
+        f"What downstream step runs after the main search processor returns data?",
     ]
     results = []
     for idx, question in enumerate(questions, 1):
@@ -961,7 +962,7 @@ def main() -> None:
         print(f"\n── {method_selector} ──")
         candidates = _resolve_method_selector(graph, method_selector)
         if not candidates:
-            print("  ✗ Not found in graph, skipping")
+            print(f"  ✗ Not found in graph, skipping")
             continue
         if len(candidates) > 1:
             print(f"  ✗ Ambiguous ({len(candidates)} matches), skipping")
@@ -970,13 +971,14 @@ def main() -> None:
         method = candidates[0]
         method_node = node_by_id.get(method.id)
         if not method_node:
-            print("  ✗ Node not found in raw graph, skipping")
+            print(f"  ✗ Node not found in raw graph, skipping")
             continue
 
         jidra_ctx = _build_jidra_context(method_node)
+        retrieved_symbols = set(_extract_java_identifiers(str(jidra_ctx)))
         _, naive_src = _collect_naive_files(method_node, node_by_id, codebase_path)
         if not naive_src:
-            print("  ✗ Could not read source files for naive context, skipping")
+            print(f"  ✗ Could not read source files for naive context, skipping")
             continue
 
         method_name = method_node.get("method_name") or method_selector.split(".")[-1]

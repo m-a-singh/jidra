@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from jidra import graph_store
-from jidra.engine import JidraEngine
+from jidra.graph import graph_store
+from jidra.engine.engine import JidraEngine
 from jidra.models import Graph, MethodEntry
 
 

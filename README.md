@@ -95,6 +95,8 @@ The same view also exports the full graph as Graphviz DOT or pretty-printed JSON
 Every index, reindex, and doc-index run is recorded to a local telemetry dashboard (`jidra history --html`, served from `~/.jidra/telemetry/telemetry.html`):
 
 <p align="center">
+  <img src="docs/assets/graph-visualization-overview.png" alt="Interactive graph visualization overview" width="800">
+  <img src="docs/assets/graph-visualization-json-export.png" alt="Graph visualization JSON export tab" width="800">
   <img src="docs/assets/jidra_telemetry.jpg" alt="JIDRA telemetry dashboard — index history, elapsed time, doc chunk charts" width="800">
   <img src="docs/assets/jidra_telemetry_2.jpg" alt="JIDRA telemetry — full index events and doc index events tables" width="800">
 </p>
@@ -141,46 +143,91 @@ JIDRA used ~3.5x fewer tokens than CodeGraph at equal correctness. Runtime Actua
 
 ```text
 jidra/
-├── pyproject.toml
-├── requirements.txt
 ├── README.md
-├── ENTERPRISE_TYPESCRIPT_PROOF.md
-├── ENTERPRISE_PYTHON_PROOF.md
-├── ENTERPRISE_SCALA_PROOF.md
-├── scala_sidecar/
-│   ├── Dockerfile             # JDK 21 base (eclipse-temurin) + sbt launcher from Maven Central
-│   └── entrypoint.sh          # Injects semanticdb plugin, runs sbt compile, exports .semanticdb
-└── jidra/
-    ├── __init__.py
-    ├── cli.py
-    ├── config.yaml
-    ├── llm_client.py
-    ├── models.py
-    ├── graph_io.py
-    ├── selector.py
-    ├── trace_engine.py
-    ├── context_builder.py
-    ├── extractor.py
-    ├── exporter.py
-    ├── ts_filters.py          # Language detection (all languages) + TypeScript file iteration
-    ├── ts_extractor.py        # TypeScript extraction (dispatches to tree-sitter or Docker sidecar)
-    ├── ts_treesitter.py       # In-process tree-sitter TypeScript backend (no Docker, default)
-    ├── daemon.py              # Shared-graph daemon (Unix socket RPC, watchdog, hot-reload)
-    ├── proxy.py               # Thin stdio<->socket MCP proxy that spawns the daemon
-    ├── watcher.py             # Debounced filesystem watcher -> incremental reindex
-    ├── git_hooks.py           # post-commit/merge/checkout hook installer
-    ├── scala_filters.py       # Scala file iteration + excluded dirs
-    ├── scala_extractor.py     # Scala extraction (SemanticDB two-pass)
-    ├── scala_proto/           # Generated protobuf bindings for SemanticDB
-    │   ├── semanticdb.proto
-    │   └── semanticdb_pb2.py
-    ├── py_filters.py          # Python language detection
-    ├── py_extractor.py        # Python extraction (AST + symbol table)
-    ├── py_type_provider.py    # Python type validation (Pyright)
-    ├── go_filters.py          # Go file iteration + excluded dirs
-    ├── go_extractor.py        # Go extraction (tree-sitter, in-process)
-    ├── filters.py             # Java file iteration
-    └── cache.py
+├── pyproject.toml
+├── pytest.ini
+├── requirements.txt
+├── LICENSE
+├── .gitignore
+├── docs/
+│   ├── MCP_VERIFICATION_RESULTS.md
+│   ├── actuator_incremental_plan.md
+│   ├── incremental_reindex_plan.md
+│   ├── quick_test_script.sh
+│   ├── testing_incremental_reindex.md
+│   ├── assets/
+│   └── archive/
+├── evals/
+│   ├── agent_eval.py
+│   ├── agent_eval_py.py
+│   ├── agent_eval_ts.py
+│   ├── analyze_session_logs.py
+│   ├── compare_chat.py
+│   ├── eval_chat.py
+│   ├── eval_queries.yaml
+│   ├── migrate_structure.py
+│   └── validate_jidra_analysis.py
+├── examples/
+│   └── sample-java/
+├── experiments/
+│   ├── compare_graph_json.py
+│   ├── enrichment_agent.py
+│   ├── enrichment_judge.py
+│   ├── enrichment_ui.py
+│   ├── method_prompt.py
+│   └── token_count.py
+├── sidecar/
+│   ├── scala/
+│   └── typescript/
+├── src/
+│   └── jidra/
+│       ├── cli.py
+│       ├── cost_calculator.py
+│       ├── context_builder.py
+│       ├── daemon.py
+│       ├── doc_indexer.py
+│       ├── engine.py
+│       ├── extractor.py
+│       ├── flow_stitcher.py
+│       ├── graph_rag.py
+│       ├── graph_validator.py
+│       ├── mcp_server.py
+│       ├── scala_extractor.py
+│       ├── session_log.py
+│       ├── ts_filters.py
+│       └── ...
+├── tests/
+│   ├── fixtures/
+│   ├── conftest.py
+│   ├── test_budget.py
+│   ├── test_context_builder.py
+│   ├── test_continuous_sync.py
+│   ├── test_cost_calculator.py
+│   ├── test_daemon.py
+│   ├── test_engine.py
+│   ├── test_file_deps.py
+│   ├── test_flow_stitcher.py
+│   ├── test_frameworks.py
+│   ├── test_go_extractor.py
+│   ├── test_graph_health.py
+│   ├── test_incremental_index.py
+│   ├── test_index_cache.py
+│   ├── test_module_partitioning.py
+│   ├── test_py_extractor.py
+│   ├── test_search.py
+│   ├── test_session_log.py
+│   ├── test_smithy.py
+│   └── test_ts_treesitter.py
+├── ui/
+│   ├── index.html
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   └── src/
+└── validations/
+    ├── hallucination_test.py
+    └── run_validation.py
 ```
 
 ## Installation
@@ -531,12 +578,6 @@ Builds the graph (`graph.db`) from source code (auto-detects language):
 
 Language detection is automatic via manifest files (`build.sbt`, `pom.xml`, `package.json`, `pyproject.toml`, `go.mod`, etc.). Multiple languages in the same repo are detected and merged into a single graph automatically.
 
-Example: a Go package's call graph (`logging`), generated the same way as any other language:
-
-<p align="center">
-  <img src="docs/assets/go_graph_pkg_logging.png" alt="Go package call graph example" width="800">
-</p>
-
 > **Note:** a directory that contains source files but **no manifest** (e.g. loose `.py`/`.ts` files with no `requirements.txt`/`pyproject.toml`/`package.json`) is not recognized as that language and will index to an empty graph. Add the appropriate manifest so the codebase is detected. This also affects auto-sync (below): the watcher/hooks will reindex but find nothing to extract.
 
 ## `reindex`
@@ -562,18 +603,6 @@ delimited `# BEGIN JIDRA` / `# END JIDRA` blocks, so they compose with other hoo
 (Husky, lefthook) and `uninstall` removes only JIDRA's block. When running the MCP server
 in `--mode proxy`, the shared daemon also runs a debounced filesystem watcher that hot-reloads
 the graph on save — so on most setups you get fresh graphs with no manual reindex at all.
-
-## `history`
-
-```bash
-jidra history [--repo <path>] [--limit 50] [--html [path]]
-```
-
-Prints index/reindex/doc-index telemetry recorded under `~/.jidra/telemetry/telemetry.db`
-(written automatically by `index`, `reindex`, and `index-docs`). `--html` regenerates the
-dashboard at `~/.jidra/telemetry/telemetry.html` (or a custom path) — the same file
-`jidra up` and every subsequent index/reindex/doc-index run keep up to date. See the
-telemetry screenshots above.
 
 ## `trace`
 

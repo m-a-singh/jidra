@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from jidra.go_extractor import build_go_graph, build_go_graph_for_files
+from jidra.extractors.go_extractor import build_go_graph, build_go_graph_for_files
 
 
 GO_FIXTURE = """\
@@ -340,7 +340,9 @@ def test_cross_file_method_resolution(tmp_path):
     pkg.mkdir()
 
     # Type lives in types.go
-    (pkg / "types.go").write_text("package svc\n\ntype Service struct{ Name string }\n")
+    (pkg / "types.go").write_text(
+        "package svc\n\ntype Service struct{ Name string }\n"
+    )
     # Methods live in service.go — different file, same package
     (pkg / "service.go").write_text(
         "package svc\n\nfunc (s *Service) Run() string { return s.Name }\n"
@@ -350,9 +352,7 @@ def test_cross_file_method_resolution(tmp_path):
     graph = build_go_graph(tmp_path)
 
     method_names = {m.method_name for m in graph.methods}
-    assert "Run" in method_names, (
-        "method in separate file from type should be extracted"
-    )
+    assert "Run" in method_names, "method in separate file from type should be extracted"
     assert "Stop" in method_names
 
     # Both methods should be owned by the Service class

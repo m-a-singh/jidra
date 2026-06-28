@@ -2,7 +2,7 @@ import time
 from pathlib import Path
 
 import jidra.cli as cli
-from jidra.cache import cache_path, load_cache
+from jidra.utils.cache import cache_path, load_cache
 
 
 def _make_codebase(tmp_path: Path) -> Path:
