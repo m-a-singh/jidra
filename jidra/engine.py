@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 import threading
-from collections import deque
+from collections import Counter, deque
 from pathlib import Path
+from typing import Any
 
 from .context_builder import build_method_context
 from .flow_stitcher import stitch_flow
@@ -82,7 +83,17 @@ _BUDGET_TIERS: list[tuple[int | None, dict]] = [
 # query like "AuthToken" or "validate_token" matches the same methods.
 _CAMEL_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 # Path markers that demote generated/mock code in explore ranking.
-_GENERATED_MARKERS = (".pb.", "_generated", "/generated/", "mock_", "/mocks/")
+_GENERATED_MARKERS = (
+    ".pb.",
+    "_generated",
+    "/generated/",
+    "mock_",
+    "/mocks/",
+    "/build/generated",
+    "generated-src",
+    "/build/classes",
+    "/out/production",
+)
 
 
 def _tokenize_query(text: str) -> set[str]:
@@ -123,7 +134,7 @@ def _score_hit(row: dict, tokens: set[str]) -> float:
     ):
         score -= 15.0
     if any(marker in path for marker in _GENERATED_MARKERS):
-        score -= 20.0
+        score -= 200.0  # hard demote — generated files never outrank real source
     score += -float(row.get("score", 0.0))  # bm25 tiebreaker
     return score
 
@@ -162,6 +173,35 @@ def _summarize_stopped_paths(paths: list[dict]) -> dict:
     }
 
 
+def _call_neighbors_batch(
+    conn: Any, method_ids: set[str], variant: str = "main"
+) -> set[str]:
+    """Return all direct callers + callees of a set of method IDs via resolved_call_edges."""
+    if not method_ids:
+        return set()
+    import sqlite3 as _sq3
+
+    placeholders = ",".join("?" * len(method_ids))
+    ids = list(method_ids)
+    out: set[str] = set()
+    try:
+        cur = conn.execute(
+            f"SELECT callee_method_id FROM resolved_call_edges "
+            f"WHERE caller_method_id IN ({placeholders}) AND variant=?",
+            ids + [variant],
+        )
+        out |= {r[0] for r in cur.fetchall()}
+        cur = conn.execute(
+            f"SELECT caller_method_id FROM resolved_call_edges "
+            f"WHERE callee_method_id IN ({placeholders}) AND variant=?",
+            ids + [variant],
+        )
+        out |= {r[0] for r in cur.fetchall()}
+    except _sq3.OperationalError:
+        pass
+    return out
+
+
 class JidraEngine:
     def __init__(self, graph_path: str, variant: str = "validated"):
         self.graph_path = str(Path(graph_path).resolve())
@@ -173,9 +213,102 @@ class JidraEngine:
         self._conn_lock = threading.Lock()
         self.graph = graph_store.load_graph(self.conn, variant=variant)
 
+        # Resolve repo root: read from meta if available, else compute from class paths
+        codebase_root = graph_store.get_meta(self.conn, "codebase_root")
+        if codebase_root:
+            self.repo_root = Path(codebase_root)
+        else:
+            # Fallback: longest common prefix of all class file paths, anchored by markers
+            if self.graph.classes:
+                paths = [Path(c.file_path).resolve() for c in self.graph.classes]
+                try:
+                    candidate = Path(*[p.parts[0] for p in paths if p.parts])
+                    for i in range(1, min(len(p.parts) for p in paths)):
+                        if all(p.parts[i] == paths[0].parts[i] for p in paths):
+                            candidate = Path(*paths[0].parts[: i + 1])
+                        else:
+                            break
+
+                    # Anchor candidate on a real repo marker (.git)
+                    self.repo_root = self._find_repo_root_with_marker()
+                    if not self.repo_root:
+                        self.repo_root = candidate
+                except (IndexError, ValueError):
+                    self.repo_root = None
+            else:
+                self.repo_root = None
+
+    def _rel(self, path: str | None) -> str | None:
+        """Make path repo-relative if possible, else return absolute."""
+        if not path or not self.repo_root:
+            return path
+        try:
+            p = Path(path).resolve()
+            rel = p.relative_to(self.repo_root)
+            return str(rel)
+        except (ValueError, RuntimeError):
+            return str(Path(path).resolve())
+
+    def _find_repo_root_with_marker(self) -> Path | None:
+        """Find the deepest directory with a .git marker that is an ancestor of most file paths."""
+        try:
+            if self.graph.classes:
+                paths = [Path(c.file_path).resolve() for c in self.graph.classes]
+
+                # For each path, walk up to find the deepest dir with .git (project root)
+                possible_roots = []
+                for p in paths:
+                    current = p.parent
+                    while current != current.parent:
+                        if (current / ".git").exists():
+                            possible_roots.append(current)
+                            break
+                        current = current.parent
+
+                # Find the most common root among all paths
+                if possible_roots:
+                    root_counts = Counter(possible_roots)
+                    most_common_root, count = root_counts.most_common(1)[0]
+                    # Return only if it's the root for most paths
+                    if count > len(paths) * 0.5:
+                        return most_common_root
+
+                return None
+        except (IndexError, ValueError, AttributeError):
+            pass
+        return None
+
     def _resolve_single_method(self, selector: str) -> dict:
         candidates = _resolve_method_selector(self.graph, selector)
         if not candidates:
+            # If the selector names a CLASS that exists but a method that does
+            # not, say so definitively + list the real methods — otherwise the
+            # agent keeps fuzzy-searching a method that isn't there (the T2 spiral).
+            if "#" in selector or "." in selector:
+                sep = "#" if "#" in selector else "."
+                class_part, _, method_part = selector.rpartition(sep)
+                cls_short = class_part.rsplit(".", 1)[-1]
+                cls_methods = [
+                    m
+                    for m in self.graph.methods
+                    if m.class_full_name == class_part
+                    or m.class_full_name.rsplit(".", 1)[-1] == cls_short
+                ]
+                if class_part and method_part and cls_methods:
+                    names = sorted({m.method_name for m in cls_methods})
+                    if method_part not in names:
+                        owner = cls_methods[0].class_full_name
+                        return {
+                            "error": "method_not_found_on_class",
+                            "definitive": True,
+                            "message": (
+                                f"Class '{owner}' exists but declares no method "
+                                f"named '{method_part}'. Do not keep searching — "
+                                f"it is not on this class."
+                            ),
+                            "class": owner,
+                            "available_methods": names,
+                        }
             suggestions = _fuzzy_suggestions(self.graph, selector)
             return {
                 "error": f"No exact match for '{selector}' in the graph.",
@@ -267,7 +400,11 @@ class JidraEngine:
         }
 
     def get_flow(
-        self, method: str, depth: int | None = None, top_n: int | None = None
+        self,
+        method: str,
+        depth: int | None = None,
+        top_n: int | None = None,
+        detail: str = "summary",
     ) -> dict:
         _ = top_n
         if depth is None:
@@ -285,7 +422,12 @@ class JidraEngine:
         selected = resolved["method"]
         if not hasattr(selected, "id"):
             return {"error": "invalid_method_selector_result"}
-        return self._with_budget(stitch_flow(self.graph, selected, max_depth=depth))
+        result = self._with_budget(
+            stitch_flow(self.graph, selected, max_depth=depth, detail=detail)
+        )
+        if self.repo_root:
+            result["repo_root"] = str(self.repo_root)
+        return result
 
     def get_agent_flow(
         self, method: str, depth: int | None = None, top_n: int | None = None
@@ -605,6 +747,321 @@ class JidraEngine:
         result["edges"] = edges_out
         return result
 
+    def get_implementations(
+        self,
+        interface: str,
+        *,
+        transitive: bool = False,
+        limit: int = 30,
+        detail: str = "summary",
+    ) -> dict:
+        """Resolve interface to full name, walk inheritance_edges where target matches,
+        return direct (or transitive) implementers with signatures, file paths, stereotypes."""
+        class_by_full_name = {c.full_name: c for c in self.graph.classes}
+
+        # Resolve the interface SELECTOR to a class. inheritance_edges store the
+        # target as written in the `implements`/`extends` clause — almost always a
+        # SHORT name — so we resolve by short name and match the graph on short
+        # name too. Prefer an exact short-name class, favouring interface/abstract
+        # stereotypes over a same-named *Impl/*Service when both exist.
+        sel_short = interface.split("#")[0].split("(")[0].rsplit(".", 1)[-1]
+        candidates = [
+            c
+            for c in self.graph.classes
+            if c.full_name.rsplit(".", 1)[-1] == sel_short or c.full_name == interface
+        ]
+        if not candidates:
+            return {
+                "error": "interface_class_not_found",
+                "selector": interface,
+                "hint": "no class with that name; pass the interface's simple or full name",
+            }
+
+        def _iface_rank(c) -> int:
+            st = set(getattr(c, "stereotypes", []) or [])
+            if {"interface"} & st:
+                return 0
+            if {"abstract"} & st:
+                return 1
+            return 2
+
+        interface_class = sorted(candidates, key=_iface_rank)[0]
+        target_short = interface_class.full_name.rsplit(".", 1)[-1]
+
+        # Build forward adjacency keyed by SHORT target name (matches how the
+        # extractor records implements/extends clauses).
+        adjacency: dict[str, list[tuple[str, str]]] = {}
+        for edge in self.graph.inheritance_edges:
+            if edge.relation in ("implements", "extends"):
+                key = edge.target_class.rsplit(".", 1)[-1]
+                adjacency.setdefault(key, []).append((edge.source_class, edge.relation))
+
+        implementers = []
+        visited: set[str] = set()
+        frontier = [target_short]
+
+        while frontier:
+            current = frontier.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+
+            for source_full_name, _relation in adjacency.get(current, []):
+                impl_class = class_by_full_name.get(source_full_name)
+                if impl_class:
+                    methods = [
+                        m
+                        for m in self.graph.methods
+                        if m.class_full_name == source_full_name
+                    ]
+                    item = {
+                        "class_full_name": impl_class.full_name,
+                        "file_path": self._rel(impl_class.file_path),
+                        "stereotypes": getattr(impl_class, "stereotypes", []),
+                    }
+                    if detail == "full":
+                        item["methods"] = [
+                            {
+                                "signature": m.signature,
+                                "start_line": getattr(m, "start_line", None),
+                            }
+                            for m in methods
+                        ]
+                    else:
+                        item["methods"] = [m.signature for m in methods]
+                    implementers.append(item)
+                    if transitive:
+                        frontier.append(source_full_name.rsplit(".", 1)[-1])
+
+        result: dict = {
+            "interface": interface_class.full_name,
+        }
+        if self.repo_root:
+            result["repo_root"] = str(self.repo_root)
+
+        total = len(implementers)
+        if limit > 0:
+            capped = implementers[:limit]
+            omitted = total - len(capped)
+            result["implementations"] = capped
+            result["count"] = total
+            result["omitted"] = omitted
+        else:
+            result["implementations"] = implementers
+            result["count"] = total
+
+        return result
+
+    def get_class_members(self, class_selector: str) -> dict:
+        """Resolve class, return fields + methods with signatures, file paths."""
+        resolved = self._resolve_single_method(class_selector)
+        if "error" in resolved:
+            suggestions = resolved.get("suggestions", [])
+            if suggestions and suggestions[0].get("score", 0) >= 100:
+                resolved = self._resolve_single_method(suggestions[0]["selector"])
+                if "error" in resolved:
+                    return resolved
+            else:
+                return resolved
+        selected = resolved["method"]
+        class_full_name = getattr(selected, "class_full_name", None)
+        if not class_full_name:
+            return {"error": "method_has_no_class_context"}
+
+        class_by_full_name = {c.full_name: c for c in self.graph.classes}
+        cls = class_by_full_name.get(class_full_name)
+        if not cls:
+            return {"error": "class_not_found"}
+
+        methods = [
+            m for m in self.graph.methods if m.class_full_name == class_full_name
+        ]
+        fields = [
+            f
+            for f in self.graph.fields
+            if getattr(f, "class_full_name", None) == class_full_name
+            or f.class_id == cls.id
+        ]
+
+        return {
+            "class_full_name": cls.full_name,
+            "file_path": cls.file_path,
+            "fields": [
+                {
+                    "name": f.name,
+                    "type_name": getattr(f, "type_name", None),
+                    "line": getattr(f, "line", None),
+                }
+                for f in fields
+            ],
+            "methods": [
+                {
+                    "signature": m.signature,
+                    "file_path": m.file_path,
+                    "start_line": getattr(m, "start_line", None),
+                }
+                for m in methods
+            ],
+        }
+
+    def query_by_annotation(
+        self,
+        annotation: str,
+        kind: str = "any",
+        limit: int = 30,
+        detail: str = "summary",
+    ) -> dict:
+        """Find classes/methods by annotation or framework_role.
+        kind: 'class', 'method', or 'any'. Matching is lenient: leading '@',
+        annotation parameters (``@RequestMapping("/x")``), and case are ignored,
+        so ``RestController`` matches ``@RestController``."""
+
+        def _norm(s: str) -> str:
+            s = (s or "").strip()
+            if s.startswith("@"):
+                s = s[1:]
+            s = s.split("(", 1)[0]  # drop annotation params
+            return s.rsplit(".", 1)[-1].strip().lower()  # bare name, lowercased
+
+        target = _norm(annotation)
+
+        def _ann_match(values) -> bool:
+            return any(_norm(v) == target for v in (values or []))
+
+        class_matches = []
+        method_matches = []
+
+        if kind in ("class", "any"):
+            for cls in self.graph.classes:
+                if _ann_match(cls.annotations):
+                    item = {
+                        "full_name": cls.full_name,
+                        "file_path": self._rel(cls.file_path),
+                        "line": cls.start_line,
+                    }
+                    stereotypes = cls.stereotypes or []
+                    if detail == "full" or (stereotypes and stereotypes != ["unknown"]):
+                        if stereotypes and stereotypes != ["unknown"]:
+                            item["stereotypes"] = stereotypes
+                    class_matches.append(item)
+
+        if kind in ("method", "any"):
+            for method in self.graph.methods:
+                role = getattr(method, "framework_role", None)
+                if _ann_match(method.annotations) or (role and _norm(role) == target):
+                    item = {
+                        "signature": method.signature,
+                        "class": method.class_full_name,
+                        "file_path": self._rel(method.file_path),
+                        "line": method.start_line,
+                    }
+                    if detail == "full" or (role and role != "unknown"):
+                        if role and role != "unknown":
+                            item["framework_role"] = role
+                    method_matches.append(item)
+
+        result: dict = {}
+        total_omitted = 0
+        if class_matches:
+            total_classes = len(class_matches)
+            capped_classes = class_matches[:limit] if limit > 0 else class_matches
+            result["classes"] = capped_classes
+            if limit > 0 and total_classes > limit:
+                result["classes_omitted"] = total_classes - limit
+                total_omitted += total_classes - limit
+        if method_matches:
+            total_methods = len(method_matches)
+            capped_methods = method_matches[:limit] if limit > 0 else method_matches
+            result["methods"] = capped_methods
+            if limit > 0 and total_methods > limit:
+                result["methods_omitted"] = total_methods - limit
+                total_omitted += total_methods - limit
+
+        if total_omitted > 0:
+            result["omitted"] = total_omitted
+
+        if self.repo_root:
+            result["repo_root"] = str(self.repo_root)
+
+        if not result:
+            suggestions = []
+            seen = set()
+            for cls in self.graph.classes:
+                for ann in cls.annotations:
+                    if ann not in seen:
+                        suggestions.append({"annotation": ann, "kind": "class"})
+                        seen.add(ann)
+                if len(suggestions) >= 5:
+                    break
+            for method in self.graph.methods:
+                for ann in method.annotations:
+                    if ann not in seen:
+                        suggestions.append({"annotation": ann, "kind": "method"})
+                        seen.add(ann)
+                if len(suggestions) >= 10:
+                    break
+            if suggestions:
+                result["suggestions"] = suggestions
+            else:
+                result["message"] = "no matches found"
+
+        return result
+
+    def field_access(self, field: str | None = None, method: str | None = None) -> dict:
+        """Find field access patterns. Query by field name or method signature."""
+        if not field and not method:
+            return {"error": "specify_field_or_method"}
+        if field and method:
+            return {"error": "specify_field_or_method"}
+
+        if method:
+            resolved = self._resolve_single_method(method)
+            if "error" in resolved:
+                return resolved
+            m = resolved["method"]
+            result = {
+                "method": m.signature,
+                "class": m.class_full_name,
+            }
+            if m.field_reads:
+                result["reads"] = list(m.field_reads)
+            if m.field_writes:
+                result["writes"] = list(m.field_writes)
+            if self.repo_root:
+                result["repo_root"] = str(self.repo_root)
+            return result
+
+        # By field: field format is "ClassName#fieldName"
+        class_name: str | None = None
+        if not field:
+            return {"error": "specify_field_or_method"}
+
+        field_name: str = field
+        if "#" in field:
+            class_name, field_name = field.rsplit("#", 1)
+
+        readers = []
+        writers = []
+        for m in self.graph.methods:
+            if class_name and m.class_full_name != class_name:
+                continue
+            if field_name in m.field_reads:
+                readers.append(m.signature)
+            if field_name in m.field_writes:
+                writers.append(m.signature)
+
+        if not readers and not writers:
+            return {"message": f"no access found for field '{field}'"}
+
+        result: dict = {"field": field}
+        if readers:
+            result["readers"] = readers
+        if writers:
+            result["writers"] = writers
+        if self.repo_root:
+            result["repo_root"] = str(self.repo_root)
+        return result
+
     def _search_fallback(
         self, query: str, *, limit: int, language: str | None = None
     ) -> list[dict]:
@@ -639,25 +1096,95 @@ class JidraEngine:
         return [row for _matched, row in hits[:limit]]
 
     def search(self, query: str, limit: int = 20, language: str | None = None) -> dict:
-        """FTS5 keyword search over method names, signatures, and source."""
+        """FTS5 keyword search over method names, signatures, and source.
+
+        After FTS, expands results with 1-hop call-graph neighbors so that
+        callers/callees of matched methods surface even when not directly
+        indexed under the query terms.
+        """
         with self._conn_lock:
             rows = graph_store.search_methods(
                 self.conn, query, limit=limit, language=language
             )
         if not rows:
             rows = self._search_fallback(query, limit=limit, language=language)
-        results = [
-            {
-                "method_id": r["id"],
-                "method_name": r["method_name"],
-                "signature": r["signature"],
-                "class_full_name": r["class_full_name"],
-                "file_path": r["file_path"],
-                "language": r["language"],
-                "score": round(-float(r.get("score", 0.0)), 6),
-            }
-            for r in rows
-        ]
+
+        # Re-sort FTS rows: demote generated/build paths so real source ranks first.
+        # BM25 scores are negative — more negative = better match, so sort ascending.
+        # Generated files go into bucket 1 (after real source in bucket 0).
+        def _fts_sort_key(r: dict) -> tuple:
+            path = r.get("file_path", "")
+            is_generated = any(m in path for m in _GENERATED_MARKERS)
+            return (1 if is_generated else 0, float(r.get("score", 0.0)))
+
+        rows = sorted(rows, key=_fts_sort_key)
+
+        # If all top results are generated, fetch more rows to find real source
+        if rows and all(
+            any(m in r.get("file_path", "") for m in _GENERATED_MARKERS) for r in rows
+        ):
+            with self._conn_lock:
+                extended = graph_store.search_methods(
+                    self.conn, query, limit=limit * 5, language=language
+                )
+            rows = sorted(extended, key=_fts_sort_key)
+
+        seed_ids = {r["id"] for r in rows}
+
+        # 1-hop call expansion — callers + callees of every seed
+        neighbor_ids = _call_neighbors_batch(self.conn, seed_ids) - seed_ids
+        neighbor_rows: list = []
+        if neighbor_ids:
+            with self._conn_lock:
+                neighbor_rows = graph_store.fetch_methods_by_ids(
+                    self.conn, list(neighbor_ids)
+                )
+
+        tokens = _tokenize_query(query)
+
+        # Seeds first — preserve BM25 order, never interleaved with neighbors
+        results = []
+        seen: set[str] = set()
+        for r in rows:
+            seen.add(r["id"])
+            results.append(
+                {
+                    "method_id": r["id"],
+                    "method_name": r["method_name"],
+                    "signature": r["signature"],
+                    "class_full_name": r["class_full_name"],
+                    "file_path": r["file_path"],
+                    "language": r["language"],
+                    "score": round(-float(r.get("score", 0.0)), 6),
+                    "source": "fts",
+                }
+            )
+
+        # Neighbors appended after all seeds, sorted by heuristic score
+        scored_neighbors = sorted(
+            (
+                (_score_hit(dict(r), tokens), r)
+                for r in neighbor_rows
+                if r["id"] not in seen
+            ),
+            key=lambda p: p[0],
+            reverse=True,
+        )
+        for score, r in scored_neighbors:
+            seen.add(r["id"])
+            results.append(
+                {
+                    "method_id": r["id"],
+                    "method_name": r["method_name"],
+                    "signature": r["signature"],
+                    "class_full_name": r["class_full_name"],
+                    "file_path": r["file_path"],
+                    "language": r["language"],
+                    "score": round(score, 6),
+                    "source": "graph",
+                }
+            )
+
         return {"query": query, "count": len(results), "results": results}
 
     def explore(self, query: str, top_n: int = 10) -> dict:
@@ -677,8 +1204,38 @@ class JidraEngine:
             key=lambda pair: pair[0],
             reverse=True,
         )
+
+        # top_n seeds — these are the primary results
+        top_seeds = scored[:top_n]
+        seed_ids = {r["id"] for _, r in top_seeds}
+
+        # 1-2 hop graph expansion — find neighbors, re-score, append without
+        # displacing seeds (they always come first)
+        neighbor_ids = _call_neighbors_batch(self.conn, seed_ids)
+        hop2_ids = (
+            _call_neighbors_batch(self.conn, neighbor_ids - seed_ids)
+            - seed_ids
+            - neighbor_ids
+        )
+        new_ids = (neighbor_ids | hop2_ids) - seed_ids
+        neighbor_rows: list = []
+        if new_ids:
+            with self._conn_lock:
+                neighbor_rows = graph_store.fetch_methods_by_ids(
+                    self.conn, list(new_ids)
+                )
+
+        # re-score neighbors; keep top_n worth of them
+        scored_neighbors = sorted(
+            ((_score_hit(r, tokens), r) for r in neighbor_rows),
+            key=lambda p: p[0],
+            reverse=True,
+        )[:top_n]
+
         results: list[dict] = []
-        for score, r in scored[:top_n]:
+        seen_ids: set[str] = set()
+
+        def _make_entry(score: float, r: dict) -> dict:
             entry: dict = {
                 "method_id": r["id"],
                 "method_name": r["method_name"],
@@ -697,7 +1254,17 @@ class JidraEngine:
             cls = class_by_full.get(r["class_full_name"])
             if cls is not None and cls.stereotypes:
                 entry["class_stereotypes"] = cls.stereotypes
-            results.append(entry)
+            return entry
+
+        for score, r in top_seeds:
+            seen_ids.add(r["id"])
+            results.append(_make_entry(score, r))
+
+        for score, r in scored_neighbors:
+            if r["id"] not in seen_ids:
+                seen_ids.add(r["id"])
+                results.append(_make_entry(score, r))
+
         return {
             "query": query,
             "tokens": sorted(tokens),

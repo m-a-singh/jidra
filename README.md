@@ -62,11 +62,41 @@ Live progress while indexing is in flight:
   <img src="docs/assets/jidra-output-directory-structure.png" alt="jidra output directory structure" width="400">
 </p>
 
-The generated `graph_visualization.html` — interactive graph, Graphviz DOT, and JSON export tabs:
+The generated `graph_visualization.html` — interactive dark-theme call graph with a node inspector, search, and callers/callees navigation:
 
 <p align="center">
-  <img src="docs/assets/graph-visualization-overview.png" alt="Interactive graph visualization overview" width="800">
-  <img src="docs/assets/graph-visualization-json-export.png" alt="Graph visualization JSON export tab" width="800">
+  <img src="docs/assets/jidra_main_graph_visualization.jpg" alt="Interactive graph visualization — dark theme, node inspector, physics/filter controls" width="800">
+</p>
+
+Click any node to inspect its module, signature, and file location; "Show Neighbors" highlights its direct call relationships:
+
+<p align="center">
+  <img src="docs/assets/jidra_main_graph_clickable_features.jpg" alt="Graph node inspector and Show Neighbors highlighting" width="800">
+</p>
+
+Search by method or class name to jump straight to a node:
+
+<p align="center">
+  <img src="docs/assets/jidra_main_graph_search.jpg" alt="Graph search box with live results dropdown" width="800">
+</p>
+
+The same view also exports the full graph as Graphviz DOT or pretty-printed JSON, in-place:
+
+<p align="center">
+  <img src="docs/assets/jidra_main_graph_json_view.jpg" alt="Graph visualization JSON export overlay" width="800">
+</p>
+
+`jidra up` also offers to index your `docs/`/`README.md` and link doc chunks to the classes/methods they describe — rendered as its own interactive doc graph:
+
+<p align="center">
+  <img src="docs/assets/jidra_main_doc_graph.jpg" alt="JIDRA doc graph — documents linked to source classes" width="800">
+</p>
+
+Every index, reindex, and doc-index run is recorded to a local telemetry dashboard (`jidra history --html`, served from `~/.jidra/telemetry/telemetry.html`):
+
+<p align="center">
+  <img src="docs/assets/jidra_telemetry.jpg" alt="JIDRA telemetry dashboard — index history, elapsed time, doc chunk charts" width="800">
+  <img src="docs/assets/jidra_telemetry_2.jpg" alt="JIDRA telemetry — full index events and doc index events tables" width="800">
 </p>
 
 ## What JIDRA Does
@@ -76,12 +106,26 @@ The generated `graph_visualization.html` — interactive graph, Graphviz DOT, an
 - **Searches** the graph by keyword or natural language (FTS5-backed `jidra_search` / `jidra_explore`)
 - **Surfaces** framework structure as first-class data — HTTP endpoints, React/Vue/Angular components & hooks (`jidra_get_endpoints`, `jidra_get_components`, `jidra_get_framework_summary`)
 - **Answers** impact-analysis questions — what breaks if I change this file (`jidra_get_file_dependents` / `_dependencies`)
+- **Resolves** interface→implementation and class surface — list every concrete implementation of an interface/abstract class in one call (`jidra_get_implementations`), or every method and field of a class (`jidra_get_class_members`)
 - **Generates** noise-free context (68-95% smaller depending on language), auto-scaled to repo size (budget tiers)
 - **Traces** method/function execution with uncertainty markers
 - **Stays fresh** automatically via git hooks + an in-daemon file watcher (no manual reindex)
 - **Exports** as JSON, MCP tools, or interactive HTML
 - **Integrates** with Claude/Codex/Gemini via MCP (shared-daemon proxy mode shares one in-memory graph across editor windows)
 - **Reduces** LLM token costs by 68-95% (proven on real projects)
+
+## Benchmarked vs CodeGraph (agent-in-loop)
+
+JIDRA was evaluated against the [CodeGraph](https://github.com/colbymchenry/codegraph) MCP server using a real coding agent: the same LLM was given a navigation task and **exactly one backend's tools**, then scored on correctness, tool calls, tokens, and hallucinations. On a Spring Boot Java repo (7 tasks, Haiku 4.5):
+
+| Config | Backend | correct | avg tool calls | avg tokens | halluc. |
+|---|---|---|---|---|---|
+| **A (runtime Actuator)** | **JIDRA** | **7/7** | **3.0** | **~18.9k** | 0/7 |
+| A (runtime Actuator) | CodeGraph | 7/7 | 4.9 | ~65.2k | 0/7 |
+| **B (static only)** | **JIDRA** | **7/7** | **3.9** | **~26.0k** | 0/7 |
+| B (static only) | CodeGraph | 6/7 | 5.0 | ~68.3k | 0/7 |
+
+JIDRA used ~3.5x fewer tokens than CodeGraph at equal correctness. Runtime Actuator grounding (Config A) cut JIDRA a further ~27% tokens and ~1 tool call per task versus static analysis (Config B) by resolving dependency injection ambiguity up front—something CodeGraph's pure-static approach cannot match. The CodeGraph 7/7→6/7 variance between configs is agent run-variance (CodeGraph never uses JIDRA's graph), not a real effect. Full methodology, per-task data, and limitations are in [FINDINGS_jidra_vs_codegraph.md](FINDINGS_jidra_vs_codegraph.md).
 
 ## What JIDRA Does NOT Do (By Design)
 
@@ -487,6 +531,12 @@ Builds the graph (`graph.db`) from source code (auto-detects language):
 
 Language detection is automatic via manifest files (`build.sbt`, `pom.xml`, `package.json`, `pyproject.toml`, `go.mod`, etc.). Multiple languages in the same repo are detected and merged into a single graph automatically.
 
+Example: a Go package's call graph (`logging`), generated the same way as any other language:
+
+<p align="center">
+  <img src="docs/assets/go_graph_pkg_logging.png" alt="Go package call graph example" width="800">
+</p>
+
 > **Note:** a directory that contains source files but **no manifest** (e.g. loose `.py`/`.ts` files with no `requirements.txt`/`pyproject.toml`/`package.json`) is not recognized as that language and will index to an empty graph. Add the appropriate manifest so the codebase is detected. This also affects auto-sync (below): the watcher/hooks will reindex but find nothing to extract.
 
 ## `reindex`
@@ -512,6 +562,18 @@ delimited `# BEGIN JIDRA` / `# END JIDRA` blocks, so they compose with other hoo
 (Husky, lefthook) and `uninstall` removes only JIDRA's block. When running the MCP server
 in `--mode proxy`, the shared daemon also runs a debounced filesystem watcher that hot-reloads
 the graph on save — so on most setups you get fresh graphs with no manual reindex at all.
+
+## `history`
+
+```bash
+jidra history [--repo <path>] [--limit 50] [--html [path]]
+```
+
+Prints index/reindex/doc-index telemetry recorded under `~/.jidra/telemetry/telemetry.db`
+(written automatically by `index`, `reindex`, and `index-docs`). `--html` regenerates the
+dashboard at `~/.jidra/telemetry/telemetry.html` (or a custom path) — the same file
+`jidra up` and every subsequent index/reindex/doc-index run keep up to date. See the
+telemetry screenshots above.
 
 ## `trace`
 

@@ -397,7 +397,10 @@ def dispatch_tool(
         _log_session_call(codebase_path, name, p.get("method"))
         return _maybe_add_stale_hint(
             engine().get_flow(
-                method=p["method"], depth=p.get("depth"), top_n=p.get("top_n")
+                method=p["method"],
+                depth=p.get("depth"),
+                top_n=p.get("top_n"),
+                detail=p.get("detail", "summary"),
             ),
             graph_dir,
         )
@@ -534,10 +537,57 @@ def dispatch_tool(
             graph_path=graph_path,
             path=p["path"],
         )
+    if name == "jidra_get_implementations":
+        _log_session_call(str(graph_dir), name, p.get("interface"))
+        return _maybe_add_stale_hint(
+            engine().get_implementations(
+                p["interface"],
+                transitive=p.get("transitive", False),
+                limit=p.get("limit", 30),
+                detail=p.get("detail", "summary"),
+            ),
+            graph_dir,
+        )
+    if name == "jidra_get_class_members":
+        _log_session_call(str(graph_dir), name, p.get("class_selector"))
+        return _maybe_add_stale_hint(
+            engine().get_class_members(p["class_selector"]), graph_dir
+        )
+    if name == "jidra_find_callers":
+        _log_session_call(str(graph_dir), name, p.get("method"))
+        return _maybe_add_stale_hint(
+            engine().find_callers(p["method"], depth=p.get("depth", 1)), graph_dir
+        )
+    if name == "jidra_query_by_annotation":
+        _log_session_call(str(graph_dir), name, p.get("annotation"))
+        return _maybe_add_stale_hint(
+            engine().query_by_annotation(
+                p["annotation"],
+                kind=p.get("kind", "any"),
+                limit=p.get("limit", 30),
+                detail=p.get("detail", "summary"),
+            ),
+            graph_dir,
+        )
+    if name == "jidra_field_access":
+        _log_session_call(str(graph_dir), name, p.get("field") or p.get("method"))
+        return _maybe_add_stale_hint(
+            engine().field_access(field=p.get("field"), method=p.get("method")),
+            graph_dir,
+        )
     raise KeyError(f"unknown tool: {name}")
 
 
-# Tool names exposed by the server, for the daemon's tools/list reply.
+# Primary tier: lean, high-confidence grounding tools. Always visible.
+PRIMARY_TOOLS = [
+    "jidra_explore",
+    "jidra_get_method_source",
+    "jidra_find_callers",
+    "jidra_get_agent_flowjidra_get_implementations",
+    "jidra_analyze_stack_trace",
+]
+
+# Full tool set exposed by the server.
 TOOL_NAMES = [
     "jidra_get_method_context",
     "jidra_get_flow",
@@ -561,6 +611,15 @@ TOOL_NAMES = [
     "jidra_get_docs",
     "jidra_index_docs",
 ]
+
+
+def visible_tool_names() -> list[str]:
+    """Return visible tools: primary tier by default, full set if JIDRA_FULL_TOOLS=1."""
+    import os
+
+    if os.environ.get("JIDRA_FULL_TOOLS") == "1":
+        return TOOL_NAMES
+    return PRIMARY_TOOLS
 
 
 def build_mcp(
@@ -611,9 +670,11 @@ def build_mcp(
         graph_path: str | None = None,
         depth: int | None = None,
         top_n: int | None = None,
+        detail: str = "summary",
     ) -> dict:
         """Get ranked downstream call graph for a method from the local code graph.
-        depth/top_n default to the graph's budget tier when omitted."""
+        depth/top_n default to the graph's budget tier when omitted.
+        detail: 'summary' (default, fast) or 'full' (includes all nodes/edges/flows)."""
         return invoke(
             "jidra_get_flow",
             {
@@ -621,6 +682,7 @@ def build_mcp(
                 "graph_path": graph_path,
                 "depth": depth,
                 "top_n": top_n,
+                "detail": detail,
             },
         )
 
@@ -843,6 +905,79 @@ def build_mcp(
         )
 
     @mcp.tool()
+    def jidra_get_implementations(
+        interface: str,
+        transitive: bool = False,
+        graph_path: str | None = None,
+        limit: int = 30,
+        detail: str = "summary",
+    ) -> dict:
+        """List ALL concrete implementations of interface/abstract class in ONE call.
+        Use instead of repeated searches asking 'implements X', 'how many impls', 'what classes handle interface'.
+        limit: max implementations to return (default 30); detail: 'summary' or 'full'.
+        """
+        return invoke(
+            "jidra_get_implementations",
+            {
+                "interface": interface,
+                "transitive": transitive,
+                "graph_path": graph_path,
+                "limit": limit,
+                "detail": detail,
+            },
+        )
+
+    @mcp.tool()
+    def jidra_get_class_members(
+        class_selector: str,
+        graph_path: str | None = None,
+    ) -> dict:
+        """List field and method members of a class in one call.
+        Use before calling get_method_source repeatedly on same class.
+        """
+        return invoke(
+            "jidra_get_class_members",
+            {"class_selector": class_selector, "graph_path": graph_path},
+        )
+
+    @mcp.tool()
+    def jidra_query_by_annotation(
+        annotation: str,
+        kind: str = "any",
+        graph_path: str | None = None,
+        limit: int = 30,
+        detail: str = "summary",
+    ) -> dict:
+        """Find classes/methods by annotation. kind: 'class', 'method', or 'any'.
+        Example queries: query_by_annotation("RestController"), query_by_annotation("async_task", kind="method").
+        limit: max results per kind to return (default 30); detail: 'summary' or 'full'.
+        """
+        return invoke(
+            "jidra_query_by_annotation",
+            {
+                "annotation": annotation,
+                "kind": kind,
+                "graph_path": graph_path,
+                "limit": limit,
+                "detail": detail,
+            },
+        )
+
+    @mcp.tool()
+    def jidra_field_access(
+        field: str | None = None,
+        method: str | None = None,
+        graph_path: str | None = None,
+    ) -> dict:
+        """Find field access patterns. Query by field name or method signature.
+        Field format: "ClassName#fieldName" or just "fieldName" to search all classes.
+        Example: field_access(field="Cache#config"), field_access(method="processData(String)")."""
+        return invoke(
+            "jidra_field_access",
+            {"field": field, "method": method, "graph_path": graph_path},
+        )
+
+    @mcp.tool()
     def jidra_reindex(
         graph_path: str | None = None,
         codebase: str | None = None,
@@ -902,6 +1037,16 @@ def build_mcp(
             "jidra_index_docs",
             {"path": path, "graph_path": graph_path},
         )
+
+    # Honor the tool-surface trim in direct mode too: FastMCP advertises every
+    # @mcp.tool() decorator, so prune the ones hidden by the primary-tier gate
+    # (set JIDRA_FULL_TOOLS=1 to expose all). Keeps direct mode in sync with the
+    # daemon's tools/list (see visible_tool_names).
+    visible = set(visible_tool_names())
+    tool_mgr = mcp._tool_manager
+    for tool_name in list(tool_mgr._tools):
+        if tool_name not in visible:
+            tool_mgr.remove_tool(tool_name)
 
     return mcp
 

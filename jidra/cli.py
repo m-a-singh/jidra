@@ -1804,6 +1804,13 @@ def _up() -> None:
     if not graph_validated_path.exists():
         raise SystemExit(f"Graph build failed: {graph_validated_path} not created")
 
+    docs_source = _detect_docs_source(repo)
+    if docs_source is not None:
+        index_docs = _prompt_yn(f"Index docs from {docs_source}?", True)
+        if index_docs:
+            n_docs = _index_docs_path(graph_validated_path, docs_source)
+            ui.success(f"Indexed {n_docs} doc file(s).")
+
     ui.section(2, 2, "MCP configuration")
 
     settings_path = repo / ".mcp.json"
@@ -2064,6 +2071,86 @@ def _up() -> None:
         _print_manual_mcp(manual_mcp_lines)
 
     _write_claude_md(repo, langs)
+
+
+def _index_docs_path(
+    db_path: Path,
+    path: Path,
+    extensions: tuple[str, ...] = (".md", ".mdx", ".txt", ".pdf"),
+) -> int:
+    """Index every matching file under `path` into the doc graph at `db_path`.
+
+    Shared by the `index-docs` subcommand and the `jidra up` auto-detect
+    prompt so both go through identical chunking/linking/telemetry logic.
+    Returns the number of files indexed.
+    """
+    from . import ui
+    from .doc_indexer import index_document, extract_graph_names
+    from . import doc_store
+    from .telemetry import record_doc_index_event
+
+    conn = graph_store.connect(db_path)
+    doc_store.migrate(conn)
+    graph = graph_store.load_graph(conn, variant="main")
+    class_names, method_names = extract_graph_names(graph)
+
+    files = sorted(path.rglob("*") if path.is_dir() else [path])
+    files = [
+        f
+        for f in files
+        if f.is_file()
+        and ((path.is_dir() and f.suffix.lower() in extensions) or not path.is_dir())
+    ]
+    if not files:
+        return 0
+
+    ui.info(f"Docs source: {path}  |  Files: {len(files)}")
+    for f in files:
+        size = f.stat().st_size
+        t0 = time.time()
+        try:
+            n_chunks = index_document(conn, str(f), class_names, method_names)
+            elapsed_ms = int((time.time() - t0) * 1000)
+            linked_set: set[str] = set()
+            for row in conn.execute(
+                "SELECT linked_classes FROM doc_chunks WHERE source_path=?",
+                (str(f),),
+            ).fetchall():
+                linked_set.update(x for x in row[0].split(",") if x)
+            source_type = f.suffix.lstrip(".").lower() or "file"
+            if source_type in ("md", "mdx", "txt"):
+                source_type = "markdown"
+            record_doc_index_event(
+                str(f), source_type, n_chunks, len(linked_set), size, elapsed_ms
+            )
+            ui.success(
+                f"{f.name}: {n_chunks} chunks, {len(linked_set)} classes linked ({elapsed_ms}ms)"
+            )
+        except Exception as e:
+            record_doc_index_event(
+                str(f), "unknown", 0, 0, size, 0, status="error", error=str(e)
+            )
+            ui.error(f"{f.name}: {e}")
+
+    doc_graph_out = _write_doc_graph(db_path.parent, db_path)
+    if doc_graph_out:
+        ui.success(f"Doc graph: file://{doc_graph_out}")
+    return len(files)
+
+
+def _detect_docs_source(repo: Path) -> Path | None:
+    """Best-effort guess at a docs directory/file worth indexing.
+
+    Prefers a `docs/` directory over a bare README so `jidra up` defaults to
+    the richer source when both exist."""
+    docs_dir = repo / "docs"
+    if docs_dir.is_dir() and any(docs_dir.rglob("*.md")):
+        return docs_dir
+    for name in ("README.md", "readme.md"):
+        readme = repo / name
+        if readme.is_file():
+            return readme
+    return None
 
 
 def _write_doc_graph(output_dir: Path, db_path: Path) -> Path | None:
@@ -2895,9 +2982,6 @@ def main() -> None:
 
     if args.command == "index-docs":
         from . import ui
-        from .doc_indexer import index_document, extract_graph_names
-        from . import doc_store
-        from .telemetry import record_doc_index_event
 
         if args.path.startswith(("http://", "https://")):
             raise SystemExit(
@@ -2905,57 +2989,15 @@ def main() -> None:
             )
 
         db_path = _resolve_graph_db_path(args.graph)
-        conn = graph_store.connect(db_path)
-        doc_store.migrate(conn)
-        graph = graph_store.load_graph(conn, variant="main")
-        class_names, method_names = extract_graph_names(graph)
-
         p = Path(args.path)
-        exts = tuple(args.extensions)
-        files = sorted(p.rglob("*") if p.is_dir() else [p])
-        files = [
-            f
-            for f in files
-            if f.is_file()
-            and ((p.is_dir() and f.suffix.lower() in exts) or not p.is_dir())
-        ]
-
-        if not files:
-            raise SystemExit(f"No matching files found in {p}")
+        if not p.exists():
+            raise SystemExit(f"Path does not exist: {p}")
 
         ui.banner("JIDRA Doc Indexer")
-        ui.info(f"Source: {p}  |  Files: {len(files)}  |  Graph: {db_path.name}")
-
-        for f in files:
-            size = f.stat().st_size
-            t0 = time.time()
-            try:
-                n_chunks = index_document(conn, str(f), class_names, method_names)
-                elapsed_ms = int((time.time() - t0) * 1000)
-                linked_set: set[str] = set()
-                for row in conn.execute(
-                    "SELECT linked_classes FROM doc_chunks WHERE source_path=?",
-                    (str(f),),
-                ).fetchall():
-                    linked_set.update(x for x in row[0].split(",") if x)
-                source_type = f.suffix.lstrip(".").lower() or "file"
-                if source_type in ("md", "mdx", "txt"):
-                    source_type = "markdown"
-                record_doc_index_event(
-                    str(f), source_type, n_chunks, len(linked_set), size, elapsed_ms
-                )
-                ui.success(
-                    f"{f.name}: {n_chunks} chunks, {len(linked_set)} classes linked ({elapsed_ms}ms)"
-                )
-            except Exception as e:
-                record_doc_index_event(
-                    str(f), "unknown", 0, 0, size, 0, status="error", error=str(e)
-                )
-                ui.error(f"{f.name}: {e}")
-
-        doc_graph_out = _write_doc_graph(db_path.parent, db_path)
-        if doc_graph_out:
-            ui.success(f"Doc graph: file://{doc_graph_out}")
+        ui.info(f"Graph: {db_path.name}")
+        n = _index_docs_path(db_path, p, tuple(args.extensions))
+        if n == 0:
+            raise SystemExit(f"No matching files found in {p}")
         return
 
     if args.command == "history":
