@@ -113,10 +113,18 @@ export function GraphViewer({ repoPath, outputPath }: RepoState) {
   const buildNetwork = useCallback((rawNodes: object[], rawEdges: object[]) => {
     if (!nodesRef.current || !edgesRef.current || !networkRef.current) return;
 
-    rawNodesRef.current = rawNodes;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const seenIds = new Set<string>();
+    const dedupedNodes = (rawNodes as any[]).filter((n: any) => {
+      if (seenIds.has(n.id)) return false;
+      seenIds.add(n.id);
+      return true;
+    });
+
+    rawNodesRef.current = dedupedNodes;
     rawEdgesRef.current = rawEdges;
 
-    const largeGraph = rawNodes.length > 500;
+    const largeGraph = dedupedNodes.length > 500;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const edgeData = (rawEdges as any[]).map((e: any, i: number) => ({
@@ -128,7 +136,7 @@ export function GraphViewer({ repoPath, outputPath }: RepoState) {
 
     nodesRef.current.clear();
     edgesRef.current.clear();
-    nodesRef.current.add(rawNodes);
+    nodesRef.current.add(dedupedNodes);
     edgesRef.current.add(edgeData);
 
     networkRef.current.setOptions({
@@ -140,6 +148,7 @@ export function GraphViewer({ repoPath, outputPath }: RepoState) {
 
   async function load() {
     if (!repoPath) { setError("Repository not indexed. Go to IDX tab and run the pipeline first."); return; }
+    if (loading) return;
     setLoading(true);
     setLoadMsg("fetching graph data…");
     setError(null);

@@ -74,8 +74,23 @@ async def call_tool(req: CallRequest) -> dict:
 
 
 @router.get("/session-log")
-async def session_log(repo_path: str, limit: int = 100) -> list[dict]:
-    log_path = Path(repo_path) / ".jidra" / "session_log.jsonl"
+async def session_log(
+    repo_path: str, output_path: str | None = None, limit: int = 100
+) -> list[dict]:
+    from ...cli import _repo_output_dir
+    from ...graph.graph_store import resolve_graph_db_path
+    from ...server.mcp_server import _resolve_graph_dir
+
+    if output_path:
+        graph_path = output_path
+    else:
+        graph_path = str(resolve_graph_db_path(_repo_output_dir(Path(repo_path))))
+    graph_dir = _resolve_graph_dir(graph_path)
+
+    log_path = graph_dir / ".jidra" / "session_log.jsonl"
+    if not log_path.exists():
+        # fall back to legacy location for entries logged before this fix
+        log_path = Path(repo_path) / ".jidra" / "session_log.jsonl"
     if not log_path.exists():
         return []
     lines = log_path.read_text().splitlines()

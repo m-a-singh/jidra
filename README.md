@@ -137,8 +137,6 @@ Pick a repository — the same picker drives every tab:
 
 <p align="center">
   <img src="docs/assets/jidra-ui-graph-overview.jpg" alt="JIDRA UI — graph overview" width="800">
-  <img src="docs/assets/jidra-ui-graph-search.jpg" alt="JIDRA UI — graph method search dropdown" width="800">
-  <img src="docs/assets/jidra-ui-graph-inspector.jpg" alt="JIDRA UI — graph node inspector with callers" width="800">
 </p>
 
 **SQL** — schema browser plus a real query editor against `graph.db`:
@@ -153,12 +151,16 @@ Pick a repository — the same picker drives every tab:
   <img src="docs/assets/jidra-ui-mcp-explore.jpg" alt="JIDRA UI — MCP tool call (jidra_explore) with live result" width="800">
 </p>
 
+**TRC** — run flow/trace/context directly against the graph, no MCP plumbing in the way:
+
+<p align="center">
+  <img src="docs/assets/jidra-ui-explore-flow.jpg" alt="JIDRA UI — TRC flow result for a selected method" width="800">
+</p>
+
 **DOC** — doc-to-code linkage graph; click a chunk or doc to see exactly which classes it links to:
 
 <p align="center">
   <img src="docs/assets/jidra-ui-doc-graph-overview.jpg" alt="JIDRA UI — doc graph overview" width="800">
-  <img src="docs/assets/jidra-ui-doc-graph-physics.jpg" alt="JIDRA UI — doc graph force layout settling" width="800">
-  <img src="docs/assets/jidra-ui-doc-graph-inspector.jpg" alt="JIDRA UI — doc graph inspector showing linked classes" width="800">
 </p>
 
 **HIST** — telemetry is top-level, not scoped to one repo: stat cards and charts across everything you've indexed:

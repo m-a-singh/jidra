@@ -93,7 +93,7 @@ export const api = {
     tools: (repo_path?: string) => get<{ name: string; description: string; input_schema: { properties?: Record<string, { title?: string; type?: string; anyOf?: { type: string }[]; default?: unknown; description?: string }>; required?: string[] } }[]>("/mcp/tools", repo_path ? { repo_path } : undefined),
     call: (body: { tool: string; params: Record<string, unknown>; repo_path?: string; output_path?: string }) =>
       post<{ result: unknown }>("/mcp/call", body),
-    sessionLog: (repo_path: string, limit = 100) => get<{ tool_name: string; method_id?: string; timestamp: string }[]>("/mcp/session-log", { repo_path, limit }),
+    sessionLog: (repo_path: string, output_path?: string, limit = 100) => get<{ tool_name: string; method_id?: string; timestamp: string }[]>("/mcp/session-log", { repo_path, output_path, limit }),
   },
 
   explore: {

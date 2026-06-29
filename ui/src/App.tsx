@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cn } from "./lib/utils";
 import { useRepo } from "./hooks/useRepo";
 import { HomePage } from "./components/HomePage";
 import { RepoSelector } from "./components/RepoSelector";
@@ -38,13 +39,23 @@ export default function App() {
   }
 
   return (
-    <div className="layout">
-      <aside className="sidebar">
-        <div className="sidebar-logo" onClick={() => { setTab(null); repo.setRepoPath(""); }} style={{ cursor: "pointer" }}>J</div>
+    <div className="flex h-screen w-screen overflow-hidden">
+      <aside className="w-14 min-w-14 bg-surface border-r border-border flex flex-col items-center pt-2.5 gap-0.5">
+        <div
+          className="w-[30px] h-[30px] flex items-center justify-center text-accent text-sm font-semibold tracking-tight mb-3.5 border border-accent-dim bg-accent-subtle rounded-md cursor-pointer"
+          onClick={() => { setTab(null); repo.setRepoPath(""); }}
+        >
+          J
+        </div>
         {NAV.map((n) => (
           <div
             key={n.id}
-            className={`nav-item${tab === n.id ? " active" : ""}`}
+            className={cn(
+              "w-10 h-9 flex flex-col items-center justify-center cursor-pointer text-xs font-medium tracking-wide rounded-md transition-colors select-none",
+              tab === n.id
+                ? "text-accent bg-accent-subtle font-semibold"
+                : "text-text-dim hover:text-text-muted hover:bg-accent-subtle"
+            )}
             onClick={() => setTab(n.id)}
             title={n.title}
           >
@@ -52,10 +63,10 @@ export default function App() {
           </div>
         ))}
       </aside>
-      <div className="main">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <RepoSelector {...repo} />
-        <div className="panel">
-          {tab === "index"   && <IndexPanel {...repo} />}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {tab === "index"   && <IndexPanel {...repo} onNavigate={(t) => setTab(t as Tab)} />}
           {tab === "graph"   && <GraphViewer {...repo} />}
           {tab === "sql"     && <SqlEditor {...repo} />}
           {tab === "mcp"     && <McpInspector {...repo} />}
