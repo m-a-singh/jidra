@@ -2,7 +2,8 @@ import time
 from pathlib import Path
 
 import jidra.cli as cli
-from jidra import graph_store, reindexer
+from jidra.engine import reindexer
+from jidra.graph import graph_store
 
 
 def _record_keys(graph) -> dict:
@@ -350,7 +351,7 @@ public class UserService {
     assert result["change_type"] == "callsite_change"
 
     graph = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="main"
+        graph_store.connect(output / "graph.db"), variant="validated"
     )
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch = method_by_sig["com.example.UserService#fetch(String)"]

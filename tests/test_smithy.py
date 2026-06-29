@@ -8,11 +8,11 @@ searched in the wrong text span) that a hand-written toy fixture wouldn't
 have surfaced.
 """
 
-from jidra import graph_store
-from jidra.engine import JidraEngine
+from jidra.graph import graph_store
+from jidra.engine.engine import JidraEngine
 from jidra.models import ClassEntry
-from jidra.smithy_bridge import link_operations
-from jidra.smithy_extractor import parse_smithy_text
+from jidra.smithy.smithy_bridge import link_operations
+from jidra.extractors.smithy_extractor import parse_smithy_text
 
 BEER_SERVICE_SMITHY = """
 $version: "2"
@@ -104,7 +104,7 @@ class TestSmithyParsing:
         assert beer_member.required is True
 
     def test_no_smithy_files_yields_nothing(self, tmp_path):
-        from jidra.smithy_extractor import build_smithy_graph
+        from jidra.extractors.smithy_extractor import build_smithy_graph
 
         shapes, operations = build_smithy_graph(tmp_path)
         assert shapes == []

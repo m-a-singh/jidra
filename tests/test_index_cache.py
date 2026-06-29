@@ -2,7 +2,7 @@ import time
 from pathlib import Path
 
 import jidra.cli as cli
-from jidra.cache import cache_path, load_cache
+from jidra.utils.cache import cache_path, load_cache
 
 
 def _make_codebase(tmp_path: Path) -> Path:
@@ -31,8 +31,8 @@ def test_first_run_builds_graph_and_writes_cache(tmp_path, monkeypatch):
     cli._index(str(codebase), str(output), _quiet=True)
 
     assert calls == [1]
-    assert cache_path(codebase).exists()
-    cached = load_cache(codebase)
+    assert cache_path(output).exists()
+    cached = load_cache(output)
     assert "fingerprint" in cached
 
 

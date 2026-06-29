@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 
 from jidra.models import Graph, MethodEntry, ClassEntry, CallSite, ResolvedCallEdge
-from jidra import graph_store
+from jidra.graph import graph_store
 
 
 @pytest.fixture
@@ -137,15 +137,10 @@ def simple_test_graph():
 
 @pytest.fixture
 def test_graph_file(simple_test_graph, tmp_path):
-    """Write test graph to a temporary graph.db and return its path.
-
-    Written as `main` (auto-split) — none of the fixture classes carry Spring
-    annotations, so the derived "validated" view (read by `loaded_test_graph`
-    and by JidraEngine's default) is identical to `main` with no filtering.
-    """
+    """Write test graph to a temporary graph.db and return its path."""
     db_path = tmp_path / "graph.db"
     conn = graph_store.connect(db_path)
-    graph_store.save_full_graph(conn, simple_test_graph)
+    graph_store.save_full_graph(conn, simple_test_graph, variant="validated")
     return str(db_path)
 
 

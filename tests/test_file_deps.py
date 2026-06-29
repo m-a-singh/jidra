@@ -4,7 +4,7 @@ The shared fixture wires TestController -> TestService -> TestRepository, each
 in its own file, with resolved call edges between them.
 """
 
-from jidra.engine import JidraEngine
+from jidra.engine.engine import JidraEngine
 
 CONTROLLER = "src/main/java/com/example/TestController.java"
 SERVICE = "src/main/java/com/example/TestService.java"

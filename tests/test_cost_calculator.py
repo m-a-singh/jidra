@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from jidra.cost_calculator import (
+from jidra.llm.cost_calculator import (
     CostCalculator,
     CostBreakdown,
     GraphStats,
