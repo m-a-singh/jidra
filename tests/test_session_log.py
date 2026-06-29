@@ -1,6 +1,6 @@
 import json
 
-from jidra.mcp_server import _log_session_call
+from jidra.server.mcp_server import _log_session_call
 
 
 def test_logs_one_valid_json_line_per_call(tmp_path):

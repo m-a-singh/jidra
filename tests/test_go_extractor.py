@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from jidra.go_extractor import build_go_graph, build_go_graph_for_files
+from jidra.extractors.go_extractor import build_go_graph, build_go_graph_for_files
 
 
 GO_FIXTURE = """\

@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("tree_sitter_typescript")
 
-from jidra.ts_treesitter import build_ts_graph_treesitter  # noqa: E402
+from jidra.extractors.ts_treesitter import build_ts_graph_treesitter  # noqa: E402
 
 
 def _build(tmp_path: Path, files: dict[str, str]):

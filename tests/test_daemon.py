@@ -12,10 +12,11 @@ import time
 
 import pytest
 
-from jidra import graph_store, mcp_server
-from jidra.daemon import JidraDaemon, socket_path
+from jidra.graph import graph_store
+from jidra.server import mcp_server
+from jidra.engine.daemon import JidraDaemon, socket_path
 from jidra.models import ClassEntry, Graph, MethodEntry
-from jidra.proxy import JidraProxy
+from jidra.server.proxy import JidraProxy
 
 
 @pytest.fixture

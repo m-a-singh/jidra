@@ -1,6 +1,6 @@
 """Regression tests for flow stitcher."""
 
-from jidra.flow_stitcher import stitch_flow
+from jidra.flow.flow_stitcher import stitch_flow
 
 
 class TestStitchFlow:
@@ -47,10 +47,11 @@ class TestStitchFlow:
     def test_stitch_flow_edges_structure(self, loaded_test_graph, simple_test_graph):
         """Test edge structure in stitched flow."""
         entry_method = simple_test_graph.methods[0]
-        result = stitch_flow(loaded_test_graph, entry_method)
+        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
 
         edges = result.get("edges", [])
         assert isinstance(edges, list)
+        assert len(edges) > 0
 
         for edge in edges:
             assert "from" in edge
@@ -150,7 +151,7 @@ class TestStitchFlow:
         result = stitch_flow(loaded_test_graph, entry_method)
 
         stopped = result.get("stopped_paths", [])
-        # Just verify structure is valid; stopped paths may include "cycle" reasons if they occur
+        # Just verify structure is valid
         assert isinstance(stopped, list)
 
     def test_stitch_flow_uncertain_edges(self, loaded_test_graph, simple_test_graph):

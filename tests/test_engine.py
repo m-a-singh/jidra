@@ -1,6 +1,6 @@
 """Regression tests for JidraEngine public API."""
 
-from jidra.engine import JidraEngine
+from jidra.engine.engine import JidraEngine
 
 
 class TestEngineInit:
