@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { RepoState } from "../hooks/useRepo";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
 
 type Status = { indexed: boolean; variant?: string; node_count?: number; class_count?: number; validated?: boolean; doc_count?: number };
 
@@ -31,39 +33,32 @@ export function RepoSelector({ repoPath, outputPath, setRepoPath, setOutputPath 
   }
 
   return (
-    <div className="topbar">
-      <span className="topbar-label">repo</span>
-      <button
-        className="btn"
-        onClick={handlePick}
-        disabled={picking}
-        style={{ padding: "3px 10px", fontSize: "var(--sz-xs)" }}
-        title="Browse for repository folder"
-      >
+    <div className="h-11 min-h-11 bg-surface border-b border-border flex items-center px-3.5 gap-2.5">
+      <span className="text-xs text-text-dim tracking-widest uppercase">repo</span>
+      <Button variant="default" size="sm" onClick={handlePick} disabled={picking} title="Browse for repository folder">
         {picking ? "…" : "browse"}
-      </button>
+      </Button>
       <input
-        className="topbar-input"
+        className="bg-transparent border-0 border-b border-border-mid text-text text-sm py-0.5 outline-none w-[340px] tracking-tight transition-colors focus:border-accent-dim placeholder:text-text-faint"
         placeholder="/path/to/repository"
         value={repoPath}
         onChange={(e) => setRepoPath(e.target.value)}
         spellCheck={false}
       />
-      <div className="topbar-sep" />
-      <span className="topbar-label">out</span>
+      <div className="w-px h-3.5 bg-border-mid" />
+      <span className="text-xs text-text-dim tracking-widest uppercase">out</span>
       <input
-        className="topbar-input"
-        style={{ width: 200 }}
+        className="bg-transparent border-0 border-b border-border-mid text-text text-sm py-0.5 outline-none w-[200px] tracking-tight transition-colors focus:border-accent-dim placeholder:text-text-faint"
         placeholder="output (optional)"
         value={outputPath}
         onChange={(e) => setOutputPath(e.target.value)}
         spellCheck={false}
       />
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
       {status && (
-        <div className="status-badge">
-          <div className="status-dot" style={{ background: status.indexed ? "var(--success)" : "var(--text-faint)" }} />
-          <span style={{ color: status.indexed ? "var(--success)" : "var(--text-faint)" }}>
+        <div className="text-xs tracking-wide flex items-center gap-1.5">
+          <div className={cn("w-1.5 h-1.5 rounded-full", status.indexed ? "bg-success" : "bg-text-faint")} />
+          <span className={status.indexed ? "text-success" : "text-text-faint"}>
             {status.indexed
               ? `${status.node_count?.toLocaleString()} methods · ${status.class_count?.toLocaleString()} classes${status.doc_count ? ` · ${status.doc_count} doc${status.doc_count === 1 ? "" : "s"}` : ""} · ${status.validated ? "validated" : "main"}`
               : "not indexed — index first"}

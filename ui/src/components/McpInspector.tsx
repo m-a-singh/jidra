@@ -50,8 +50,8 @@ export function McpInspector({ repoPath, outputPath }: RepoState) {
 
   useEffect(() => {
     if (!repoPath) return;
-    api.mcp.sessionLog(repoPath).then(setLog).catch(() => {});
-  }, [repoPath]);
+    api.mcp.sessionLog(repoPath, outputPath || undefined).then(setLog).catch(() => {});
+  }, [repoPath, outputPath]);
 
   function selectTool(t: Tool) {
     setSelected(t);
@@ -94,7 +94,7 @@ export function McpInspector({ repoPath, outputPath }: RepoState) {
         output_path: outputPath || undefined,
       });
       setResult(JSON.stringify(res.result, null, 2));
-      if (repoPath) api.mcp.sessionLog(repoPath).then(setLog).catch(() => {});
+      if (repoPath) api.mcp.sessionLog(repoPath, outputPath || undefined).then(setLog).catch(() => {});
     } catch (e) {
       const msg = String(e).replace("Error: ", "");
       if (msg.includes("not found") || msg.includes("404") || msg.includes("No such file")) {
@@ -224,7 +224,26 @@ export function McpInspector({ repoPath, outputPath }: RepoState) {
           {log.length === 0
             ? <div className="empty-state">{repoPath ? "No tool calls yet." : "Run the pipeline first."}</div>
             : log.map((e, i) => (
-              <div key={i} className="log-entry">
+              <div
+                key={i}
+                className="log-entry"
+                style={{ cursor: "pointer" }}
+                title={`${e.tool_name} — ${new Date(e.timestamp).toLocaleString()}\nclick to open this tool`}
+                onClick={() => {
+                  const t = tools.find((t) => t.name === e.tool_name);
+                  if (!t) return;
+                  selectTool(t);
+                  if (e.method_id) {
+                    const propKeys = Object.keys(t.input_schema?.properties ?? {});
+                    const required = t.input_schema?.required ?? [];
+                    const primaryKey = required[0] ?? propKeys[0];
+                    if (primaryKey) {
+                      setParamValues((v) => ({ ...v, [primaryKey]: e.method_id! }));
+                      setNulled((n) => ({ ...n, [primaryKey]: false }));
+                    }
+                  }
+                }}
+              >
                 <div className="log-entry-tool">{e.tool_name}</div>
                 {e.method_id && <div className="log-entry-method">{e.method_id}</div>}
                 <div className="log-entry-time">{new Date(e.timestamp).toLocaleTimeString()}</div>

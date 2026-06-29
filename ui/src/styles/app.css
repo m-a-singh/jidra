@@ -1,32 +1,34 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+}
 
 :root {
-  --bg:           #060810;
-  --surface:      #0c0f1a;
-  --surface-2:    #131722;
-  --surface-3:    #1a2030;
+  --bg:           #0a0a0b;
+  --surface:      #111113;
+  --surface-2:    #18181b;
+  --surface-3:    #202023;
 
-  --border:       #182030;
-  --border-mid:   #243048;
-  --border-strong:#304060;
+  --border:       #27272a;
+  --border-mid:   #2e2e33;
+  --border-strong:#3f3f46;
 
-  --cyan:         #00d4b8;
-  --cyan-bright:  #14f0dc;
-  --cyan-dim:     #005e52;
-  --cyan-glow:    rgba(0, 212, 184, 0.07);
-  --cyan-subtle:  rgba(0, 212, 184, 0.04);
+  --cyan:         #818cf8;
+  --cyan-bright:  #a5b4fc;
+  --cyan-dim:     #4338ca;
+  --cyan-glow:    rgba(129, 140, 248, 0.08);
+  --cyan-subtle:  rgba(129, 140, 248, 0.06);
 
-  --text:         #cce0f8;
-  --text-muted:   #7a9ab8;
-  --text-faint:   #5d7c9c;
-  --text-dim:     #3a5070;
-  --text-bright:  #d8eaf8;
+  --text:         #e4e4e7;
+  --text-muted:   #a1a1aa;
+  --text-faint:   #71717a;
+  --text-dim:     #52525b;
+  --text-bright:  #fafafa;
 
-  --error:        #ff3d6e;
-  --warn:         #f0a020;
-  --success:      #20c850;
+  --error:        #f87171;
+  --warn:         #fbbf24;
+  --success:      #4ade80;
 
   --z-dropdown:   10;
   --z-sticky:     20;
@@ -38,7 +40,8 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 
-  --font: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   --sz-xs: 13px;
   --sz-sm: 14px;
   --sz-md: 14px;
@@ -474,7 +477,7 @@ body {
 .empty-state { padding: 20px 16px; font-size: var(--sz-sm); color: var(--text-faint); line-height: 1.7; }
 
 /* ── CODEMIRROR ── */
-.cm-editor { height: 100%; background: var(--bg) !important; font-family: var(--font) !important; font-size: var(--sz-sm) !important; }
+.cm-editor { height: 100%; background: var(--bg) !important; font-family: var(--font-mono) !important; font-size: var(--sz-sm) !important; }
 .cm-editor .cm-scroller { overflow: auto; }
 .cm-editor.cm-focused { outline: none; }
 .cm-editor .cm-gutters { background: var(--surface) !important; border-right: 1px solid var(--border) !important; color: var(--text-dim) !important; }
