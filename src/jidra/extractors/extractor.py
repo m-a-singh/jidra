@@ -825,6 +825,28 @@ def _infer_receiver_type_raw(
     return symbols.lookup(receiver_text)
 
 
+LITERAL_NODE_TYPES = {
+    "string_literal": "java.lang.String",
+    "character_literal": "char",
+    "decimal_integer_literal": "int",
+    "hex_integer_literal": "int",
+    "octal_integer_literal": "int",
+    "binary_integer_literal": "int",
+    "decimal_floating_point_literal": "double",
+    "hex_floating_point_literal": "double",
+    "true": "boolean",
+    "false": "boolean",
+    "null_literal": "null",
+}
+
+
+def _infer_argument_type(arg_node: Node, source: bytes, symbols: SymbolTable) -> str | None:
+    if arg_node.type == "identifier":
+        arg_type, _ = symbols.lookup(_text(arg_node, source))
+        return arg_type
+    return LITERAL_NODE_TYPES.get(arg_node.type)
+
+
 def _extract_callsite(
     invocation: Node,
     source: bytes,
@@ -832,10 +854,12 @@ def _extract_callsite(
     file_path: str,
     receiver_type_raw: str | None,
     receiver_source: str | None,
+    symbols: SymbolTable,
 ) -> CallSite:
     callee_name = "unknown"
     receiver = None
     args_count = 0
+    argument_types: list[str | None] = []
 
     if invocation.type == "method_reference":
         # Structure: <expression> "::" (<identifier> | "new")
@@ -858,9 +882,13 @@ def _extract_callsite(
 
         arguments = invocation.child_by_field_name("arguments")
         if arguments:
-            args_count = sum(
-                1 for c in arguments.children if c.type not in {",", "(", ")"}
-            )
+            arg_nodes = [
+                c for c in arguments.children if c.type not in {",", "(", ")"}
+            ]
+            args_count = len(arg_nodes)
+            argument_types = [
+                _infer_argument_type(a, source, symbols) for a in arg_nodes
+            ]
 
     line = invocation.start_point[0] + 1
     column = invocation.start_point[1] + 1
@@ -879,6 +907,7 @@ def _extract_callsite(
         receiver_type_raw=receiver_type_raw,
         receiver_resolution_source=receiver_source,
         receiver_type=receiver_type_raw,
+        argument_types=argument_types,
     )
 
 
@@ -1022,6 +1051,7 @@ def _extract_methods(
                         cls.file_path,
                         receiver_type_raw,
                         receiver_source,
+                        symbols,
                     )
                 )
 
@@ -1380,7 +1410,39 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         def _arity_filter(ms: list[MethodEntry]) -> list[MethodEntry]:
             if call.argument_count < 0:
                 return ms
-            return [m for m in ms if len(m.parameter_types) == call.argument_count]
+            arity_matches = [
+                m for m in ms if len(m.parameter_types) == call.argument_count
+            ]
+            return _type_filter(arity_matches)
+
+        # Narrows arity-matched candidates further using call.argument_types,
+        # when we have at least one inferred argument type to go on. Falls
+        # back to the arity-only list if the type filter would empty it out
+        # (incomplete/incorrect inference must never make resolution worse).
+        def _type_filter(ms: list[MethodEntry]) -> list[MethodEntry]:
+            if len(call.argument_types) != call.argument_count:
+                return ms
+            if not any(t is not None for t in call.argument_types):
+                return ms
+
+            def _short(t: str) -> str:
+                return _strip_generic(t).split(".")[-1]
+
+            narrowed = []
+            for m in ms:
+                ok = True
+                for i, arg_type in enumerate(call.argument_types):
+                    if arg_type is None:
+                        continue
+                    if i >= len(m.parameter_types):
+                        ok = False
+                        break
+                    if _short(arg_type) != _short(m.parameter_types[i]):
+                        ok = False
+                        break
+                if ok:
+                    narrowed.append(m)
+            return narrowed or ms
 
         if call.receiver is None:
             same_class = methods_by_full_class_and_name.get(
@@ -1608,7 +1670,10 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
 
 
 def _build_java_graph(
-    codebase_root: Path, on_progress=None, extra_java_roots: list[Path] | None = None
+    codebase_root: Path,
+    on_progress=None,
+    extra_java_roots: list[Path] | None = None,
+    skip_folders: set[str] | None = None,
 ) -> Graph:
     all_classes: list[ClassEntry] = []
     all_methods: list[MethodEntry] = []
@@ -1616,7 +1681,11 @@ def _build_java_graph(
     all_calls: list[CallSite] = []
     all_inheritance_edges: list[InheritanceEdge] = []
 
-    file_paths = list(iter_java_files(codebase_root, extra_roots=extra_java_roots))
+    file_paths = list(
+        iter_java_files(
+            codebase_root, extra_roots=extra_java_roots, skip_folders=skip_folders
+        )
+    )
     for result in parallel_map(_extract_file, file_paths):
         all_classes.extend(result.classes)
         all_methods.extend(result.methods)
@@ -1657,6 +1726,7 @@ def build_graph(
     previous_graph: Graph | None = None,
     ts_backend: str = "auto",
     extra_java_roots: list[Path] | None = None,
+    skip_folders: set[str] | None = None,
 ) -> Graph:
     if changed_files is not None and previous_graph is not None:
         changed_paths_str = {str(p) for p in changed_files}
@@ -1709,13 +1779,22 @@ def build_graph(
         # "tsmorph" selects the Docker sidecar; auto/treesitter stay in-process.
         backend = "tsmorph" if ts_backend == "tsmorph" else ts_backend
         graphs.append(
-            build_ts_graph(codebase_root, on_progress=on_progress, backend=backend)
+            build_ts_graph(
+                codebase_root,
+                on_progress=on_progress,
+                backend=backend,
+                skip_folders=skip_folders,
+            )
         )
 
     if "python" in langs:
         from .py_extractor import build_py_graph
 
-        graphs.append(build_py_graph(codebase_root, on_progress=on_progress))
+        graphs.append(
+            build_py_graph(
+                codebase_root, on_progress=on_progress, skip_folders=skip_folders
+            )
+        )
 
     if "scala" in langs:
         from .scala_extractor import build_scala_graph
@@ -1726,11 +1805,18 @@ def build_graph(
     if "go" in langs:
         from .go_extractor import build_go_graph
 
-        graphs.append(build_go_graph(codebase_root, on_progress=on_progress))
+        graphs.append(
+            build_go_graph(
+                codebase_root, on_progress=on_progress, skip_folders=skip_folders
+            )
+        )
 
     if "java" in langs:
         java_graph = _build_java_graph(
-            codebase_root, on_progress=on_progress, extra_java_roots=extra_java_roots
+            codebase_root,
+            on_progress=on_progress,
+            extra_java_roots=extra_java_roots,
+            skip_folders=skip_folders,
         )
         for cls in java_graph.classes:
             cls.language = "java"

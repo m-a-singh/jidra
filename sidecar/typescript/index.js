@@ -682,47 +682,12 @@ function resolveCallEdges(records) {
 
 // ── JS/Frontend source root detection ────────────────────────────────────────
 
-function readPackageJson(root) {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-  } catch { return {}; }
-}
-
-function detectFramework(pkg) {
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-  if (deps["next"]) return "nextjs";
-  if (deps["@angular/core"]) return "angular";
-  if (deps["vue"]) return "vue";
-  if (deps["react"]) return "react";
-  if (deps["express"] || deps["fastify"] || deps["koa"] || deps["hapi"]) return "node";
-  return "unknown";
-}
-
-const FRAMEWORK_SOURCE_ROOTS = {
-  nextjs:  ["src", "app", "pages", "components", "lib", "hooks", "utils"],
-  react:   ["src", "components", "lib", "hooks", "utils", "pages"],
-  angular: ["src"],
-  vue:     ["src"],
-  node:    ["src", "lib", "routes", "controllers", "middleware", "api", "server"],
-  unknown: ["src", "lib", "app"],
-};
-
-function detectSourceRoots(root, framework) {
-  const candidates = FRAMEWORK_SOURCE_ROOTS[framework] || FRAMEWORK_SOURCE_ROOTS.unknown;
-  const roots = candidates
-    .map(c => path.join(root, c))
-    .filter(p => { try { return fs.statSync(p).isDirectory(); } catch { return false; } });
-
-  // Fallback: if no known source roots exist, check if root itself has source files
-  // Only accept root-level indexing for small repos (< 200 JS/TS files at root)
-  if (roots.length === 0) {
-    const rootFiles = fs.readdirSync(root)
-      .filter(f => /\.(js|ts|jsx|tsx|mjs)$/.test(f)).length;
-    if (rootFiles < 200) roots.push(root);
-  }
-
-  return roots;
-}
+const EXCLUDE_DIRS = new Set([
+  "node_modules", "dist", ".next", "out", "build", "coverage",
+  ".git", ".turbo", "vendor", "public", "__generated__", ".cache",
+  "storybook-static", ".vercel", ".output", ".nuxt", ".svelte-kit",
+  ".claude",
+]);
 
 const SKIP_FILE_PATTERNS = [
   /\.min\.(js|ts)$/,
@@ -751,70 +716,104 @@ function isSourceFile(filePath) {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-function findTsConfig(root) {
-  const candidates = [
-    path.join(root, "tsconfig.json"),
-    path.join(root, "tsconfig.app.json"),
-    path.join(root, "tsconfig.base.json"),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
+function findAllTsConfigs(root) {
+  const found = [];
+
+  function walk(dir) {
+    const direct = path.join(dir, "tsconfig.json");
+    if (fs.existsSync(direct)) found.push(direct);
+
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (!e.isDirectory() || EXCLUDE_DIRS.has(e.name)) continue;
+      walk(path.join(dir, e.name));
+    }
   }
-  return undefined;
+
+  walk(root);
+  return [...new Set(found)];
 }
 
 function main() {
-  const tsConfigPath = findTsConfig(repoRoot);
+  const tsConfigPaths = findAllTsConfigs(repoRoot);
 
-  const project = new Project({
-    tsConfigFilePath: tsConfigPath,
-    addFilesFromTsConfig: !!tsConfigPath,
-    skipAddingFilesFromTsConfig: !tsConfigPath,
-    compilerOptions: {
-      allowJs: true,
-      jsx: ts.JsxEmit.ReactJSX,
-      skipLibCheck: true,
-      noEmit: true,
-    },
-    skipFileDependencyResolution: false,
-  });
+  const sourceFiles = [];
+  const seenPaths = new Set();
 
-  if (!tsConfigPath) {
-    // No tsconfig — detect framework and index only known source roots
-    const pkg = readPackageJson(repoRoot);
-    const framework = detectFramework(pkg);
-    const sourceRoots = detectSourceRoots(repoRoot, framework);
+  if (tsConfigPaths.length > 0) {
+    process.stderr.write(
+      `[jidra-ts] Found ${tsConfigPaths.length} tsconfig(s): ${tsConfigPaths.map(p => path.relative(repoRoot, p)).join(", ")}\n`
+    );
 
-    process.stderr.write(`[jidra-ts] Framework: ${framework}, source roots: ${sourceRoots.map(r => path.relative(repoRoot, r) || ".").join(", ")}\n`);
+    for (const tsConfigPath of tsConfigPaths) {
+      const project = new Project({
+        tsConfigFilePath: tsConfigPath,
+        addFilesFromTsConfig: true,
+        skipAddingFilesFromTsConfig: false,
+        compilerOptions: {
+          allowJs: true,
+          jsx: ts.JsxEmit.ReactJSX,
+          skipLibCheck: true,
+          noEmit: true,
+        },
+        skipFileDependencyResolution: false,
+      });
 
-    const EXCLUDE = new Set([
-      "node_modules", "dist", ".next", "out", "build", "coverage",
-      ".git", ".turbo", "vendor", "public", "__generated__", ".cache",
-      "storybook-static", ".vercel", ".output", ".nuxt", ".svelte-kit",
-    ]);
+      const filtered = project.getSourceFiles().filter((sf) => {
+        const fp = sf.getFilePath();
+        if (fp.includes("node_modules") || fp.endsWith(".d.ts")) return false;
+        if (fileFilter && !fileFilter.has(fp)) return false;
+        if (seenPaths.has(fp)) return false;
+        return true;
+      });
+
+      for (const sf of filtered) {
+        seenPaths.add(sf.getFilePath());
+        sourceFiles.push(sf);
+      }
+    }
+  } else {
+    // No tsconfig anywhere in the repo — walk the whole tree, exclude-aware.
+    const project = new Project({
+      compilerOptions: {
+        allowJs: true,
+        jsx: ts.JsxEmit.ReactJSX,
+        skipLibCheck: true,
+        noEmit: true,
+      },
+      skipFileDependencyResolution: false,
+    });
 
     function addDir(dir) {
       let entries;
       try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
       for (const e of entries) {
-        if (EXCLUDE.has(e.name)) continue;
+        if (EXCLUDE_DIRS.has(e.name)) continue;
         const full = path.join(dir, e.name);
         if (e.isDirectory()) addDir(full);
         else if (/\.(ts|tsx|js|jsx|mjs)$/.test(e.name) && isSourceFile(full)) {
+          if (fileFilter && !fileFilter.has(full)) continue;
           project.addSourceFileAtPath(full);
         }
       }
     }
 
-    for (const root of sourceRoots) addDir(root);
-  }
+    addDir(repoRoot);
 
-  const sourceFiles = project.getSourceFiles().filter((sf) => {
-    const fp = sf.getFilePath();
-    if (fp.includes("node_modules") || fp.endsWith(".d.ts")) return false;
-    if (fileFilter && !fileFilter.has(fp)) return false;
-    return true;
-  });
+    const filtered = project.getSourceFiles().filter((sf) => {
+      const fp = sf.getFilePath();
+      if (fp.includes("node_modules") || fp.endsWith(".d.ts")) return false;
+      if (fileFilter && !fileFilter.has(fp)) return false;
+      if (seenPaths.has(fp)) return false;
+      return true;
+    });
+
+    for (const sf of filtered) {
+      seenPaths.add(sf.getFilePath());
+      sourceFiles.push(sf);
+    }
+  }
 
   process.stderr.write(
     `[jidra-ts] Indexing ${sourceFiles.length} files from ${repoRoot}${fileFilter ? " (incremental)" : ""}\n`
@@ -832,6 +831,11 @@ function main() {
   for (const r of [...allRecords, ...extra]) {
     emit(r);
   }
+
+  emit({
+    _type: "covered_files",
+    files: [...seenPaths].map((fp) => path.relative(repoRoot, fp).split(path.sep).join("/")),
+  });
 
   process.stderr.write(`[jidra-ts] Done. Emitted ${allRecords.length + extra.length} records.\n`);
 }

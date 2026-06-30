@@ -248,44 +248,169 @@ def build_ts_graph(
     on_progress: Callable[[int], None] | None = None,
     timeout: int = 300,
     backend: str = "auto",
+    skip_folders: set[str] | None = None,
 ) -> Graph:
     """
     Build a JIDRA Graph from a TypeScript/React codebase.
 
     backend:
-      - "auto"/"treesitter" (default): in-process tree-sitter — no Docker needed.
-        Syntax-only, so call resolution is lower quality (~65% vs ts-morph's ~80%).
-      - "tsmorph": the Docker ts-morph sidecar (full TypeScript compiler types).
-    "auto" tries tree-sitter and falls back to the sidecar if the optional
-    `tree-sitter-typescript` dependency isn't installed — zero regression for
-    existing users.
+      - "auto" (default) / "tsmorph": runs the Docker ts-morph sidecar
+        (full TypeScript compiler types, ~80% call resolution) over every
+        TS/JS project it can find (it now discovers every `tsconfig.json`
+        in the repo, not just the root), then gap-fills with in-process
+        tree-sitter (~65%) for any source files the sidecar didn't cover
+        (e.g. plain JS with no tsconfig at all, or a sidecar run that
+        failed outright). The two extractors never process the same file
+        twice, so merging their output is safe. If Docker isn't available
+        at all, falls back to tree-sitter for the whole repo.
+      - "treesitter": in-process tree-sitter only, no Docker, no gap-fill.
     """
-    if backend in ("auto", "treesitter"):
-        try:
-            from .ts_treesitter import build_ts_graph_treesitter
+    if backend == "treesitter":
+        from .ts_treesitter import build_ts_graph_treesitter
 
-            return build_ts_graph_treesitter(codebase_root, on_progress)
-        except ImportError:
-            if backend == "treesitter":
-                raise
-            import sys
+        return build_ts_graph_treesitter(
+            codebase_root, on_progress, skip_folders=skip_folders
+        )
 
-            print(
-                "jidra: tree-sitter-typescript not installed; falling back to the "
-                "Docker ts-morph sidecar. `pip install tree-sitter-typescript` to "
-                "avoid Docker.",
-                file=sys.stderr,
-            )
+    # "auto" and "tsmorph" both run the sidecar and gap-fill with
+    # tree-sitter. They differ only in failure mode: "tsmorph" propagates a
+    # hard Docker/sidecar failure (the caller explicitly asked for it),
+    # "auto" falls back to tree-sitter-only on that same failure.
+    try:
+        if on_progress:
+            on_progress(0)
 
-    if on_progress:
-        on_progress(0)
+        records = _run_sidecar(codebase_root, timeout=timeout)
+    except TsExtractorError:
+        if backend == "tsmorph":
+            raise
 
-    records = _run_sidecar(codebase_root, timeout=timeout)
+        import sys
+
+        print(
+            "jidra: Docker ts-morph sidecar unavailable; falling back to "
+            "in-process tree-sitter (lower-quality call resolution, ~65% vs "
+            "~80%). Install/start Docker to use the higher-accuracy sidecar.",
+            file=sys.stderr,
+        )
+
+        from .ts_treesitter import build_ts_graph_treesitter
+
+        return build_ts_graph_treesitter(
+            codebase_root, on_progress, skip_folders=skip_folders
+        )
 
     if on_progress:
         on_progress(len([r for r in records if r.get("_type") == "class"]))
 
-    return _build_graph_from_records(records)
+    sidecar_graph = _build_graph_from_records(records)
+    if skip_folders:
+        sidecar_graph = _filter_graph_by_skip_folders(
+            sidecar_graph, codebase_root, skip_folders
+        )
+
+    gap_files = _compute_gap_files(codebase_root, records, skip_folders)
+
+    if not gap_files:
+        return sidecar_graph
+
+    from .ts_treesitter import build_ts_graph_treesitter
+
+    gap_graph = build_ts_graph_treesitter(
+        codebase_root, on_progress, only_files=gap_files
+    )
+    return _merge_ts_graphs(sidecar_graph, gap_graph)
+
+
+def _compute_gap_files(
+    codebase_root: Path, records: list[dict], skip_folders: set[str] | None = None
+) -> set[Path]:
+    """Files the sidecar didn't cover, for tree-sitter gap-fill.
+
+    The sidecar emits one `covered_files` record listing every source file
+    it actually processed (repo-relative, posix-style). Anything in the
+    repo's full TS/JS file set that isn't in that list — plain JS with no
+    tsconfig, a file outside every discovered tsconfig's `include`, etc. —
+    gets handed to tree-sitter instead. `skip_folders` is applied here too,
+    so a user-excluded folder doesn't get gap-filled back in.
+    """
+    from .ts_treesitter import _iter_ts_files
+
+    covered_rel: set[str] = set()
+    for r in records:
+        if r.get("_type") == "covered_files":
+            covered_rel.update(r.get("files", []))
+
+    covered_abs = {(codebase_root / rel).resolve() for rel in covered_rel}
+    all_files = {
+        p.resolve() for p in _iter_ts_files(codebase_root, skip_folders=skip_folders)
+    }
+    return all_files - covered_abs
+
+
+def _filter_graph_by_skip_folders(
+    graph: Graph, codebase_root: Path, skip_folders: set[str]
+) -> Graph:
+    """Drop sidecar-extracted entities under a user-excluded folder.
+
+    The Docker sidecar discovers and processes its own files via tsconfig
+    resolution inside the container — it has no knowledge of `skip_folders`.
+    Rather than degrade its file discovery by constraining it to a
+    host-computed allowlist, filter its output by `file_path` after the
+    fact, the same way `excluded_by_skip_folders` would for any other
+    language's file list.
+    """
+    from ..filters.file_filters import excluded_by_skip_folders
+
+    all_file_paths = {
+        e.file_path for e in graph.classes + graph.fields + graph.callsites
+    } | {m.file_path for m in graph.methods}
+    abs_paths = [(codebase_root / fp).resolve() for fp in all_file_paths]
+    excluded_abs = excluded_by_skip_folders(abs_paths, codebase_root, skip_folders)
+    root_resolved = codebase_root.resolve()
+    excluded = {p.relative_to(root_resolved).as_posix() for p in excluded_abs}
+    if not excluded:
+        return graph
+
+    kept_classes = [c for c in graph.classes if c.file_path not in excluded]
+    kept_methods = [m for m in graph.methods if m.file_path not in excluded]
+    kept_class_full_names = {c.full_name for c in kept_classes}
+    kept_method_ids = {m.id for m in kept_methods}
+
+    return Graph(
+        classes=kept_classes,
+        methods=kept_methods,
+        fields=[f for f in graph.fields if f.file_path not in excluded],
+        callsites=[c for c in graph.callsites if c.file_path not in excluded],
+        inheritance_edges=[
+            e
+            for e in graph.inheritance_edges
+            if e.source_class in kept_class_full_names
+        ],
+        resolved_call_edges=[
+            e
+            for e in graph.resolved_call_edges
+            if e.caller_method_id in kept_method_ids
+            and e.callee_method_id in kept_method_ids
+        ],
+    )
+
+
+def _merge_ts_graphs(a: Graph, b: Graph) -> Graph:
+    """Concatenate two TS graphs that cover disjoint file sets.
+
+    Safe only because the sidecar and tree-sitter gap-fill never process
+    the same file — there's no ID collision or duplicate-entity risk to
+    dedupe here, unlike the general multi-language `_merge_graphs`.
+    """
+    return Graph(
+        classes=a.classes + b.classes,
+        methods=a.methods + b.methods,
+        fields=a.fields + b.fields,
+        callsites=a.callsites + b.callsites,
+        inheritance_edges=a.inheritance_edges + b.inheritance_edges,
+        resolved_call_edges=a.resolved_call_edges + b.resolved_call_edges,
+    )
 
 
 def build_ts_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:

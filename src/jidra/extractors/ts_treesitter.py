@@ -453,7 +453,11 @@ class _FileExtractor:
             self._emit_lexical(n)
 
 
-def _iter_ts_files(codebase_root: Path):
+def _iter_ts_files(
+    codebase_root: Path,
+    only_files: set[Path] | None = None,
+    skip_folders: set[str] | None = None,
+):
     candidates = []
     for path in codebase_root.rglob("*"):
         if path.suffix not in {g.lstrip("*") for g in _SOURCE_GLOBS}:
@@ -465,11 +469,16 @@ def _iter_ts_files(codebase_root: Path):
         if _IGNORE_DIRS & set(path.parts):
             continue
         candidates.append(path)
-    yield from apply_filters(candidates, codebase_root)
+    if only_files is not None:
+        candidates = [p for p in candidates if p.resolve() in only_files]
+    yield from apply_filters(candidates, codebase_root, skip_folders=skip_folders)
 
 
 def build_ts_graph_treesitter(
-    codebase_root: Path, on_progress: Callable[[int], None] | None = None
+    codebase_root: Path,
+    on_progress: Callable[[int], None] | None = None,
+    only_files: set[Path] | None = None,
+    skip_folders: set[str] | None = None,
 ) -> Graph:
     """Build a TypeScript Graph in-process. Call sites are emitted unresolved;
     `extractor._resolve_calls` resolves them after the merge, like other
@@ -484,7 +493,7 @@ def build_ts_graph_treesitter(
     inheritance: list[InheritanceEdge] = []
 
     count = 0
-    for path in _iter_ts_files(codebase_root):
+    for path in _iter_ts_files(codebase_root, only_files=only_files, skip_folders=skip_folders):
         try:
             src = path.read_bytes()
         except OSError:
