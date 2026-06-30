@@ -694,6 +694,7 @@ def build_py_graph(
     on_progress: Callable[[int], None] | None = None,
     enable_validation: bool = True,
     language: str = "python",
+    skip_folders: set[str] | None = None,
 ) -> Graph:
     """
     Build a JIDRA Graph from Python codebase using AST + symbol table.
@@ -717,7 +718,7 @@ def build_py_graph(
     # Step 1: Run Pyright — store validator so we can call get_type_hints() later
     if enable_validation:
         try:
-            validator = PyrightValidator(codebase_root, timeout=120)
+            validator = PyrightValidator(codebase_root, timeout=300)
             metrics = validator.validate()
             if metrics.runs > 0 and metrics.failures == 0:
                 logger.info(
@@ -729,7 +730,7 @@ def build_py_graph(
             validator = None
 
     # Step 2: Discover and parse Python files
-    python_files = list(iter_python_files(codebase_root))
+    python_files = list(iter_python_files(codebase_root, skip_folders=skip_folders))
 
     worker = partial(_extract_py_file, codebase_root=codebase_root)
     for result in parallel_map(worker, python_files):

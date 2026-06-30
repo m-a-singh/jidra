@@ -138,6 +138,7 @@ class CallSite:
     resolution_status: str = "unresolved"
     resolution_reason: str = ""
     candidate_count: int = 0
+    argument_types: list[str | None] = field(default_factory=list)
 
 
 @dataclass

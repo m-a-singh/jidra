@@ -22,6 +22,20 @@ class ProcessRequest(BaseModel):
     use_docker: bool = False
     write_mcp_config: bool = True
     index_docs: bool = True
+    skip_folders: list[str] | None = None
+
+
+# Folders commonly excluded across the language-specific filter modules
+# (filters/filters.py, py_filters.py, go_filters.py, ts_filters.py) — used
+# here only to pre-check the UI folder picker's default state. The actual
+# exclusion during indexing still goes through each language's own filter
+# plus gitignore; this list is a coarse approximation for UX purposes.
+_DEFAULT_EXCLUDED_DIRS = {
+    "node_modules", ".git", "dist", "build", "vendor", ".cache", "coverage",
+    "venv", ".venv", "__pycache__", "target", ".gradle", "out", ".next",
+    ".nuxt", "public", "bin", ".turbo", ".output", ".svelte-kit", "generated",
+    ".pytest_cache", ".mypy_cache", "site-packages", ".expo", "android", "ios",
+}
 
 
 _DOC_EXTENSIONS = (".md", ".mdx", ".txt", ".pdf", ".docx")
@@ -72,6 +86,7 @@ async def _stream_process(req: ProcessRequest):
                 skip_build=req.skip_build,
                 build_dir=req.build_dir or None,
                 use_docker=req.use_docker,
+                skip_folders=set(req.skip_folders) if req.skip_folders else None,
             ),
         )
         yield _sse("status", {"msg": "Graph indexed and validated", "phase": "indexed"})
@@ -183,6 +198,43 @@ async def _stream_process(req: ProcessRequest):
 @router.post("/run")
 async def run_pipeline(req: ProcessRequest) -> StreamingResponse:
     return StreamingResponse(_stream_process(req), media_type="text/event-stream")
+
+
+@router.get("/list-folders")
+async def list_folders(repo_path: str, subpath: str = "") -> dict:
+    """One level of subdirectories under `repo_path/subpath`, with each
+    pre-marked as default-excluded (gitignored or in the common default
+    exclude set) so the UI tree picker can pre-check its starting state.
+    The frontend calls this again with a deeper `subpath` to lazy-expand."""
+    from ...filters.file_filters import gitignored_paths
+
+    repo = Path(repo_path).resolve()
+    if not repo.is_dir():
+        raise HTTPException(status_code=400, detail=f"Not a directory: {repo}")
+
+    target = (repo / subpath).resolve() if subpath else repo
+    if target != repo and repo not in target.parents:
+        raise HTTPException(status_code=400, detail="subpath escapes repo_path")
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail=f"Not a directory: {target}")
+
+    try:
+        subdirs = sorted(
+            (d for d in target.iterdir() if d.is_dir()), key=lambda d: d.name
+        )
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    ignored = gitignored_paths(repo, subdirs)
+    folders = [
+        {
+            "name": d.name,
+            "path": d.relative_to(repo).as_posix(),
+            "default_excluded": d in ignored or d.name in _DEFAULT_EXCLUDED_DIRS,
+        }
+        for d in subdirs
+    ]
+    return {"path": subpath, "folders": folders}
 
 
 @router.get("/status")

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { OutputLog } from "./OutputLog";
+import { FolderTreePicker } from "./FolderTreePicker";
 import type { RepoState } from "../hooks/useRepo";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -18,6 +19,7 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
   const [useDocker, setUseDocker] = useState(false);
   const [writeMcp, setWriteMcp] = useState(true);
   const [indexDocs, setIndexDocs] = useState(true);
+  const [skipFolders, setSkipFolders] = useState<string[]>([]);
   const [log, setLog] = useState<LogLine[]>([]);
   const [running, setRunning] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -51,6 +53,7 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
         use_docker: useDocker,
         write_mcp_config: writeMcp,
         index_docs: indexDocs,
+        skip_folders: skipFolders.length ? skipFolders : undefined,
       },
       (event, data) => {
         const d = data as { msg?: string; phase?: string };
@@ -174,6 +177,8 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
           </label>
         </div>
       </div>
+
+      <FolderTreePicker repoPath={repoPath} skipFolders={skipFolders} onChange={setSkipFolders} />
 
       <div className="flex gap-4 items-center mb-4">
         <Button variant="primary" size="lg" disabled={running || !repoPath} onClick={run} className="px-8 py-3">
