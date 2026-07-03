@@ -1743,20 +1743,56 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         call.resolution_status = status
         call.resolution_reason = reason
 
-    _KNOWN_GLOBALS = frozenset({
-        # JS builtins
-        "console", "setTimeout", "setInterval", "clearTimeout", "clearInterval",
-        "Promise", "String", "Number", "Boolean", "Array", "Object", "JSON",
-        "Math", "Date", "Error", "Map", "Set", "Symbol", "RegExp",
-        "parseInt", "parseFloat", "isNaN", "isFinite", "encodeURIComponent",
-        "decodeURIComponent", "fetch", "process", "Buffer",
-        # React hooks (bare calls, no receiver)
-        "useState", "useEffect", "useCallback", "useMemo", "useRef",
-        "useContext", "useReducer", "useLayoutEffect", "useImperativeHandle",
-        "useDebugValue", "useId", "useDeferredValue", "useTransition",
-        # i18n
-        "t", "i18n",
-    })
+    _KNOWN_GLOBALS = frozenset(
+        {
+            # JS builtins
+            "console",
+            "setTimeout",
+            "setInterval",
+            "clearTimeout",
+            "clearInterval",
+            "Promise",
+            "String",
+            "Number",
+            "Boolean",
+            "Array",
+            "Object",
+            "JSON",
+            "Math",
+            "Date",
+            "Error",
+            "Map",
+            "Set",
+            "Symbol",
+            "RegExp",
+            "parseInt",
+            "parseFloat",
+            "isNaN",
+            "isFinite",
+            "encodeURIComponent",
+            "decodeURIComponent",
+            "fetch",
+            "process",
+            "Buffer",
+            # React hooks (bare calls, no receiver)
+            "useState",
+            "useEffect",
+            "useCallback",
+            "useMemo",
+            "useRef",
+            "useContext",
+            "useReducer",
+            "useLayoutEffect",
+            "useImperativeHandle",
+            "useDebugValue",
+            "useId",
+            "useDeferredValue",
+            "useTransition",
+            # i18n
+            "t",
+            "i18n",
+        }
+    )
 
     _REACT_HOOK_RE = re.compile(r"^use[A-Z]")
 
@@ -1812,7 +1848,11 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
 
     _TS_EXTENSIONS = (".ts", ".tsx", ".js", ".jsx", ".mjs")
     for call in callsites_in_scope:
-        if call.resolution_status not in ("unresolved_receiver", "unresolved", "unresolved_method"):
+        if call.resolution_status not in (
+            "unresolved_receiver",
+            "unresolved",
+            "unresolved_method",
+        ):
             continue
         if not call.file_path.endswith(_TS_EXTENSIONS):
             continue

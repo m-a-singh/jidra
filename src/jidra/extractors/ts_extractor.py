@@ -315,6 +315,7 @@ def build_ts_graph(
 
     if not gap_files:
         from .extractor import _resolve_calls
+
         _resolve_calls(sidecar_graph)
         return sidecar_graph
 

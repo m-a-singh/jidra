@@ -36,10 +36,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from jidra.engine.engine import JidraEngine
 
 PASS_THRESHOLD = 0.5
-SEARCH_LIMIT   = 10
-EXPLORE_TOP_N  = 20
-FLOW_TOP_N     = 10
-FLOW_DEPTH     = 3
+SEARCH_LIMIT = 10
+EXPLORE_TOP_N = 20
+FLOW_TOP_N = 10
+FLOW_DEPTH = 3
 
 
 @dataclass
@@ -74,115 +74,368 @@ def make_test_cases() -> list[TestCase]:
 
     # ── MTKruto ──────────────────────────────────────────────────────
     cases += [
-        TestCase("mtkruto-search-sendMessage",    "sendMessage",    "search", ["sendMessage"],    "mtkruto", ["method"]),
-        TestCase("mtkruto-search-invoke",         "invoke",         "search", ["invoke"],         "mtkruto", ["method"]),
-        TestCase("mtkruto-search-serialize",      "serializeObject","search", ["serializeObject"],"mtkruto", ["method"]),
-        TestCase("mtkruto-search-getMe",          "getMe",          "search", ["getMe"],          "mtkruto", ["method"]),
-        TestCase("mtkruto-search-signIn",         "signIn",         "search", ["signIn"],         "mtkruto", ["method"]),
-        TestCase("mtkruto-search-forwardMessages","forwardMessages","search", ["forwardMessages"],"mtkruto", ["method"]),
-        TestCase("mtkruto-explore-send-flow",
+        TestCase(
+            "mtkruto-search-sendMessage",
+            "sendMessage",
+            "search",
+            ["sendMessage"],
+            "mtkruto",
+            ["method"],
+        ),
+        TestCase(
+            "mtkruto-search-invoke",
+            "invoke",
+            "search",
+            ["invoke"],
+            "mtkruto",
+            ["method"],
+        ),
+        TestCase(
+            "mtkruto-search-serialize",
+            "serializeObject",
+            "search",
+            ["serializeObject"],
+            "mtkruto",
+            ["method"],
+        ),
+        TestCase(
+            "mtkruto-search-getMe", "getMe", "search", ["getMe"], "mtkruto", ["method"]
+        ),
+        TestCase(
+            "mtkruto-search-signIn",
+            "signIn",
+            "search",
+            ["signIn"],
+            "mtkruto",
+            ["method"],
+        ),
+        TestCase(
+            "mtkruto-search-forwardMessages",
+            "forwardMessages",
+            "search",
+            ["forwardMessages"],
+            "mtkruto",
+            ["method"],
+        ),
+        TestCase(
+            "mtkruto-explore-send-flow",
             "How does calling sendMessage get serialized and sent over the network transport?",
-            "explore", ["sendMessage", "serializeObject", "send"], "mtkruto"),
-        TestCase("mtkruto-explore-session",
+            "explore",
+            ["sendMessage", "serializeObject", "send"],
+            "mtkruto",
+        ),
+        TestCase(
+            "mtkruto-explore-session",
             "How does the encrypted session handle encryption and transport?",
-            "explore", ["send", "receive"], "mtkruto"),
-        TestCase("mtkruto-explore-invoke",
+            "explore",
+            ["send", "receive"],
+            "mtkruto",
+        ),
+        TestCase(
+            "mtkruto-explore-invoke",
             "How does the client invoke a TL function?",
-            "explore", ["invoke", "sendMessage"], "mtkruto"),
-        TestCase("mtkruto-explore-connection",
+            "explore",
+            ["invoke", "sendMessage"],
+            "mtkruto",
+        ),
+        TestCase(
+            "mtkruto-explore-connection",
             "How does the client establish and manage a connection?",
-            "explore", ["connect", "send"], "mtkruto"),
-        TestCase("mtkruto-explore-auth",
+            "explore",
+            ["connect", "send"],
+            "mtkruto",
+        ),
+        TestCase(
+            "mtkruto-explore-auth",
             "How does user authentication and sign in work?",
-            "explore", ["signIn", "getMe"], "mtkruto"),
-        TestCase("mtkruto-explore-messaging",
+            "explore",
+            ["signIn", "getMe"],
+            "mtkruto",
+        ),
+        TestCase(
+            "mtkruto-explore-messaging",
             "How does sending and forwarding messages work?",
-            "explore", ["sendMessage", "forwardMessages"], "mtkruto"),
+            "explore",
+            ["sendMessage", "forwardMessages"],
+            "mtkruto",
+        ),
     ]
 
     # ── Trezor Suite ─────────────────────────────────────────────────
     cases += [
-        TestCase("trezor-search-signTransaction","signTransaction","search", ["signTransaction"],"trezor", ["method"]),
-        TestCase("trezor-search-getAddress",     "getAddress",     "search", ["getAddress"],    "trezor", ["method"]),
-        TestCase("trezor-search-getFeatures",    "getFeatures",    "search", ["getFeatures"],   "trezor", ["method"]),
-        TestCase("trezor-search-useSendForm",    "useSendForm",    "search", ["useSendForm"],   "trezor", ["method"]),
-        TestCase("trezor-search-applySettings",  "applySettings",  "search", ["applySettings"], "trezor", ["method"]),
-        TestCase("trezor-search-estimateFee",    "estimateFee",    "search", ["estimateFee"],   "trezor", ["method"]),
-        TestCase("trezor-explore-tx-flow",
+        TestCase(
+            "trezor-search-signTransaction",
+            "signTransaction",
+            "search",
+            ["signTransaction"],
+            "trezor",
+            ["method"],
+        ),
+        TestCase(
+            "trezor-search-getAddress",
+            "getAddress",
+            "search",
+            ["getAddress"],
+            "trezor",
+            ["method"],
+        ),
+        TestCase(
+            "trezor-search-getFeatures",
+            "getFeatures",
+            "search",
+            ["getFeatures"],
+            "trezor",
+            ["method"],
+        ),
+        TestCase(
+            "trezor-search-useSendForm",
+            "useSendForm",
+            "search",
+            ["useSendForm"],
+            "trezor",
+            ["method"],
+        ),
+        TestCase(
+            "trezor-search-applySettings",
+            "applySettings",
+            "search",
+            ["applySettings"],
+            "trezor",
+            ["method"],
+        ),
+        TestCase(
+            "trezor-search-estimateFee",
+            "estimateFee",
+            "search",
+            ["estimateFee"],
+            "trezor",
+            ["method"],
+        ),
+        TestCase(
+            "trezor-explore-tx-flow",
             "How does a transaction get signed and broadcast to the network?",
-            "explore", ["signTransaction", "pushTransaction"], "trezor"),
-        TestCase("trezor-explore-device",
+            "explore",
+            ["signTransaction", "pushTransaction"],
+            "trezor",
+        ),
+        TestCase(
+            "trezor-explore-device",
             "How does the app connect to and get info from a Trezor device?",
-            "explore", ["getFeatures", "getAddress"], "trezor"),
-        TestCase("trezor-explore-send-form",
+            "explore",
+            ["getFeatures", "getAddress"],
+            "trezor",
+        ),
+        TestCase(
+            "trezor-explore-send-form",
             "How does the send form compose and submit a transaction?",
-            "explore", ["useSendForm", "signTransaction"], "trezor"),
-        TestCase("trezor-explore-fees",
+            "explore",
+            ["useSendForm", "signTransaction"],
+            "trezor",
+        ),
+        TestCase(
+            "trezor-explore-fees",
             "How are transaction fees estimated and applied?",
-            "explore", ["estimateFee", "composeTransaction"], "trezor"),
-        TestCase("trezor-explore-settings",
+            "explore",
+            ["estimateFee", "composeTransaction"],
+            "trezor",
+        ),
+        TestCase(
+            "trezor-explore-settings",
             "How does the user change device settings and PIN?",
-            "explore", ["applySettings", "changePin"], "trezor"),
-        TestCase("trezor-explore-account",
+            "explore",
+            ["applySettings", "changePin"],
+            "trezor",
+        ),
+        TestCase(
+            "trezor-explore-account",
             "How does the app fetch account info and balance?",
-            "explore", ["getAccountInfo", "getAddress"], "trezor"),
+            "explore",
+            ["getAccountInfo", "getAddress"],
+            "trezor",
+        ),
     ]
 
     # ── PostyBirb ─────────────────────────────────────────────────────
     cases += [
-        TestCase("postybirb-search-validateSubmission","validateSubmission","search",["validateSubmission"],"postybirb",["method"]),
-        TestCase("postybirb-search-postSubmission",    "postSubmission",    "search",["postSubmission"],    "postybirb",["method"]),
-        TestCase("postybirb-search-uploadFile",        "uploadFile",        "search",["uploadFile"],        "postybirb",["method"]),
-        TestCase("postybirb-search-login",             "login",             "search",["login"],             "postybirb",["method"]),
-        TestCase("postybirb-search-updateSubmission",  "updateSubmission",  "search",["updateSubmission"],  "postybirb",["method"]),
-        TestCase("postybirb-search-post",              "post",              "search",["post"],              "postybirb",["method"]),
-        TestCase("postybirb-explore-submit",
+        TestCase(
+            "postybirb-search-validateSubmission",
+            "validateSubmission",
+            "search",
+            ["validateSubmission"],
+            "postybirb",
+            ["method"],
+        ),
+        TestCase(
+            "postybirb-search-postSubmission",
+            "postSubmission",
+            "search",
+            ["postSubmission"],
+            "postybirb",
+            ["method"],
+        ),
+        TestCase(
+            "postybirb-search-uploadFile",
+            "uploadFile",
+            "search",
+            ["uploadFile"],
+            "postybirb",
+            ["method"],
+        ),
+        TestCase(
+            "postybirb-search-login",
+            "login",
+            "search",
+            ["login"],
+            "postybirb",
+            ["method"],
+        ),
+        TestCase(
+            "postybirb-search-updateSubmission",
+            "updateSubmission",
+            "search",
+            ["updateSubmission"],
+            "postybirb",
+            ["method"],
+        ),
+        TestCase(
+            "postybirb-search-post", "post", "search", ["post"], "postybirb", ["method"]
+        ),
+        TestCase(
+            "postybirb-explore-submit",
             "How does a submission get validated and posted to a website?",
-            "explore", ["validateSubmission", "postSubmission"], "postybirb"),
-        TestCase("postybirb-explore-file",
+            "explore",
+            ["validateSubmission", "postSubmission"],
+            "postybirb",
+        ),
+        TestCase(
+            "postybirb-explore-file",
             "How does file uploading work when creating a post?",
-            "explore", ["uploadFile", "post"], "postybirb"),
-        TestCase("postybirb-explore-auth",
+            "explore",
+            ["uploadFile", "post"],
+            "postybirb",
+        ),
+        TestCase(
+            "postybirb-explore-auth",
             "How does the app authenticate and log in to a website account?",
-            "explore", ["login", "logout"], "postybirb"),
-        TestCase("postybirb-explore-website",
+            "explore",
+            ["login", "logout"],
+            "postybirb",
+        ),
+        TestCase(
+            "postybirb-explore-website",
             "How does the app know which websites are available and supported?",
-            "explore", ["validateSubmission", "login"], "postybirb"),
-        TestCase("postybirb-explore-update",
+            "explore",
+            ["validateSubmission", "login"],
+            "postybirb",
+        ),
+        TestCase(
+            "postybirb-explore-update",
             "How does updating or editing a submission work?",
-            "explore", ["updateSubmission", "validateSubmission"], "postybirb"),
-        TestCase("postybirb-explore-posting",
+            "explore",
+            ["updateSubmission", "validateSubmission"],
+            "postybirb",
+        ),
+        TestCase(
+            "postybirb-explore-posting",
             "How does the posting pipeline work end to end?",
-            "explore", ["post", "postSubmission"], "postybirb"),
+            "explore",
+            ["post", "postSubmission"],
+            "postybirb",
+        ),
     ]
-
 
     # ── Shapeshift Web ────────────────────────────────────────────────
     cases += [
-        TestCase("shapeshift-search-getTradeQuote",       "getTradeQuote",       "search",["getTradeQuote"],       "shapeshift",["method"]),
-        TestCase("shapeshift-search-signTransaction",      "signTransaction",     "search",["signTransaction"],     "shapeshift",["method"]),
-        TestCase("shapeshift-search-estimateFees",         "estimateFees",        "search",["estimateFees"],        "shapeshift",["method"]),
-        TestCase("shapeshift-search-broadcastTransaction", "broadcastTransaction","search",["broadcastTransaction"],"shapeshift",["method"]),
-        TestCase("shapeshift-search-getRates",             "getRates",            "search",["getRates"],            "shapeshift",["method"]),
-        TestCase("shapeshift-search-getAssets",            "getAssets",           "search",["getAssets"],           "shapeshift",["method"]),
-        TestCase("shapeshift-explore-swap",
+        TestCase(
+            "shapeshift-search-getTradeQuote",
+            "getTradeQuote",
+            "search",
+            ["getTradeQuote"],
+            "shapeshift",
+            ["method"],
+        ),
+        TestCase(
+            "shapeshift-search-signTransaction",
+            "signTransaction",
+            "search",
+            ["signTransaction"],
+            "shapeshift",
+            ["method"],
+        ),
+        TestCase(
+            "shapeshift-search-estimateFees",
+            "estimateFees",
+            "search",
+            ["estimateFees"],
+            "shapeshift",
+            ["method"],
+        ),
+        TestCase(
+            "shapeshift-search-broadcastTransaction",
+            "broadcastTransaction",
+            "search",
+            ["broadcastTransaction"],
+            "shapeshift",
+            ["method"],
+        ),
+        TestCase(
+            "shapeshift-search-getRates",
+            "getRates",
+            "search",
+            ["getRates"],
+            "shapeshift",
+            ["method"],
+        ),
+        TestCase(
+            "shapeshift-search-getAssets",
+            "getAssets",
+            "search",
+            ["getAssets"],
+            "shapeshift",
+            ["method"],
+        ),
+        TestCase(
+            "shapeshift-explore-swap",
             "How does getting a swap quote and executing a trade work?",
-            "explore", ["getTradeQuote", "broadcastTransaction"], "shapeshift"),
-        TestCase("shapeshift-explore-assets",
+            "explore",
+            ["getTradeQuote", "broadcastTransaction"],
+            "shapeshift",
+        ),
+        TestCase(
+            "shapeshift-explore-assets",
             "How does the app fetch and display available assets?",
-            "explore", ["getAssets", "getRates"], "shapeshift"),
-        TestCase("shapeshift-explore-fees",
+            "explore",
+            ["getAssets", "getRates"],
+            "shapeshift",
+        ),
+        TestCase(
+            "shapeshift-explore-fees",
             "How are gas fees estimated for a swap?",
-            "explore", ["estimateFees", "getTradeQuote"], "shapeshift"),
-        TestCase("shapeshift-explore-signing",
+            "explore",
+            ["estimateFees", "getTradeQuote"],
+            "shapeshift",
+        ),
+        TestCase(
+            "shapeshift-explore-signing",
             "How does transaction signing work for a swap?",
-            "explore", ["signTransaction", "broadcastTransaction"], "shapeshift"),
-        TestCase("shapeshift-explore-broadcast",
+            "explore",
+            ["signTransaction", "broadcastTransaction"],
+            "shapeshift",
+        ),
+        TestCase(
+            "shapeshift-explore-broadcast",
             "How does a signed transaction get broadcast to the network?",
-            "explore", ["broadcastTransaction", "signTransaction"], "shapeshift"),
-        TestCase("shapeshift-explore-rates",
+            "explore",
+            ["broadcastTransaction", "signTransaction"],
+            "shapeshift",
+        ),
+        TestCase(
+            "shapeshift-explore-rates",
             "How does the app get current exchange rates?",
-            "explore", ["getRates", "getAssets"], "shapeshift"),
+            "explore",
+            ["getRates", "getAssets"],
+            "shapeshift",
+        ),
     ]
 
     return cases
@@ -229,7 +482,9 @@ def score_search(case: TestCase, results: list[dict], latency_ms: float) -> Eval
             if first_rank == 0:
                 first_rank = idx + 1
         except ValueError:
-            partial = next((j + 1 for j, n in enumerate(result_names_list) if sym in n), None)
+            partial = next(
+                (j + 1 for j, n in enumerate(result_names_list) if sym in n), None
+            )
             if partial:
                 found.append(case.expected_symbols[i])
                 if first_rank == 0:
@@ -239,27 +494,40 @@ def score_search(case: TestCase, results: list[dict], latency_ms: float) -> Eval
 
     recall = len(found) / len(case.expected_symbols) if case.expected_symbols else 0.0
     return EvalResult(
-        case_id=case.id, repo=case.repo, api="search",
+        case_id=case.id,
+        repo=case.repo,
+        api="search",
         passed=recall >= PASS_THRESHOLD,
-        recall=recall, mrr=1.0 / first_rank if first_rank else 0.0,
-        found=found, missed=missed, latency_ms=latency_ms,
+        recall=recall,
+        mrr=1.0 / first_rank if first_rank else 0.0,
+        found=found,
+        missed=missed,
+        latency_ms=latency_ms,
     )
 
 
-def score_explore_combined(case: TestCase, explore_res: list[dict],
-                            flow_res: list[dict], latency_ms: float) -> EvalResult:
-    ex_r,   ex_f,   ex_m   = _recall(case.expected_symbols, _extract_names(explore_res))
-    fl_r,   fl_f,   fl_m   = _recall(case.expected_symbols, _extract_names(flow_res))
-    comb_r, comb_f, comb_m = _recall(case.expected_symbols,
-                                      _extract_names(explore_res) | _extract_names(flow_res))
+def score_explore_combined(
+    case: TestCase, explore_res: list[dict], flow_res: list[dict], latency_ms: float
+) -> EvalResult:
+    ex_r, ex_f, ex_m = _recall(case.expected_symbols, _extract_names(explore_res))
+    fl_r, fl_f, fl_m = _recall(case.expected_symbols, _extract_names(flow_res))
+    comb_r, comb_f, comb_m = _recall(
+        case.expected_symbols, _extract_names(explore_res) | _extract_names(flow_res)
+    )
     return EvalResult(
-        case_id=case.id, repo=case.repo, api="explore",
+        case_id=case.id,
+        repo=case.repo,
+        api="explore",
         passed=comb_r >= PASS_THRESHOLD,
-        recall=comb_r, mrr=0.0,
-        found=comb_f, missed=comb_m,
+        recall=comb_r,
+        mrr=0.0,
+        found=comb_f,
+        missed=comb_m,
         node_count=len(explore_res) + len(flow_res),
         latency_ms=latency_ms,
-        explore_recall=ex_r, flow_recall=fl_r, combined_recall=comb_r,
+        explore_recall=ex_r,
+        flow_recall=fl_r,
+        combined_recall=comb_r,
     )
 
 
@@ -281,14 +549,15 @@ def run_flow_from_explore(engine: JidraEngine, query: str) -> list[dict]:
 def run_case(case: TestCase, engine: JidraEngine) -> EvalResult:
     t0 = time.perf_counter()
     if case.api == "search":
-        raw  = engine.search(case.query, limit=SEARCH_LIMIT)
+        raw = engine.search(case.query, limit=SEARCH_LIMIT)
         hits = raw.get("results", raw.get("hits", []))
         return score_search(case, hits, (time.perf_counter() - t0) * 1000)
     else:
         explore_res = engine.explore(case.query, top_n=EXPLORE_TOP_N).get("results", [])
-        flow_res    = run_flow_from_explore(engine, case.query)
-        return score_explore_combined(case, explore_res, flow_res,
-                                       (time.perf_counter() - t0) * 1000)
+        flow_res = run_flow_from_explore(engine, case.query)
+        return score_explore_combined(
+            case, explore_res, flow_res, (time.perf_counter() - t0) * 1000
+        )
 
 
 def run_repo(repo_name: str, db_path: Path, cases: list[TestCase]) -> list[EvalResult]:
@@ -299,7 +568,7 @@ def run_repo(repo_name: str, db_path: Path, cases: list[TestCase]) -> list[EvalR
         print(f"  ⚠  no graph.db at {db_path} — skipping")
         return []
 
-    engine  = JidraEngine(str(db_path), variant="main")
+    engine = JidraEngine(str(db_path), variant="main")
     results = []
     for case in repo_cases:
         r = run_case(case, engine)
@@ -307,11 +576,15 @@ def run_repo(repo_name: str, db_path: Path, cases: list[TestCase]) -> list[EvalR
         if case.api == "search":
             detail = f"found={r.found}" if r.found else ""
             missed = f"missed={r.missed}" if r.missed else ""
-            print(f"  {case.id:<50} {status}  recall={r.recall:.2f}  mrr={r.mrr:.2f}  {r.latency_ms:.0f}ms  {detail}  {missed}")
+            print(
+                f"  {case.id:<50} {status}  recall={r.recall:.2f}  mrr={r.mrr:.2f}  {r.latency_ms:.0f}ms  {detail}  {missed}"
+            )
         else:
-            print(f"  {case.id:<50} {status}  "
-                  f"explore={r.explore_recall:.2f}  flow={r.flow_recall:.2f}  "
-                  f"combined={r.combined_recall:.2f}  {r.latency_ms:.0f}ms")
+            print(
+                f"  {case.id:<50} {status}  "
+                f"explore={r.explore_recall:.2f}  flow={r.flow_recall:.2f}  "
+                f"combined={r.combined_recall:.2f}  {r.latency_ms:.0f}ms"
+            )
             if r.missed:
                 print(f"  {'':50}       missed={r.missed}")
         results.append(r)
@@ -321,21 +594,21 @@ def run_repo(repo_name: str, db_path: Path, cases: list[TestCase]) -> list[EvalR
 def print_summary(results: list[EvalResult], repo: str) -> dict:
     if not results:
         return {}
-    passed      = sum(1 for r in results if r.passed)
-    total       = len(results)
+    passed = sum(1 for r in results if r.passed)
+    total = len(results)
     mean_recall = sum(r.recall for r in results) / total
-    search_res  = [r for r in results if r.api == "search"]
+    search_res = [r for r in results if r.api == "search"]
     explore_res = [r for r in results if r.api == "explore"]
-    mean_mrr    = sum(r.mrr for r in search_res) / len(search_res) if search_res else 0.0
+    mean_mrr = sum(r.mrr for r in search_res) / len(search_res) if search_res else 0.0
 
     print()
     print("─" * 70)
-    print(f"  {repo} — {passed}/{total} passed ({passed/total*100:.0f}%)")
+    print(f"  {repo} — {passed}/{total} passed ({passed / total * 100:.0f}%)")
     print(f"  Mean Recall:    {mean_recall:.3f}")
     print(f"  Mean MRR:       {mean_mrr:.3f}  (search only)")
     if explore_res:
-        ex   = sum(r.explore_recall  for r in explore_res) / len(explore_res)
-        fl   = sum(r.flow_recall     for r in explore_res) / len(explore_res)
+        ex = sum(r.explore_recall for r in explore_res) / len(explore_res)
+        fl = sum(r.flow_recall for r in explore_res) / len(explore_res)
         comb = sum(r.combined_recall for r in explore_res) / len(explore_res)
         print(f"  Explore only:   {ex:.3f}  recall")
         print(f"  Flow only:      {fl:.3f}  recall")
@@ -343,12 +616,26 @@ def print_summary(results: list[EvalResult], repo: str) -> dict:
     print("─" * 70)
 
     return {
-        "repo": repo, "total": total, "passed": passed,
+        "repo": repo,
+        "total": total,
+        "passed": passed,
         "mean_recall": round(mean_recall, 4),
         "mean_mrr": round(mean_mrr, 4),
-        "explore_only_recall":     round(sum(r.explore_recall  for r in explore_res) / len(explore_res), 4) if explore_res else 0,
-        "flow_only_recall":        round(sum(r.flow_recall     for r in explore_res) / len(explore_res), 4) if explore_res else 0,
-        "combined_explore_recall": round(sum(r.combined_recall for r in explore_res) / len(explore_res), 4) if explore_res else 0,
+        "explore_only_recall": round(
+            sum(r.explore_recall for r in explore_res) / len(explore_res), 4
+        )
+        if explore_res
+        else 0,
+        "flow_only_recall": round(
+            sum(r.flow_recall for r in explore_res) / len(explore_res), 4
+        )
+        if explore_res
+        else 0,
+        "combined_explore_recall": round(
+            sum(r.combined_recall for r in explore_res) / len(explore_res), 4
+        )
+        if explore_res
+        else 0,
     }
 
 
@@ -359,35 +646,49 @@ def compare_with_codegraph(results: list[EvalResult], cg_path: Path) -> None:
 
     jidra_recall = sum(r.recall for r in results) / len(results)
     jidra_passed = sum(1 for r in results if r.passed)
-    search_res   = [r for r in results if r.api == "search"]
-    explore_res  = [r for r in results if r.api == "explore"]
-    jidra_mrr    = sum(r.mrr for r in search_res) / len(search_res) if search_res else 0
-    comb_recall  = sum(r.combined_recall for r in explore_res) / len(explore_res) if explore_res else 0
+    search_res = [r for r in results if r.api == "search"]
+    explore_res = [r for r in results if r.api == "explore"]
+    jidra_mrr = sum(r.mrr for r in search_res) / len(search_res) if search_res else 0
+    comb_recall = (
+        sum(r.combined_recall for r in explore_res) / len(explore_res)
+        if explore_res
+        else 0
+    )
 
     cg_recall = cg_s.get("meanRecall", "—")
-    cg_mrr    = cg_s.get("meanMRR",    "—")
-    cg_passed = cg_s.get("passed",     "—")
-    cg_total  = cg_s.get("total",      "—")
+    cg_mrr = cg_s.get("meanMRR", "—")
+    cg_passed = cg_s.get("passed", "—")
+    cg_total = cg_s.get("total", "—")
 
-    print(f"\n── Comparison vs CodeGraph ──────────────────────────────────────────")
+    print("\n── Comparison vs CodeGraph ──────────────────────────────────────────")
     print(f"  {'metric':<30} {'JIDRA':>10} {'CodeGraph':>12}")
-    print(f"  {'─'*30} {'─'*10} {'─'*12}")
-    print(f"  {'passed':<30} {jidra_passed}/{len(results):>6} {f'{cg_passed}/{cg_total}':>12}")
-    print(f"  {'mean recall':<30} {jidra_recall:>10.3f} {cg_recall if isinstance(cg_recall, str) else f'{cg_recall:.3f}':>12}")
-    print(f"  {'mean MRR (search)':<30} {jidra_mrr:>10.3f} {cg_mrr if isinstance(cg_mrr, str) else f'{cg_mrr:.3f}':>12}")
+    print(f"  {'─' * 30} {'─' * 10} {'─' * 12}")
+    print(
+        f"  {'passed':<30} {jidra_passed}/{len(results):>6} {f'{cg_passed}/{cg_total}':>12}"
+    )
+    print(
+        f"  {'mean recall':<30} {jidra_recall:>10.3f} {cg_recall if isinstance(cg_recall, str) else f'{cg_recall:.3f}':>12}"
+    )
+    print(
+        f"  {'mean MRR (search)':<30} {jidra_mrr:>10.3f} {cg_mrr if isinstance(cg_mrr, str) else f'{cg_mrr:.3f}':>12}"
+    )
     print(f"  {'explore+flow combined':<30} {comb_recall:>10.3f} {'(density)':>12}")
     print()
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--repo",    required=True, choices=["mtkruto","trezor","postybirb","shapeshift"])
-    ap.add_argument("--db",      required=True)
-    ap.add_argument("--out",     help="Write JSON report")
+    ap.add_argument(
+        "--repo",
+        required=True,
+        choices=["mtkruto", "trezor", "postybirb", "shapeshift"],
+    )
+    ap.add_argument("--db", required=True)
+    ap.add_argument("--out", help="Write JSON report")
     ap.add_argument("--compare", help="Codegraph JSON report for comparison")
     args = ap.parse_args()
 
-    cases   = make_test_cases()
+    cases = make_test_cases()
     db_path = Path(args.db)
 
     print(f"\nJIDRA Method-Level Retrieval Eval — {args.repo}")
@@ -405,7 +706,8 @@ def main() -> None:
     if args.out and results:
         report = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "repo": args.repo, "eval_type": "method-level",
+            "repo": args.repo,
+            "eval_type": "method-level",
             "summary": summary,
             "results": [asdict(r) for r in results],
         }
