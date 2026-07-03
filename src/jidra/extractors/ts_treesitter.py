@@ -158,7 +158,9 @@ def _return_type(node, src: bytes) -> str:
 
 
 class _FileExtractor:
-    def __init__(self, rel_path: str, src: bytes, tsconfig_paths: dict[str, str] | None = None):
+    def __init__(
+        self, rel_path: str, src: bytes, tsconfig_paths: dict[str, str] | None = None
+    ):
         self.rel = rel_path
         self.src = src
         self.namespace = _namespace(rel_path)
@@ -284,7 +286,11 @@ class _FileExtractor:
                         continue
                     var_name = _text(ident, src)
                     type_node = next(
-                        (c for c in value.children if c.type in ("identifier", "type_identifier")),
+                        (
+                            c
+                            for c in value.children
+                            if c.type in ("identifier", "type_identifier")
+                        ),
                         None,
                     )
                     if type_node is not None:
@@ -484,7 +490,11 @@ class _FileExtractor:
         for spec in named.children:
             if spec.type == "import_specifier":
                 # alias import: `import { Foo as F }` — local name is last identifier
-                idents = [c for c in spec.children if c.type in ("identifier", "type_identifier")]
+                idents = [
+                    c
+                    for c in spec.children
+                    if c.type in ("identifier", "type_identifier")
+                ]
                 if not idents:
                     continue
                 local_name = _text(idents[-1], self.src)
@@ -635,5 +645,6 @@ def build_ts_graph_treesitter(
     # repos; for TS-only it returns this graph directly, so resolve here too.
     if _resolve:
         from .extractor import _resolve_calls
+
         _resolve_calls(graph)
     return graph
