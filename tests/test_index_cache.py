@@ -31,8 +31,8 @@ def test_first_run_builds_graph_and_writes_cache(tmp_path, monkeypatch):
     cli._index(str(codebase), str(output), _quiet=True)
 
     assert calls == [1]
-    assert cache_path(codebase).exists()
-    cached = load_cache(codebase)
+    assert cache_path(output).exists()
+    cached = load_cache(output)
     assert "fingerprint" in cached
 
 

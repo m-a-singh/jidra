@@ -132,7 +132,7 @@ class TestEngineQueries:
             framework_role="hook",
         )
         graph_store.save_full_graph(
-            conn, Graph([cls], [endpoint, hook], [], [], [], [])
+            conn, Graph([cls], [endpoint, hook], [], [], [], []), variant="validated"
         )
         conn.close()
         return JidraEngine(str(db))
