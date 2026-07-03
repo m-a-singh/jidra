@@ -69,6 +69,8 @@ def _run_sidecar(
         "docker",
         "run",
         "--rm",
+        "-e",
+        "NODE_OPTIONS=--max-old-space-size=4096",
         "-v",
         f"{codebase_root}:/repo:ro",
         DOCKER_IMAGE,
@@ -312,14 +314,21 @@ def build_ts_graph(
     gap_files = _compute_gap_files(codebase_root, records, skip_folders)
 
     if not gap_files:
+        from .extractor import _resolve_calls
+        _resolve_calls(sidecar_graph)
         return sidecar_graph
 
     from .ts_treesitter import build_ts_graph_treesitter
+    from .extractor import _resolve_calls
 
+    # Skip resolve in gap-fill — we resolve the full merged graph below so
+    # that sidecar classes/methods are visible to the gap-fill callsites too.
     gap_graph = build_ts_graph_treesitter(
-        codebase_root, on_progress, only_files=gap_files
+        codebase_root, on_progress, only_files=gap_files, _resolve=False
     )
-    return _merge_ts_graphs(sidecar_graph, gap_graph)
+    merged = _merge_ts_graphs(sidecar_graph, gap_graph)
+    _resolve_calls(merged)
+    return merged
 
 
 def _compute_gap_files(
