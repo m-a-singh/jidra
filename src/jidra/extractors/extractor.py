@@ -1465,9 +1465,15 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
             )
         return status, reason, candidates
 
-    def _resolve_one(call: CallSite) -> None:
+    def _resolve_one(call: CallSite, _seen: frozenset[str] | None = None) -> None:
         caller_method = method_by_id[call.caller_method_id]
         caller_class = class_by_id[caller_method.class_id]
+
+        _seen = _seen or frozenset()
+        _cycle_key = f"{call.id}:{call.receiver_type_raw}"
+        if _cycle_key in _seen:
+            return
+        _seen = _seen | {_cycle_key}
 
         normalized, norm_source, wildcard_candidates = _normalize_type(
             call.receiver_type_raw,
@@ -1694,7 +1700,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                 call.receiver_type_raw = caller_method.class_full_name
                 call.receiver_resolution_source = "this_super"
                 call.receiver_type = caller_method.class_full_name
-                _resolve_one(call)
+                _resolve_one(call, _seen)
                 return
             elif (
                 call.receiver
@@ -1715,7 +1721,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                     call.receiver_type_raw = dotted_type
                     call.receiver_resolution_source = dotted_source
                     call.receiver_type = dotted_type
-                    _resolve_one(call)
+                    _resolve_one(call, _seen)
                     return
                 else:
                     status, reason, candidates = _interface_dispatch_fallback(
@@ -1737,6 +1743,23 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         call.resolution_status = status
         call.resolution_reason = reason
 
+    _KNOWN_GLOBALS = frozenset({
+        # JS builtins
+        "console", "setTimeout", "setInterval", "clearTimeout", "clearInterval",
+        "Promise", "String", "Number", "Boolean", "Array", "Object", "JSON",
+        "Math", "Date", "Error", "Map", "Set", "Symbol", "RegExp",
+        "parseInt", "parseFloat", "isNaN", "isFinite", "encodeURIComponent",
+        "decodeURIComponent", "fetch", "process", "Buffer",
+        # React hooks (bare calls, no receiver)
+        "useState", "useEffect", "useCallback", "useMemo", "useRef",
+        "useContext", "useReducer", "useLayoutEffect", "useImperativeHandle",
+        "useDebugValue", "useId", "useDeferredValue", "useTransition",
+        # i18n
+        "t", "i18n",
+    })
+
+    _REACT_HOOK_RE = re.compile(r"^use[A-Z]")
+
     callsites_in_scope = (
         graph.callsites
         if only_caller_ids is None
@@ -1747,6 +1770,19 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
     # chain-receiver callsites that are still stuck, using newly-resolved inner
     # calls' return types — bounded so we don't loop forever on a malformed chain.
     for call in callsites_in_scope:
+        if (
+            call.resolution_status == "resolved"
+            and call.resolved_candidates
+            and call.resolution_reason == "compiler_symbol"
+            and not call.receiver  # bare calls only — receiver calls resolved better by _resolve_one
+        ):
+            # Sidecar resolved a bare function call via TS compiler symbol.
+            # Validate candidate IDs exist in our method registry.
+            valid = [c for c in call.resolved_candidates if c in method_by_id]
+            if valid:
+                call.resolved_candidates = valid
+                call.candidate_count = len(valid)
+                continue
         _resolve_one(call)
 
     MAX_CHAIN_PASSES = 6
@@ -1773,6 +1809,26 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
             changed = True
         if not changed:
             break
+
+    _TS_EXTENSIONS = (".ts", ".tsx", ".js", ".jsx", ".mjs")
+    for call in callsites_in_scope:
+        if call.resolution_status not in ("unresolved_receiver", "unresolved", "unresolved_method"):
+            continue
+        if not call.file_path.endswith(_TS_EXTENSIONS):
+            continue
+        receiver = (call.receiver or "").strip()
+        callee = call.callee_name or ""
+        # Only reclassify unresolved_method when there is no receiver — a bare
+        # call like useMemo(...) that fell through with the default status.
+        if call.resolution_status == "unresolved_method" and receiver:
+            continue
+        if (
+            receiver in _KNOWN_GLOBALS
+            or (not receiver and callee in _KNOWN_GLOBALS)
+            or (not receiver and _REACT_HOOK_RE.match(callee))
+        ):
+            call.resolution_status = "external_library"
+            call.resolution_reason = "known global or react hook"
 
     # Second pass: retry `unresolved_method` callsites where the receiver class
     # exists in the graph but the method wasn't found on it or its hierarchy.
