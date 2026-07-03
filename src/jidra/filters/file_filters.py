@@ -49,8 +49,38 @@ def gitignored_paths(root: Path, paths: list[Path]) -> set[Path]:
     return {Path(p) for p in out.split("\0") if p}
 
 
-def apply_filters(files: list[Path], root: Path) -> list[Path]:
-    """Drop oversized files, then drop git-ignored ones."""
+def excluded_by_skip_folders(
+    files: list[Path], root: Path, skip_folders: set[str] | None
+) -> set[Path]:
+    """Subset of `files` that fall under a user-supplied skip-folder prefix.
+
+    `skip_folders` entries are relative POSIX paths from `root` (e.g.
+    `"ui/src/components/ui"`), matched as path prefixes — not bare folder
+    names — so excluding `legacy` doesn't also exclude an unrelated
+    `vendor/legacy` elsewhere in the tree.
+    """
+    if not skip_folders:
+        return set()
+    prefixes = tuple(s.strip("/") + "/" for s in skip_folders if s.strip("/"))
+    if not prefixes:
+        return set()
+    excluded = set()
+    for f in files:
+        try:
+            rel = f.resolve().relative_to(root.resolve()).as_posix() + "/"
+        except ValueError:
+            continue
+        if rel.startswith(prefixes):
+            excluded.add(f)
+    return excluded
+
+
+def apply_filters(
+    files: list[Path], root: Path, skip_folders: set[str] | None = None
+) -> list[Path]:
+    """Drop oversized files, git-ignored ones, and user-supplied skip-folders."""
     kept = [f for f in files if not is_too_large(f)]
     ignored = gitignored_paths(root, kept)
-    return [f for f in kept if f not in ignored]
+    kept = [f for f in kept if f not in ignored]
+    skipped = excluded_by_skip_folders(kept, root, skip_folders)
+    return [f for f in kept if f not in skipped]

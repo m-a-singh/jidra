@@ -277,7 +277,7 @@ export function GraphViewer({ repoPath, outputPath }: RepoState) {
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => () => { networkRef.current = null; }, []);
+  useEffect(() => () => { networkRef.current?.destroy(); networkRef.current = null; }, []);
 
   const callers = selected?.id ? getCallers(selected.id) : [];
   const callees = selected?.id ? getCallees(selected.id) : [];

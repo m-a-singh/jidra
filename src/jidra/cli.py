@@ -1221,6 +1221,7 @@ def _index(
     _quiet: bool = False,
     force: bool = False,
     ts_backend: str = "auto",
+    skip_folders: set[str] | None = None,
 ) -> None:
     from .utils.cache import (
         compute_file_manifest,
@@ -1319,6 +1320,7 @@ def _index(
         previous_graph=previous_graph,
         ts_backend=ts_backend,
         extra_java_roots=extra_java_roots or None,
+        skip_folders=skip_folders,
     )
 
     if changed_files is not None and previous_graph is not None and not _quiet:
@@ -1461,6 +1463,7 @@ def _process(
     build_dir: str | None,
     repo_root: str | None = None,
     use_docker: bool = False,
+    skip_folders: set[str] | None = None,
 ) -> None:
     ui.banner("JIDRA Processing Pipeline")
     _pipeline_start = time.time()
@@ -1494,6 +1497,7 @@ def _process(
                 str(output_dir),
                 on_progress=on_class_parsed,
                 _quiet=True,
+                skip_folders=skip_folders,
             )
         conn = graph_store.connect(db_path)
         graph = graph_store.load_graph(conn, variant="main")
@@ -1741,6 +1745,13 @@ def _up() -> None:
     codebase_path = repo / build_sub_dir if build_sub_dir != "." else repo
     build_dir = build_sub_dir if build_sub_dir != "." else None
 
+    skip_input = _prompt(
+        "Folders to skip, comma-separated (optional, relative to repo)",
+        "",
+        optional=True,
+    )
+    skip_folders = {s.strip() for s in skip_input.split(",") if s.strip()} or None
+
     from .filters.ts_filters import detect_languages
 
     langs = detect_languages(repo)
@@ -1809,6 +1820,7 @@ def _up() -> None:
             build_dir=build_dir,
             repo_root=str(repo),
             use_docker=use_docker,
+            skip_folders=skip_folders,
         )
     except SystemExit as e:
         raise e
