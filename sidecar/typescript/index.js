@@ -299,6 +299,26 @@ function extractFile(sourceFile, root) {
       });
     }
 
+    // Constructor parameter properties (e.g. constructor(private repo: UserRepo))
+    for (const ctor of cls.getConstructors()) {
+      for (const p of ctor.getParameters()) {
+        if (!p.isParameterProperty()) continue;
+        const fName = p.getName();
+        const fType = safeTypeName(p);
+        const fId = fieldId(fullName, fName, relPath, startLine(p));
+        allRecords.push({
+          _type: "field",
+          id: fId,
+          class_id: cId,
+          name: fName,
+          type_name: fType,
+          modifiers: p.getModifiers().map(m => m.getText()),
+          file_path: relPath,
+          line: startLine(p),
+        });
+      }
+    }
+
     // Methods
     for (const method of cls.getMethods()) {
       extractMethod(method, fullName, cId, relPath, imports, decoratorNames, allRecords);
@@ -527,20 +547,37 @@ function extractCallSites(node, callerMethodId, relPath, records) {
         const sym = expr.getSymbol();
         if (sym) {
           const decls = sym.getDeclarations();
+          const declName = sym.getName();
           for (const decl of decls) {
             const declFile = decl.getSourceFile().getFilePath();
             if (declFile.includes("node_modules")) continue; // Option A: skip external
-            // Build a rough signature to look up in registry
-            const declName = sym.getName();
-            const parent = decl.getParent();
-            let parentName = "";
+            const declNs = filePathToNamespace(declFile, repoRoot);
+            const declClassName = filePathToClassName(declFile);
+            const declFullName = `${declNs}.${declClassName}`;
+            // Try module-level function: <ns>.<file>#name(
+            const moduleKeyPrefix = `${declFullName}#${declName}(`;
+            for (const [sig, mId] of methodRegistry.entries()) {
+              if (sig.startsWith(moduleKeyPrefix) && !resolvedCandidates.includes(mId)) {
+                resolvedCandidates.push(mId);
+                break;
+              }
+            }
+            // Try parent class method: <ns>.<ClassName>#name(
             try {
-              parentName = parent.getName ? parent.getName() : "";
+              const parent = decl.getParent();
+              if (parent && parent.getName) {
+                const parentName = parent.getName();
+                if (parentName) {
+                  const classKeyPrefix = `${declNs}.${parentName}#${declName}(`;
+                  for (const [sig, mId] of methodRegistry.entries()) {
+                    if (sig.startsWith(classKeyPrefix) && !resolvedCandidates.includes(mId)) {
+                      resolvedCandidates.push(mId);
+                      break;
+                    }
+                  }
+                }
+              }
             } catch {}
-            const candidateSig = parentName
-              ? `${parentName}#${declName}`
-              : declName;
-            resolvedCandidates.push(candidateSig);
           }
           if (resolvedCandidates.length > 0) {
             resolutionStatus = "resolved";
@@ -569,14 +606,15 @@ function extractCallSites(node, callerMethodId, relPath, records) {
         candidate_count: resolvedCandidates.length,
       });
 
-      if (calleeMethodId) {
-        const reId = resolvedCallEdgeId(csId, calleeMethodId);
+      // Emit resolved_call_edge records for every candidate found via symbol resolution.
+      for (const mId of resolvedCandidates) {
+        const reId = resolvedCallEdgeId(csId, mId);
         records.push({
           _type: "resolved_call_edge",
           id: reId,
           callsite_id: csId,
           caller_method_id: callerMethodId,
-          callee_method_id: calleeMethodId,
+          callee_method_id: mId,
         });
       }
     } catch {
@@ -653,31 +691,9 @@ function extractCallSites(node, callerMethodId, relPath, records) {
 
 // ── Resolve call edges after all files processed ──────────────────────────────
 
-function resolveCallEdges(records) {
-  const callsites = records.filter((r) => r._type === "callsite");
-  const extra = [];
-
-  for (const cs of callsites) {
-    if (cs.resolution_status !== "resolved") continue;
-    for (const candidate of cs.resolved_candidates) {
-      // Look up by partial signature match
-      for (const [sig, mId] of methodRegistry.entries()) {
-        if (sig.includes(candidate) || sig.endsWith(`#${cs.callee_name}(`)) {
-          const reId = resolvedCallEdgeId(cs.id, mId);
-          extra.push({
-            _type: "resolved_call_edge",
-            id: reId,
-            callsite_id: cs.id,
-            caller_method_id: cs.caller_method_id,
-            callee_method_id: mId,
-          });
-          break;
-        }
-      }
-    }
-  }
-
-  return extra;
+function resolveCallEdges(_records) {
+  // Edges are now emitted inline during extraction (resolved_candidates holds real method IDs).
+  return [];
 }
 
 // ── JS/Frontend source root detection ────────────────────────────────────────
@@ -718,16 +734,17 @@ function isSourceFile(filePath) {
 
 function findAllTsConfigs(root) {
   const found = [];
+  const TSCONFIG_NAMES = /^tsconfig(\.[a-z]+)?\.json$/i;
 
   function walk(dir) {
-    const direct = path.join(dir, "tsconfig.json");
-    if (fs.existsSync(direct)) found.push(direct);
-
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
-      if (!e.isDirectory() || EXCLUDE_DIRS.has(e.name)) continue;
-      walk(path.join(dir, e.name));
+      if (e.isDirectory()) {
+        if (!EXCLUDE_DIRS.has(e.name)) walk(path.join(dir, e.name));
+      } else if (TSCONFIG_NAMES.test(e.name)) {
+        found.push(path.join(dir, e.name));
+      }
     }
   }
 

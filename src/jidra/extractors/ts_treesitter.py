@@ -31,6 +31,7 @@ from ..utils.parser import make_ts_parser
 from ..filters.ts_filters import EXCLUDED_DIRS as _IGNORE_DIRS
 
 _SOURCE_GLOBS = ("*.ts", "*.tsx", "*.js", "*.jsx")
+_COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
 _CONFIG_FILE_RE = re.compile(
     r"(webpack|vite|jest|babel|rollup|esbuild|next|nuxt|tailwind|postcss|prettier|eslint)"
     r"\.config\.(js|mjs|cjs|ts)$"
@@ -156,7 +157,7 @@ def _return_type(node, src: bytes) -> str:
 
 
 class _FileExtractor:
-    def __init__(self, rel_path: str, src: bytes):
+    def __init__(self, rel_path: str, src: bytes, tsconfig_paths: dict[str, str] | None = None):
         self.rel = rel_path
         self.src = src
         self.namespace = _namespace(rel_path)
@@ -167,6 +168,8 @@ class _FileExtractor:
         self.inheritance: list[InheritanceEdge] = []
         self._module_class: ClassEntry | None = None
         self.imports: list[str] = []
+        self.tsconfig_paths: dict[str, str] = tsconfig_paths or {}
+        self.import_types: dict[str, str] = {}
 
     # ── classes ───────────────────────────────────────────────────────────────
 
@@ -262,6 +265,31 @@ class _FileExtractor:
 
     # ── methods / fields ──────────────────────────────────────────────────────
 
+    @staticmethod
+    def _collect_local_new_types(body_node, src: bytes) -> dict[str, str]:
+        """Walk body AST; return {var_name: type_name} for `const x = new Foo()` patterns."""
+        result: dict[str, str] = {}
+        stack = list(body_node.children)
+        while stack:
+            n = stack.pop()
+            if n.type == "lexical_declaration":
+                for decl in _children(n, "variable_declarator"):
+                    value = decl.child_by_field_name("value")
+                    if value is None or value.type != "new_expression":
+                        continue
+                    ident = _child(decl, "identifier")
+                    if ident is None:
+                        continue
+                    var_name = _text(ident, src)
+                    type_node = next(
+                        (c for c in value.children if c.type in ("identifier", "type_identifier")),
+                        None,
+                    )
+                    if type_node is not None:
+                        result[var_name] = _text(type_node, src)
+            stack.extend(n.children)
+        return result
+
     def _emit_field(self, node, cls: ClassEntry):
         name_node = _child(node, "property_identifier")
         if name_node is None:
@@ -303,6 +331,8 @@ class _FileExtractor:
         local_types = {
             n: t for n, t in zip(param_names, param_types) if t and t != "unknown"
         }
+        if body is not None:
+            local_types.update(self._collect_local_new_types(body, self.src))
         framework_role = _framework_role(name, body, decorators)
         # Backfill class stereotype when framework_role gives more signal than path
         if framework_role and framework_role not in cls.stereotypes:
@@ -384,6 +414,8 @@ class _FileExtractor:
                 receiver = obj_text
                 if obj_text in local_types:
                     receiver_type_raw = local_types[obj_text]
+                elif obj_text in self.import_types:
+                    receiver_type_raw = self.import_types[obj_text]
         elif fn.type == "identifier":
             callee = _text(fn, self.src)
         else:
@@ -415,10 +447,48 @@ class _FileExtractor:
 
     def _collect_import(self, node):
         src_str = _child(node, "string")
-        if src_str is not None:
-            frag = _child(src_str, "string_fragment")
-            if frag is not None:
-                self.imports.append(_text(frag, self.src))
+        if src_str is None:
+            return
+        frag = _child(src_str, "string_fragment")
+        if frag is None:
+            return
+        module_src = _text(frag, self.src)
+        self.imports.append(module_src)
+        if not self.tsconfig_paths:
+            return
+        # Resolve tsconfig path aliases for cross-package imports.
+        resolved_file: str | None = None
+        for alias, abs_path in self.tsconfig_paths.items():
+            if module_src == alias or module_src.startswith(alias + "/"):
+                resolved_file = abs_path
+                break
+        if resolved_file is None:
+            return
+        # Derive the FQN namespace from the resolved file path.
+        resolved = Path(resolved_file)
+        # Compute rel path from codebase root (best effort: strip common suffix).
+        rel_resolved = re.sub(r"\.(ts|tsx|js|jsx)$", "", resolved.as_posix())
+        ns_parts = rel_resolved.split("/")
+        if ns_parts and ns_parts[-1] in ("index",):
+            ns_parts = ns_parts[:-1]
+        resolved_ns = ".".join(ns_parts[:-1]) if len(ns_parts) > 1 else "<root>"
+        # Collect named imports: `import { Foo, Bar } from "..."`
+        clause = _child(node, "import_clause")
+        if clause is None:
+            return
+        named = _child(clause, "named_imports")
+        if named is None:
+            return
+        for spec in named.children:
+            if spec.type == "import_specifier":
+                # alias import: `import { Foo as F }` — local name is last identifier
+                idents = [c for c in spec.children if c.type in ("identifier", "type_identifier")]
+                if not idents:
+                    continue
+                local_name = _text(idents[-1], self.src)
+                imported_name = _text(idents[0], self.src)
+                fqn = f"{resolved_ns}.{imported_name}"
+                self.import_types[local_name] = fqn
 
     # ── top-level walk ─────────────────────────────────────────────────────────
 
@@ -453,6 +523,31 @@ class _FileExtractor:
             self._emit_lexical(n)
 
 
+def _load_tsconfig_paths(codebase_root: Path) -> dict[str, str]:
+    """Return {alias: resolved_abs_path} from tsconfig.base.json or tsconfig.json."""
+    import json
+
+    for name in ("tsconfig.base.json", "tsconfig.json"):
+        cfg = codebase_root / name
+        if not cfg.exists():
+            continue
+        try:
+            text = _COMMENT_RE.sub("", cfg.read_text(encoding="utf-8"))
+            data = json.loads(text)
+        except Exception:
+            continue
+        paths = (data.get("compilerOptions") or {}).get("paths") or {}
+        result: dict[str, str] = {}
+        for alias, targets in paths.items():
+            if not targets:
+                continue
+            clean_alias = alias.rstrip("/*")
+            first = targets[0].rstrip("/*")
+            result[clean_alias] = str(codebase_root / first)
+        return result
+    return {}
+
+
 def _iter_ts_files(
     codebase_root: Path,
     only_files: set[Path] | None = None,
@@ -479,12 +574,14 @@ def build_ts_graph_treesitter(
     on_progress: Callable[[int], None] | None = None,
     only_files: set[Path] | None = None,
     skip_folders: set[str] | None = None,
+    _resolve: bool = True,
 ) -> Graph:
     """Build a TypeScript Graph in-process. Call sites are emitted unresolved;
     `extractor._resolve_calls` resolves them after the merge, like other
     tree-sitter languages."""
     parser_ts = make_ts_parser(tsx=False)
     parser_tsx = make_ts_parser(tsx=True)
+    tsconfig_paths = _load_tsconfig_paths(codebase_root)
 
     classes: list[ClassEntry] = []
     methods: list[MethodEntry] = []
@@ -503,7 +600,7 @@ def build_ts_graph_treesitter(
         rel = path.relative_to(codebase_root).as_posix()
         parser = parser_tsx if path.suffix in (".tsx", ".jsx") else parser_ts
         tree = parser.parse(src)
-        fx = _FileExtractor(rel, src)
+        fx = _FileExtractor(rel, src, tsconfig_paths=tsconfig_paths)
         fx.run(tree.root_node)
         classes.extend(fx.classes)
         methods.extend(fx.methods)
@@ -526,7 +623,7 @@ def build_ts_graph_treesitter(
     # Lazy import avoids the extractor -> ts_extractor -> ts_treesitter cycle at
     # module load. The merge path in build_graph re-resolves for multi-language
     # repos; for TS-only it returns this graph directly, so resolve here too.
-    from .extractor import _resolve_calls
-
-    _resolve_calls(graph)
+    if _resolve:
+        from .extractor import _resolve_calls
+        _resolve_calls(graph)
     return graph
