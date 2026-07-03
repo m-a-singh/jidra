@@ -20,12 +20,12 @@ from ..models import (
     SmithyShapeEntry,
 )
 
-SCHEMA_VERSION = "2.2"
+SCHEMA_VERSION = "2.3"
 
 # Older schema versions whose on-disk layout this code can upgrade in place via
 # `_run_migrations` (additive columns / virtual tables only). A DB stamped with
 # one of these is migrated and re-stamped to SCHEMA_VERSION instead of raising.
-_MIGRATABLE_FROM = {"2.0", "2.1"}
+_MIGRATABLE_FROM = {"2.0", "2.1", "2.2"}
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS classes (
@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS callsites (
     resolution_status TEXT,
     resolution_reason TEXT,
     candidate_count INTEGER,
+    argument_types_json TEXT,
     PRIMARY KEY (id, variant, module_id)
 );
 CREATE INDEX IF NOT EXISTS idx_callsites_scope ON callsites (variant, module_id, file_path);
@@ -329,6 +330,13 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE methods ADD COLUMN framework_role TEXT")
         conn.commit()
 
+    # Phase 5: argument_types_json column on callsites. Appended last to match
+    # where a fresh `_SCHEMA_SQL` build also places it, so the positional
+    # INSERT lines up.
+    if not _column_exists(conn, "callsites", "argument_types_json"):
+        conn.execute("ALTER TABLE callsites ADD COLUMN argument_types_json TEXT")
+        conn.commit()
+
     # Phase 1: backfill the FTS index for DBs created before it existed. The
     # sync triggers only cover rows written after the trigger was created, so an
     # upgraded DB needs a one-time bulk load of its existing methods.
@@ -485,6 +493,7 @@ def _callsite_row(c: CallSite, variant: str, module_id: str | None) -> tuple:
         c.resolution_status,
         c.resolution_reason,
         c.candidate_count,
+        _dumps(c.argument_types),
     )
 
 
@@ -750,7 +759,7 @@ def _insert_graph(
         ],
     )
     conn.executemany(
-        "INSERT INTO callsites VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO callsites VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [_callsite_row(c, variant_of(c.file_path), module_id) for c in graph.callsites],
     )
     conn.executemany(
@@ -888,6 +897,7 @@ def _row_to_callsite(row: sqlite3.Row) -> CallSite:
         resolution_status=row["resolution_status"] or "unresolved",
         resolution_reason=row["resolution_reason"] or "",
         candidate_count=row["candidate_count"] or 0,
+        argument_types=_loads(row["argument_types_json"], []),
     )
 
 
@@ -1398,7 +1408,7 @@ def insert_callsites(
     module_id: str | None = None,
 ) -> None:
     conn.executemany(
-        "INSERT INTO callsites VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO callsites VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [_callsite_row(c, variant, module_id) for c in callsites],
     )
 

@@ -816,9 +816,11 @@ def _merge_unresolved(
 
 
 def build_go_graph(
-    codebase_root: Path, on_progress: Callable[[int], None] | None = None
+    codebase_root: Path,
+    on_progress: Callable[[int], None] | None = None,
+    skip_folders: set[str] | None = None,
 ) -> Graph:
-    file_paths = list(iter_go_files(codebase_root))
+    file_paths = list(iter_go_files(codebase_root, skip_folders=skip_folders))
 
     # Pass 1: parse every file and collect all type declarations globally.
     # Parallel-safe — each worker parses its own file and returns plain

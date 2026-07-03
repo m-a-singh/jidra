@@ -20,7 +20,11 @@ def should_include_dir(path: Path) -> bool:
     return not bool(names & EXCLUDED_DIRS)
 
 
-def iter_java_files(root: Path, extra_roots: list[Path] | None = None) -> list[Path]:
+def iter_java_files(
+    root: Path,
+    extra_roots: list[Path] | None = None,
+    skip_folders: set[str] | None = None,
+) -> list[Path]:
     files: list[Path] = []
     for path in root.rglob("*.java"):
         if should_include_dir(path.parent):
@@ -33,4 +37,4 @@ def iter_java_files(root: Path, extra_roots: list[Path] | None = None) -> list[P
         for path in extra.rglob("*.java"):
             extra_files.append(path)
 
-    return sorted(apply_filters(files, root) + extra_files)
+    return sorted(apply_filters(files, root, skip_folders=skip_folders) + extra_files)
