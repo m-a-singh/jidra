@@ -25,6 +25,7 @@ from ..models import (
     inheritance_edge_id,
     method_id,
     method_signature,
+    module_class_id,
 )
 from ..filters.file_filters import apply_filters
 from ..utils.parser import make_ts_parser
@@ -249,7 +250,7 @@ class _FileExtractor:
             name = _class_name_from_path(self.rel)
             full_name = f"{self.namespace}.{name}"
             self._module_class = ClassEntry(
-                id=class_id(full_name, self.rel),
+                id=module_class_id(self.rel),
                 package_name=self.namespace,
                 name=name,
                 full_name=full_name,
@@ -260,7 +261,8 @@ class _FileExtractor:
                 stereotypes=sorted(set(_path_stereotypes(self.rel))) or ["module"],
                 language="typescript",
             )
-            self.classes.append(self._module_class)
+            # Not appended to self.classes yet — deferred until run() so we can
+            # skip it if a real class with the same stem name already exists.
         return self._module_class
 
     # ── methods / fields ──────────────────────────────────────────────────────
@@ -499,6 +501,14 @@ class _FileExtractor:
                 self._collect_import(n)
         for n in root.children:
             self._dispatch_top(n)
+        # Finalise module pseudo-class: emit it only if top-level functions were
+        # found AND no real class with the same stem name already exists (to avoid
+        # id/name collisions when the file exports a class matching its file name).
+        if self._module_class is not None:
+            stem = self._module_class.name
+            real_class_names = {c.name for c in self.classes}
+            if stem not in real_class_names:
+                self.classes.append(self._module_class)
 
     def _dispatch_top(self, n, decorators: list[str] | None = None):
         decorators = decorators or []
