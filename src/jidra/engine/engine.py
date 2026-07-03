@@ -111,34 +111,42 @@ def _tokenize_query(text: str) -> set[str]:
 
 
 def _score_hit(row: dict, tokens: set[str]) -> float:
-    """Heuristic relevance for explore ranking (higher = better).
+    """Relevance score for explore ranking (higher = better).
 
-    Mirrors CodeGraph: exact name +50, name substring +25, signature match +20,
-    a base +10 for matching source (FTS already guarantees a hit), test penalty
-    -15, generated/mock penalty -20. bm25 (lower = better) is folded in as a
-    small tiebreaker.
+    BM25 is the primary signal. Heuristic boosts are small adjustments — they
+    nudge ties, they don't override BM25 ranking.
     """
+    bm25 = -float(row.get("score", 0.0))  # BM25 is negative; invert so higher = better
+
     name = (row.get("method_name") or "").lower()
     sig = (row.get("signature") or "").lower()
     path = (row.get("file_path") or "").lower()
-    score = 10.0  # base: this row matched the FTS source/name/signature index
+
+    boost = 0.0
     for tok in tokens:
         if tok == name:
-            score += 50.0
+            boost += 2.0  # exact name match
         elif tok in name:
-            score += 25.0
+            boost += 1.0  # substring
         if tok in sig:
-            score += 20.0
+            boost += 0.5  # signature hit
+
+    stereotype = row.get("stereotypes") or ""
+    if "controller" in stereotype or "service" in stereotype:
+        boost += 1.5
+    elif "repository" in stereotype:
+        boost += 0.5
+
     if (
         "/test/" in path
         or "/tests/" in path
         or path.endswith(("test.java", "tests.java"))
     ):
-        score -= 15.0
+        boost -= 1.0
     if any(marker in path for marker in _GENERATED_MARKERS):
-        score -= 200.0  # hard demote — generated files never outrank real source
-    score += -float(row.get("score", 0.0))  # bm25 tiebreaker
-    return score
+        boost -= 10.0
+
+    return bm25 + boost
 
 
 def _summarize_uncertain_edges(edges: list[dict], limit: int = 8) -> dict:
@@ -334,9 +342,18 @@ class JidraEngine:
                 "action": "Pick the best match from suggestions and retry with that selector.",
                 "suggestions": suggestions,
             }
+        candidates = sorted(
+            candidates, key=lambda m: 1 if getattr(m, "generated", False) else 0
+        )
+        non_generated = [m for m in candidates if not getattr(m, "generated", False)]
         if len(candidates) > 1:
+            if non_generated:
+                return {"method": non_generated[0]}
             return {"error": _method_ambiguous_error(selector, candidates)}
-        return {"method": candidates[0]}
+        if non_generated:
+            return {"method": non_generated[0]}
+        # Single candidate but it's generated — return with caution flag
+        return {"method": candidates[0], "generated_warning": True}
 
     def _get_budget(self) -> dict:
         """Pick the output budget for this graph's size (see _BUDGET_TIERS)."""
@@ -479,15 +496,39 @@ class JidraEngine:
                 "uncertain_edge_summary": _summarize_uncertain_edges(uncertain_edges),
                 "stopped_path_summary": _summarize_stopped_paths(stopped_paths),
                 "summary": summary,
-                "notes": [
-                    "This is a compact agent view.",
-                    "Use jidra_get_flow for the full graph.",
-                    "Use jidra_get_method_source to fetch source for a selected method.",
-                ],
             }
         )
 
     def get_method_source(self, method: str) -> dict:
+        # When the agent passes a bare class FQN (no # or .method suffix),
+        # return the class's method list so it can pick the right one in one hop.
+        # Guard: last segment starts with uppercase (Java class convention) and no #.
+        if "#" not in method and method.rsplit(".", 1)[-1][:1].isupper():
+            cls_short = method.rsplit(".", 1)[-1]
+            cls_methods = [
+                m
+                for m in self.graph.methods
+                if m.class_full_name == method
+                or m.class_full_name.rsplit(".", 1)[-1] == cls_short
+            ]
+            if cls_methods:
+                owner = cls_methods[0].class_full_name
+                entries = sorted(
+                    {(m.method_name, m.id, m.signature) for m in cls_methods},
+                    key=lambda t: t[0],
+                )
+                return {
+                    "error": "class_fqn_no_method",
+                    "message": (
+                        f"'{method}' is a class, not a method. "
+                        "Pick a method from class_methods and retry with its method_id."
+                    ),
+                    "class": owner,
+                    "class_methods": [
+                        {"method_name": name, "method_id": mid, "signature": sig}
+                        for name, mid, sig in entries
+                    ],
+                }
         resolved = self._resolve_single_method(method)
         if "error" in resolved:
             suggestions = resolved.get("suggestions", [])
@@ -1224,15 +1265,13 @@ class JidraEngine:
         results: list[dict] = []
         seen_ids: set[str] = set()
 
-        def _make_entry(score: float, r: dict) -> dict:
+        def _make_entry(_score: float, r: dict) -> dict:
             entry: dict = {
                 "method_id": r["id"],
                 "method_name": r["method_name"],
                 "signature": r["signature"],
-                "class_full_name": r["class_full_name"],
                 "file_path": r["file_path"],
                 "language": r["language"],
-                "score": round(score, 2),
             }
             method = method_by_id.get(r["id"])
             if method is not None and method.is_endpoint:
@@ -1254,13 +1293,7 @@ class JidraEngine:
                 seen_ids.add(r["id"])
                 results.append(_make_entry(score, r))
 
-        return {
-            "query": query,
-            "tokens": sorted(tokens),
-            "count": len(results),
-            "results": results,
-            "hint": "Call jidra_get_method_context on a result's method_id to drill in.",
-        }
+        return {"results": results}
 
     def _methods_in_file(self, file_path: str) -> list:
         """Methods whose file matches `file_path`, tolerating absolute vs.
