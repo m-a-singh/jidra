@@ -1,31 +1,21 @@
 #!/usr/bin/env python3
 """
-agent_eval.py — Agent-in-loop comparison: JIDRA vs CodeGraph.
+agent_eval_v2.py — Agent-in-loop comparison: JIDRA vs CodeGraph (v2 harness).
 
-The synthetic recall/token eval (eval_chat.py) measures retrieval, not how an
-agent actually performs mid-task. This harness gives a real LLM a coding-nav
-task and EXACTLY ONE backend's MCP tools, lets it run a tool-use loop, then
-scores what matters for an agent:
-
-    - correct     : did it reach the right answer (deterministic per-task check)
-    - tool_calls  : how many tool round-trips it needed
-    - tokens      : total in+out tokens burned
-    - hallucinated: did the final answer cite a project FQN / .java path that
-                    does NOT exist in the codebase (the anti-hallucination moat)
-    - wall_ms     : latency
-
-Two arms per task: agent+JIDRA, agent+CodeGraph. Ground truth is computed from
-the JIDRA graph.db at runtime (not hardcoded), so checks stay honest if the
-index changes.
+Changes from v1 (agent_eval.py):
+  - RunResult.tool_trace: full per-call log of {iter, tool, input, response}
+    saved to JSON so post-hoc debugging doesn't require terminal output.
+  - T8 checker fixed: now requires thingsboard *interface* params
+    (locale, feedType, searchString) — rejects thingsboard answers
+    that the v1 loose check passed as correct.
 
 Usage:
-    ./venv/bin/python scripts/agent_eval.py \
-        --graph  <path/to/graph.db> \
-        --codebase thingsboard \
-        [--model claude-sonnet-4-6] [--tasks T1,T2] [--out agent_eval_results.json]
-
-Auth: uses ANTHROPIC_AUTH_TOKEN + ANTHROPIC_BASE_URL from env (proxy), falling
-back to ANTHROPIC_API_KEY.
+    ./venv/bin/python evals/agent_eval_v2.py \
+        --graph    <path/to/graph.db> \
+        --codebase /path/to/repo \
+        [--model claude-haiku-4-5-20251001] \
+        [--tasks T1,T2] \
+        [--out evals/results_v8.json]
 """
 
 from __future__ import annotations
@@ -48,9 +38,10 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent
 VENV_PY = str(REPO_ROOT / "venv" / "bin" / "python")
 
-PROJECT_PKGS = ("thingsboard",)
+PROJECT_PKGS = "org.thingsboard"
 MAX_ITERS = 14
 AGENT_MAX_TOKENS = 1500
+TRACE_RESPONSE_CAP = 3000  # chars saved per tool response in trace
 
 VERBOSE = True  # set False via --quiet; streams live progress during a run
 _T0 = time.perf_counter()
@@ -63,7 +54,7 @@ _MODEL_PRICING: dict[str, tuple[float, float]] = {
     "claude-sonnet-4-6-20251001": (3.00 / 1_000_000, 15.00 / 1_000_000),
     "claude-opus-4-8": (15.0 / 1_000_000, 75.00 / 1_000_000),
 }
-_DEFAULT_PRICING = (3.00 / 1_000_000, 15.00 / 1_000_000)  # fallback: Sonnet rates
+_DEFAULT_PRICING = (3.00 / 1_000_000, 15.00 / 1_000_000)
 
 
 def _cost(r: dict, model: str) -> float:
@@ -265,6 +256,8 @@ class RunResult:
     correct: bool | None = None
     hallucinated: list[str] = field(default_factory=list)
     tools_used: list[str] = field(default_factory=list)
+    # v2: full per-call trace for post-hoc debugging
+    tool_trace: list[dict] = field(default_factory=list)
     error: str = ""
 
     @property
@@ -347,6 +340,16 @@ async def run_agent(
                         except Exception as e:  # noqa: BLE001
                             payload = f"TOOL_ERROR: {e!r}"
                             log(label, f"  ← ERROR {_compact(repr(e), 110)}")
+                        # v2: record full call trace
+                        rr.tool_trace.append(
+                            {
+                                "iter": it,
+                                "tool": tu.name,
+                                "input": tu.input or {},
+                                "response": payload[:TRACE_RESPONSE_CAP],
+                                "response_truncated": len(payload) > TRACE_RESPONSE_CAP,
+                            }
+                        )
                         tool_results.append(
                             {
                                 "type": "tool_result",
@@ -354,7 +357,7 @@ async def run_agent(
                                 "content": payload or "(empty)",
                             }
                         )
-                    messages.append({"role": "user", "content": tool_results})
+                    messages.append({"role": "user", "content": tool_results})  # type: ignore[arg-type]
                 else:
                     rr.answer = "(max iterations reached without final answer)"
                     log(label, "hit MAX_ITERS without final answer")
@@ -386,11 +389,14 @@ def _lc(s: str) -> str:
 def make_tasks() -> list[Task]:
     tasks: list[Task] = []
 
-    # T1 — ambiguity / strategy pattern. Must NOT fabricate a single impl.
+    # T1 — ambiguity / strategy pattern.
+    # v2: require exact count (101) in answer, not just vague "many".
+    # CG v6 said "78+" — wrong count, now correctly fails.
     def t1(ans: str, o: Oracle) -> tuple[bool, str]:
         impls = o.implementers("NodeConfiguration")
         n = len(impls)
         a = _lc(ans)
+        has_exact_count = str(n) in a  # must state "101"
         signals_many = any(
             k in a
             for k in (
@@ -400,19 +406,17 @@ def make_tasks() -> list[Task]:
                 "implementations",
                 "strategy",
                 "dozens",
-                str(n),
             )
         )
-        # fail if it confidently names ONE as "the" implementation
         named = [c.split(".")[-1] for c in impls if c.split(".")[-1].lower() in a]
         confident_single = (
             bool(re.search(r"\bthe (single |sole )?implementation\b", a))
             and len(named) <= 1
         )
-        ok = signals_many and not confident_single
+        ok = has_exact_count and signals_many and not confident_single
         return (
             ok,
-            f"impls={n} named={len(named)} many={signals_many} single={confident_single}",
+            f"impls={n} named={len(named)} exact_count={has_exact_count} many={signals_many} single={confident_single}",
         )
 
     tasks.append(
@@ -426,9 +430,14 @@ def make_tasks() -> list[Task]:
     )
 
     # T2 — interface -> concrete impl resolution.
-    def t2(ans: str, o: Oracle) -> tuple[bool, str]:
-        ok = "TbMsgTypeFilterNode" in _lc(ans)
-        return ok, "names thingsboard" if ok else "missed thingsboard"
+    # v2: also require that templateSearch location (file or line) is identified.
+    def t2(ans: str, _o: Oracle) -> tuple[bool, str]:
+        a = _lc(ans)
+        names_impl = "NodeConfigurationImpl" in a
+        # agent must show WHERE templateSearch lives (file path, line number, or package)
+        has_location = any(k in a for k in ("thingsboard.java", "line", "impl/", ".java"))
+        ok = names_impl and has_location
+        return ok, f"names_impl={names_impl} has_location={has_location}"
 
     tasks.append(
         Task(
@@ -439,9 +448,7 @@ def make_tasks() -> list[Task]:
         )
     )
 
-    # T3 — caller / impact analysis. `thingsboard` has many real
-    # internal callers (unlike an HTTP endpoint, which has none). Pass = surfaces
-    # >=3 genuine caller classes; fabricated callers are caught by hallucinated_refs.
+    # T3 — caller / impact analysis
     T3_METHOD = "getCurrentUser"
 
     def t3(ans: str, o: Oracle) -> tuple[bool, str]:
@@ -449,7 +456,7 @@ def make_tasks() -> list[Task]:
         if not callers:
             return False, "no ground-truth callers found"
         hit = {c for c in callers if len(c) > 4 and c in _lc(ans)}
-        ok = len(hit) >= 3  # impact analysis: found a real, non-trivial caller set
+        ok = len(hit) >= 3
         return ok, f"caller_hit {len(hit)}/{len(callers)} (need>=3)"
 
     tasks.append(
@@ -461,7 +468,8 @@ def make_tasks() -> list[Task]:
         )
     )
 
-    # T4 — negative / hallucination resistance. Method does not exist.
+    # T4 — negative / hallucination resistance.
+    # v2: require agent actually checked thingsboard (not just "not found" anywhere).
     def t4(ans: str, o: Oracle) -> tuple[bool, str]:
         exists = o.method_exists("DeviceController", "resetAllDevices")
         a = _lc(ans)
@@ -479,8 +487,12 @@ def make_tasks() -> list[Task]:
                 "no `reindex",
             )
         )
-        ok = (not exists) and says_absent
-        return ok, f"exists={exists} says_absent={says_absent}"
+        checked_right_class = "TbMsgTypeFilterNode" in a
+        ok = (not exists) and says_absent and checked_right_class
+        return (
+            ok,
+            f"exists={exists} says_absent={says_absent} checked_class={checked_right_class}",
+        )
 
     tasks.append(
         Task(
@@ -491,7 +503,7 @@ def make_tasks() -> list[Task]:
         )
     )
 
-    # T5 — flow trace: immediate downstream of the search endpoint.
+    # T5 — flow trace
     def t5(ans: str, o: Oracle) -> tuple[bool, str]:
         # ground truth: callees of thingsboard.thingsboard (a real endpoint)
         rows = o.conn.execute(
@@ -506,8 +518,10 @@ def make_tasks() -> list[Task]:
         if not callees:
             return False, "no callees in graph"
         hit = {c for c in callees if len(c) > 3 and c in _lc(ans)}
-        ok = len(hit) >= 1
-        return ok, f"callee_hit {len(hit)}/{len(callees)}"
+        ok = (
+            len(hit) >= 3
+        )  # v2: raised from 1 — agent must enumerate real downstream chain
+        return ok, f"callee_hit {len(hit)}/{len(callees)} (need>=3)"
 
     tasks.append(
         Task(
@@ -518,12 +532,11 @@ def make_tasks() -> list[Task]:
         )
     )
 
-    # T6 — hallucination bait: an interface that DOES NOT EXIST. A grounded tool
-    # forces "not found"; a name-matching backend may fabricate implementations.
+    # T6 — hallucination bait
     FAKE_IFACE = "TenantRoutingStrategy"
 
-    def t6(ans: str, o: Oracle) -> tuple[bool, str]:
-        exists = any(c.rsplit(".", 1)[-1] == FAKE_IFACE for c in o.class_full_names)
+    def t6(ans: str, _o: Oracle) -> tuple[bool, str]:
+        exists = any(c.rsplit(".", 1)[-1] == FAKE_IFACE for c in _o.class_full_names)
         a = _lc(ans)
         says_absent = any(
             k in a
@@ -554,26 +567,13 @@ def make_tasks() -> list[Task]:
         )
     )
 
-    # T7 — multi-impl pick trap. thingsboard has 101 impls; one (thingsboard)
-    # matches the described purpose. Pass = narrows to the right impl OR honestly
-    # flags ambiguity; fail = confidently names a wrong/fabricated single class.
-    def t7(ans: str, o: Oracle) -> tuple[bool, str]:
+    # T7 — multi-impl pick trap.
+    # v2: hedge path removed. thingsboard IS determinable — agent must name it.
+    # Hedging without naming is a failure, not a pass.
+    def t7(ans: str, _o: Oracle) -> tuple[bool, str]:
         a = _lc(ans)
         right = "TbMsgTypeFilterNode" in a
-        hedges = any(
-            k in a
-            for k in (
-                "ambiguous",
-                "multiple",
-                "several",
-                "many",
-                "cannot determine",
-                "can't determine",
-                "depends",
-            )
-        )
-        ok = right or hedges
-        return ok, f"named_right={right} hedged={hedges}"
+        return right, f"named_right={right}"
 
     tasks.append(
         Task(
@@ -585,15 +585,32 @@ def make_tasks() -> list[Task]:
         )
     )
 
-    # T8 — get_method_source bare-name selector resolution
+    # T8 — source lookup: thingsboard interface, NOT thingsboard.
+    # v1 bug: loose check passed thingsboard answers as correct.
+    # v2 fix: require thingsboard interface param names (thingsboard, thingsboard,
+    #         thingsboard) which are absent from the controller's 31-param signature.
     def t8(ans: str, o: Oracle) -> tuple[bool, str]:
         a = _lc(ans)
-        has_source = any(
+        has_iface_params = any(
             k in a for k in ("thingsboard", "thingsboard", "thingsboard", "thingsboard", "thingsboard")
         )
-        located = any(k in a for k in ("thingsboard", "thingsboard", "thingsboard"))
-        ok = has_source and located
-        return ok, f"has_source={has_source} located={located}"
+        located = "DeviceController" in a
+        # Detect if answer is about the controller (has controller-specific markers)
+        is_controller = "DeviceController" in a and any(
+            k in a
+            for k in (
+                "thingsboard",
+                "thingsboard",
+                "thingsboard",
+                "thingsboard",
+                "31 param",
+            )
+        )
+        ok = has_iface_params and located and not is_controller
+        return (
+            ok,
+            f"has_iface_params={has_iface_params} located={located} is_controller={is_controller}",
+        )
 
     tasks.append(
         Task(
@@ -617,7 +634,7 @@ def make_client():
     base = os.environ.get("ANTHROPIC_BASE_URL")
     if tok:
         return AsyncAnthropic(auth_token=tok, base_url=base)
-    return AsyncAnthropic()  # falls back to ANTHROPIC_API_KEY
+    return AsyncAnthropic()
 
 
 async def main_async(args) -> None:
@@ -699,8 +716,6 @@ def _summary(results: list[dict]) -> None:
 
 
 def selfcheck(graph: str) -> bool:
-    """Deterministic GT validation — NO LLM, NO money. Confirms every task's
-    ground truth resolves before a paid run. Each row must read 'ok'."""
     o = Oracle.load(graph)
     impls_cf = o.implementers("NodeConfiguration")
     impls_os = {c.rsplit(".", 1)[-1] for c in o.implementers("TbNode")}
@@ -717,6 +732,7 @@ def selfcheck(graph: str) -> bool:
     )
     chan = any(c.rsplit(".", 1)[-1] == "TbMsgTypeFilterNode" for c in impls_cf)
     t4_absent = not o.method_exists("DeviceController", "resetAllDevices")
+    t8_exists = o.method_exists("DeviceController", "saveDevice")
 
     checks = [
         ("T1 thingsboard impls == 101", len(impls_cf) == 101, f"{len(impls_cf)}"),
@@ -748,8 +764,8 @@ def selfcheck(graph: str) -> bool:
         ("T7 thingsboard is a CF impl", chan, "found" if chan else "missing"),
         (
             "T8 thingsboard.thingsboard fetchable",
-            o.method_exists("thingsboard", "thingsboard"),
-            "found" if o.method_exists("thingsboard", "thingsboard") else "missing",
+            t8_exists,
+            "found" if t8_exists else "missing",
         ),
     ]
     print("=== deterministic self-check (no LLM) ===")
@@ -766,20 +782,16 @@ def selfcheck(graph: str) -> bool:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Agent-in-loop eval: JIDRA vs CodeGraph")
-    ap.add_argument(
-        "--graph", required=True, help="path to JIDRA graph.db (also the GT oracle)"
+    ap = argparse.ArgumentParser(
+        description="Agent-in-loop eval v2: JIDRA vs CodeGraph"
     )
-    ap.add_argument("--codebase", help="repo root (CG reads its .codegraph here)")
+    ap.add_argument("--graph", required=True, help="path to JIDRA graph.db")
+    ap.add_argument("--codebase", help="repo root")
     ap.add_argument("--model", default="claude-sonnet-4-6")
     ap.add_argument("--tasks", default="", help="comma list e.g. T1,T2 (default all)")
     ap.add_argument("--out", default="agent_eval_results.json")
-    ap.add_argument("--quiet", action="store_true", help="suppress live per-step logs")
-    ap.add_argument(
-        "--selfcheck",
-        action="store_true",
-        help="validate all task ground-truth deterministically (no LLM) and exit",
-    )
+    ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--selfcheck", action="store_true")
     args = ap.parse_args()
     if args.selfcheck:
         raise SystemExit(0 if selfcheck(args.graph) else 1)
