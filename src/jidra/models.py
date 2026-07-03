@@ -117,6 +117,7 @@ class MethodEntry:
     # "django_handler". None for plain methods. See STEREOTYPE_VALUES for the
     # class-level taxonomy.
     framework_role: str | None = None
+    generated: bool = False
 
 
 @dataclass
