@@ -30,9 +30,7 @@ def should_include_dir(path: Path) -> bool:
     return not bool(names & EXCLUDED_DIRS)
 
 
-def iter_python_files(
-    root: Path, skip_folders: set[str] | None = None
-) -> list[Path]:
+def iter_python_files(root: Path, skip_folders: set[str] | None = None) -> list[Path]:
     files: list[Path] = []
     for path in root.rglob("*.py"):
         if should_include_dir(path.parent):

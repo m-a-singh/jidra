@@ -840,7 +840,9 @@ LITERAL_NODE_TYPES = {
 }
 
 
-def _infer_argument_type(arg_node: Node, source: bytes, symbols: SymbolTable) -> str | None:
+def _infer_argument_type(
+    arg_node: Node, source: bytes, symbols: SymbolTable
+) -> str | None:
     if arg_node.type == "identifier":
         arg_type, _ = symbols.lookup(_text(arg_node, source))
         return arg_type
@@ -882,9 +884,7 @@ def _extract_callsite(
 
         arguments = invocation.child_by_field_name("arguments")
         if arguments:
-            arg_nodes = [
-                c for c in arguments.children if c.type not in {",", "(", ")"}
-            ]
+            arg_nodes = [c for c in arguments.children if c.type not in {",", "(", ")"}]
             args_count = len(arg_nodes)
             argument_types = [
                 _infer_argument_type(a, source, symbols) for a in arg_nodes

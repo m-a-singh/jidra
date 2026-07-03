@@ -493,7 +493,9 @@ def build_ts_graph_treesitter(
     inheritance: list[InheritanceEdge] = []
 
     count = 0
-    for path in _iter_ts_files(codebase_root, only_files=only_files, skip_folders=skip_folders):
+    for path in _iter_ts_files(
+        codebase_root, only_files=only_files, skip_folders=skip_folders
+    ):
         try:
             src = path.read_bytes()
         except OSError:
