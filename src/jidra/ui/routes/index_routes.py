@@ -31,10 +31,33 @@ class ProcessRequest(BaseModel):
 # exclusion during indexing still goes through each language's own filter
 # plus gitignore; this list is a coarse approximation for UX purposes.
 _DEFAULT_EXCLUDED_DIRS = {
-    "node_modules", ".git", "dist", "build", "vendor", ".cache", "coverage",
-    "venv", ".venv", "__pycache__", "target", ".gradle", "out", ".next",
-    ".nuxt", "public", "bin", ".turbo", ".output", ".svelte-kit", "generated",
-    ".pytest_cache", ".mypy_cache", "site-packages", ".expo", "android", "ios",
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "vendor",
+    ".cache",
+    "coverage",
+    "venv",
+    ".venv",
+    "__pycache__",
+    "target",
+    ".gradle",
+    "out",
+    ".next",
+    ".nuxt",
+    "public",
+    "bin",
+    ".turbo",
+    ".output",
+    ".svelte-kit",
+    "generated",
+    ".pytest_cache",
+    ".mypy_cache",
+    "site-packages",
+    ".expo",
+    "android",
+    "ios",
 }
 
 
