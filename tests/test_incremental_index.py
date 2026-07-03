@@ -351,7 +351,7 @@ public class UserService {
     assert result["change_type"] == "callsite_change"
 
     graph = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="main"
+        graph_store.connect(output / "graph.db"), variant="validated"
     )
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch = method_by_sig["com.example.UserService#fetch(String)"]

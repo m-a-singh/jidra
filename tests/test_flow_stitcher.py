@@ -11,10 +11,6 @@ class TestStitchFlow:
 
         assert "error" not in result
         assert "entry" in result
-        assert "nodes" in result
-        assert "edges" in result
-        assert "uncertain_edges" in result
-        assert "stopped_paths" in result
         assert "summary" in result
         assert "agent_view" in result
 
@@ -32,11 +28,11 @@ class TestStitchFlow:
         entry_method = simple_test_graph.methods[0]
         result = stitch_flow(loaded_test_graph, entry_method)
 
-        nodes = result.get("nodes", [])
+        nodes = result.get("agent_view", {}).get("top_nodes", [])
         assert len(nodes) > 0
 
         for node in nodes:
-            assert "id" in node
+            assert "method_id" in node
             assert "signature" in node
             assert "depth" in node
             assert "tier" in node
@@ -47,9 +43,8 @@ class TestStitchFlow:
     def test_stitch_flow_edges_structure(self, loaded_test_graph, simple_test_graph):
         """Test edge structure in stitched flow."""
         entry_method = simple_test_graph.methods[0]
-        result = stitch_flow(loaded_test_graph, entry_method)
-
-        edges = result.get("edges", [])
+        result_full = stitch_flow(loaded_test_graph, entry_method, detail="full")
+        edges = result_full.get("edges", [])
         assert isinstance(edges, list)
 
         for edge in edges:
@@ -88,8 +83,8 @@ class TestStitchFlow:
         )
 
         # Both should be valid
-        assert "nodes" in result_all
-        assert "nodes" in result_business
+        assert "summary" in result_all
+        assert "summary" in result_business
 
     def test_stitch_flow_summary(self, loaded_test_graph, simple_test_graph):
         """Test summary metrics."""
@@ -117,12 +112,11 @@ class TestStitchFlow:
         assert "important_unresolved_calls" in agent_view
         assert "uncertain_edges" in agent_view
         assert "stopped_paths" in agent_view
-        assert "notes" in agent_view
 
     def test_stitch_flow_tiered_views(self, loaded_test_graph, simple_test_graph):
         """Test tiered flow views."""
         entry_method = simple_test_graph.methods[0]
-        result = stitch_flow(loaded_test_graph, entry_method)
+        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
 
         assert "likely_primary" in result or "primary_flow" in result
         assert "supporting" in result or "supporting_flow" in result
@@ -133,7 +127,7 @@ class TestStitchFlow:
     ):
         """Test backward-compatible aliases."""
         entry_method = simple_test_graph.methods[0]
-        result = stitch_flow(loaded_test_graph, entry_method)
+        result = stitch_flow(loaded_test_graph, entry_method, detail="full")
 
         # Check both new names and old aliases exist
         assert "likely_primary" in result or "primary_flow" in result
@@ -157,7 +151,7 @@ class TestStitchFlow:
         entry_method = simple_test_graph.methods[0]
         result = stitch_flow(loaded_test_graph, entry_method)
 
-        uncertain = result.get("uncertain_edges", [])
+        uncertain = result.get("agent_view", {}).get("uncertain_edges", [])
         assert isinstance(uncertain, list)
 
         for edge in uncertain:
