@@ -715,6 +715,8 @@ def build_mcp(
     ) -> dict:
         """TRIGGER: any request to see the implementation of a specific method or function. Call this BEFORE opening a file.
         Returns the source of just that method — no need to find or read the whole file.
+        Selector formats: method_id (hex), ClassName#methodName, or ClassName.methodName.
+        If you pass a bare class name or class FQN (no method), returns error=class_fqn_no_method with class_methods list — pick a method_id from that list and retry.
         If selector returns suggestions, pick the best match and retry immediately."""
         return invoke(
             "jidra_get_method_source", {"method": method, "graph_path": graph_path}

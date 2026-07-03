@@ -21,24 +21,25 @@ def _resolve_method_selector(graph: Graph, selector: str) -> list[MethodEntry]:
     if by_signature:
         return by_signature
 
-    if "." in selector:
-        class_sel, method_sel = selector.rsplit(".", 1)
-        by_full_class = [
-            m
-            for m in methods
-            if m.class_full_name == class_sel and m.method_name == method_sel
-        ]
-        if by_full_class:
-            return by_full_class
+    for sep in (".", "#"):
+        if sep in selector:
+            class_sel, method_sel = selector.rsplit(sep, 1)
+            by_full_class = [
+                m
+                for m in methods
+                if m.class_full_name == class_sel and m.method_name == method_sel
+            ]
+            if by_full_class:
+                return by_full_class
 
-        by_short_class = [
-            m
-            for m in methods
-            if m.class_full_name.split(".")[-1] == class_sel
-            and m.method_name == method_sel
-        ]
-        if by_short_class:
-            return by_short_class
+            by_short_class = [
+                m
+                for m in methods
+                if m.class_full_name.split(".")[-1] == class_sel
+                and m.method_name == method_sel
+            ]
+            if by_short_class:
+                return by_short_class
 
     return [m for m in methods if m.method_name == selector]
 

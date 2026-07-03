@@ -276,6 +276,18 @@ def _is_spring_data_repository(cls: ClassEntry) -> bool:
     )
 
 
+_GENERATED_PATH_MARKERS = (
+    "build/generated",
+    "build/generated-src",
+    "generated-sources",
+    ".jidra/generated",
+)
+
+
+def _is_generated_path(file_path: str) -> bool:
+    return any(m in file_path for m in _GENERATED_PATH_MARKERS)
+
+
 def _make_synthetic_method(
     cls_full_name: str,
     cls_id: str,
@@ -303,6 +315,7 @@ def _make_synthetic_method(
         class_context={},
         annotations=[],
         language=language,
+        generated=_is_generated_path(file_path),
     )
 
 
@@ -873,6 +886,27 @@ def _extract_callsite(
                 callee_name = "<init>" if last_text == "new" else last_text
         # -1 signals arity-unknown to the resolver; method references carry no argument list.
         args_count = -1
+    elif invocation.type == "object_creation_expression":
+        # new Foo() or new Foo<>() — treat as call to constructor
+        callee_name = "<init>"
+        # Extract the instantiated class name (strip generics)
+        for child in invocation.children:
+            if child.type == "type_identifier":
+                receiver = _text(child, source)
+                break
+            elif child.type == "generic_type":
+                for gc in child.children:
+                    if gc.type == "type_identifier":
+                        receiver = _text(gc, source)
+                        break
+                break
+        arguments = invocation.child_by_field_name("arguments")
+        if arguments:
+            arg_nodes = [c for c in arguments.children if c.type not in {",", "(", ")"}]
+            args_count = len(arg_nodes)
+            argument_types = [
+                _infer_argument_type(a, source, symbols) for a in arg_nodes
+            ]
     else:
         name_node = invocation.child_by_field_name("name")
         if name_node:
@@ -1024,6 +1058,7 @@ def _extract_methods(
                 controller_route=controller_route,
                 full_route=full_route,
                 framework_role=_java_framework_role(method_annotations, is_endpoint),
+                generated=_is_generated_path(cls.file_path),
             )
         )
 
@@ -1303,7 +1338,21 @@ def _resolve_dotted_receiver(
         if owner is None:
             # External type — can still return current_type so it becomes external_library
             return current_type, "dotted_chain_external"
-        raw_field_type = fields_by_class.get(current_type, {}).get(part)
+        # Walk superclass hierarchy for inherited fields
+        raw_field_type = None
+        walk_type: str | None = current_type
+        while walk_type and not raw_field_type:
+            raw_field_type = fields_by_class.get(walk_type, {}).get(part)
+            if not raw_field_type:
+                walk_class = class_by_full_name.get(walk_type)
+                walk_type = (
+                    walk_class.extends if walk_class and walk_class.extends else None
+                )
+                if walk_type and walk_class:
+                    walk_type_norm, _, _ = _normalize_type(
+                        walk_type, walk_class, all_class_full_names
+                    )
+                    walk_type = walk_type_norm
         if not raw_field_type:
             return None, None
         current_type, _, _ = _normalize_type(
@@ -1388,6 +1437,33 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
     chain_index: dict[tuple[str, str], CallSite] = {}
     for c in graph.callsites:
         chain_index[(c.caller_method_id, c.text)] = c
+
+    def _interface_dispatch_fallback(
+        call: CallSite,
+        candidates: list[MethodEntry],
+        status: str,
+        reason: str,
+    ) -> tuple[str, str, list[MethodEntry]]:
+        """Last-resort: when receiver is unresolved, find sole implementer of callee."""
+        all_impls: list[MethodEntry] = []
+        for impl_class_fqn in {
+            fqn for impls in implementers_by_target_short.values() for fqn in impls
+        }:
+            matches = methods_by_full_class_and_name.get(
+                (impl_class_fqn, call.callee_name), []
+            )
+            if call.argument_count >= 0:
+                matches = [
+                    m for m in matches if len(m.parameter_types) == call.argument_count
+                ]
+            all_impls.extend(matches)
+        if len(all_impls) == 1:
+            return (
+                "resolved_interface_dispatch_fallback",
+                "sole impl match on callee name+arity across all implementers",
+                all_impls,
+            )
+        return status, reason, candidates
 
     def _resolve_one(call: CallSite) -> None:
         caller_method = method_by_id[call.caller_method_id]
@@ -1560,6 +1636,43 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                             status = "ambiguous_overload"
                             reason = "multiple inherited overload candidates"
                     else:
+                        # Try inner class: "Outer.Inner" → look for FQN ending with "Outer$Inner" or "Outer.Inner"
+                        inner_fqn = None
+                        if "." in normalized:
+                            parts = normalized.split(".")
+                            suffix_dollar = "$".join(parts[-2:])
+                            suffix_dot = ".".join(parts[-2:])
+                            for fqn in all_class_full_names:
+                                if (
+                                    fqn.endswith("$" + suffix_dollar)
+                                    or fqn.endswith("." + suffix_dot)
+                                    or fqn.endswith("$" + suffix_dot.replace(".", "$"))
+                                ):
+                                    inner_fqn = fqn
+                                    break
+                        if inner_fqn:
+                            inner_matches = methods_by_full_class_and_name.get(
+                                (inner_fqn, call.callee_name), []
+                            )
+                            if inner_matches:
+                                arity_matches = _arity_filter(inner_matches)
+                                candidates = (
+                                    arity_matches if arity_matches else inner_matches
+                                )
+                                if len(candidates) == 1:
+                                    status = "resolved_exact"
+                                    reason = f"resolved inner class via FQN {inner_fqn}"
+                                else:
+                                    status = "ambiguous_overload"
+                                    reason = "multiple inner class overload candidates"
+                                # skip the short_matches fallback
+                                call.resolved_candidates = sorted(
+                                    m.id for m in candidates
+                                )
+                                call.candidate_count = len(call.resolved_candidates)
+                                call.resolution_status = status
+                                call.resolution_reason = reason
+                                return
                         short_matches = methods_by_short_class_and_name.get(
                             (normalized.split(".")[-1], call.callee_name), []
                         )
@@ -1576,6 +1689,13 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                         else:
                             status = "external_library"
                             reason = "receiver class not present in indexed codebase"
+            elif call.receiver and call.receiver.strip() in ("this", "super"):
+                # Resolve this/super to the caller's own class and re-enter.
+                call.receiver_type_raw = caller_method.class_full_name
+                call.receiver_resolution_source = "this_super"
+                call.receiver_type = caller_method.class_full_name
+                _resolve_one(call)
+                return
             elif (
                 call.receiver
                 and "." in call.receiver
@@ -1598,11 +1718,19 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                     _resolve_one(call)
                     return
                 else:
-                    status = "unresolved_receiver"
-                    reason = "could not infer or normalize receiver type"
+                    status, reason, candidates = _interface_dispatch_fallback(
+                        call,
+                        candidates,
+                        "unresolved_receiver",
+                        "could not infer or normalize receiver type",
+                    )
             else:
-                status = "unresolved_receiver"
-                reason = "could not infer or normalize receiver type"
+                status, reason, candidates = _interface_dispatch_fallback(
+                    call,
+                    candidates,
+                    "unresolved_receiver",
+                    "could not infer or normalize receiver type",
+                )
 
         call.resolved_candidates = sorted(m.id for m in candidates)
         call.candidate_count = len(call.resolved_candidates)
@@ -1646,6 +1774,281 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         if not changed:
             break
 
+    # Second pass: retry `unresolved_method` callsites where the receiver class
+    # exists in the graph but the method wasn't found on it or its hierarchy.
+    # Root cause: _find_method_in_hierarchy BFS silently drops parent types whose
+    # short name can't be resolved to a FQN (e.g. `extends BaseRepository` with no
+    # import). This pass uses methods_by_short_class_and_name as a fallback BFS step.
+    def _find_method_relaxed(
+        normalized_class: str,
+        callee_name: str,
+        argument_count: int,
+    ) -> tuple[list[MethodEntry], str | None]:
+        """BFS like _find_method_in_hierarchy but falls back to short-name lookup
+        for parents that couldn't be resolved to a FQN."""
+        visited: set[str] = set()
+        queue: deque[str] = deque([normalized_class])
+        while queue:
+            current = queue.popleft()
+            if current in visited:
+                continue
+            visited.add(current)
+            matches = methods_by_full_class_and_name.get((current, callee_name), [])
+            if matches:
+                if argument_count >= 0:
+                    arity = [
+                        m for m in matches if len(m.parameter_types) == argument_count
+                    ]
+                    return (arity or matches), current
+                return matches, current
+            cls = class_by_full_name.get(current)
+            if not cls:
+                continue
+            parents: list[str] = []
+            if cls.extends:
+                parents.append(cls.extends)
+            parents.extend(cls.implements)
+            for raw_parent in parents:
+                # First: try FQN resolution (same as existing BFS)
+                if "." in raw_parent:
+                    candidate = raw_parent
+                elif cls.package_name:
+                    candidate = f"{cls.package_name}.{raw_parent}"
+                    if candidate not in all_class_full_names:
+                        normalized, _, _ = _normalize_type(
+                            raw_parent, cls, all_class_full_names
+                        )
+                        candidate = normalized or raw_parent
+                else:
+                    candidate = raw_parent
+                if candidate in all_class_full_names and candidate not in visited:
+                    queue.append(candidate)
+                    continue
+                # Fallback: short-name match — parent FQN unknown, but methods indexed
+                short = raw_parent.split(".")[-1].split("<")[0]
+                short_hits = methods_by_short_class_and_name.get(
+                    (short, callee_name), []
+                )
+                if short_hits:
+                    if argument_count >= 0:
+                        arity = [
+                            m
+                            for m in short_hits
+                            if len(m.parameter_types) == argument_count
+                        ]
+                        return (arity or short_hits), f"~{short}"
+                    return short_hits, f"~{short}"
+        return [], None
+
+    for call in callsites_in_scope:
+        if call.resolution_status != "unresolved_method":
+            continue
+        normalized = call.receiver_type_normalized
+        if not normalized or normalized not in all_class_full_names:
+            continue
+        # Only retry cases where receiver class is known but method not found
+        inherited, found_in = _find_method_relaxed(
+            normalized, call.callee_name, call.argument_count
+        )
+        if not inherited:
+            continue
+        call.resolved_candidates = sorted(m.id for m in inherited)
+        call.candidate_count = len(call.resolved_candidates)
+        call.resolution_status = (
+            "resolved_inherited" if len(inherited) == 1 else "ambiguous_overload"
+        )
+        call.resolution_reason = f"second-pass relaxed hierarchy from {found_in}"
+
+    # Impl-suffix heuristic: for still-unresolved_receiver callsites where receiver
+    # type is a known interface/abstract short name, try {TypeName}Impl.
+    # Catches the common Spring pattern: @Autowired SearchFilterService → SearchFilterServiceImpl.
+    # Only fires when exactly one class with that Impl name exists (safe).
+    class_by_short_name: dict[str, list[str]] = {}
+    for c in graph.classes:
+        class_by_short_name.setdefault(c.full_name.split(".")[-1], []).append(
+            c.full_name
+        )
+
+    for call in callsites_in_scope:
+        if call.resolution_status != "unresolved_receiver":
+            continue
+        receiver = call.receiver
+        if not receiver or "." in receiver or receiver.rstrip().endswith(")"):
+            continue
+        # receiver is a simple var — try to find its field type from class fields
+        caller_method = method_by_id.get(call.caller_method_id)
+        if not caller_method:
+            continue
+        field_type = fields_by_class.get(caller_method.class_full_name, {}).get(
+            receiver
+        )
+        if not field_type:
+            continue
+        short_type = field_type.split(".")[-1].split("<")[0]
+        impl_name = short_type + "Impl"
+        impl_fqns = class_by_short_name.get(impl_name, [])
+        if len(impl_fqns) != 1:
+            continue
+        impl_fqn = impl_fqns[0]
+        impl_matches = methods_by_full_class_and_name.get(
+            (impl_fqn, call.callee_name), []
+        )
+        if not impl_matches:
+            continue
+        if call.argument_count >= 0:
+            arity = [
+                m for m in impl_matches if len(m.parameter_types) == call.argument_count
+            ]
+        else:
+            arity = impl_matches
+        candidates = arity if arity else impl_matches
+        call.receiver_type_raw = impl_fqn
+        call.receiver_type_normalized = impl_fqn
+        call.receiver_resolution_source = "impl-suffix"
+        call.resolved_candidates = sorted(m.id for m in candidates)
+        call.candidate_count = len(call.resolved_candidates)
+        call.resolution_status = (
+            "resolved_impl_suffix" if len(candidates) == 1 else "ambiguous_overload"
+        )
+        call.resolution_reason = f"impl-suffix heuristic: {short_type} → {impl_fqn}"
+
+    # CHA (Class Hierarchy Analysis): for unresolved_method callsites where the
+    # receiver type is known, fan out to ALL concrete implementors/subclasses.
+    # Covers interface dispatch (CandidateFeature → 101 impls) and abstract class dispatch.
+    # Result is multi-candidate (ambiguous_cha) — all candidates stored, graph gets N edges.
+    implementers_by_fqn: dict[str, list[str]] = {}
+    for edge in graph.inheritance_edges:
+        if edge.relation not in ("implements", "extends"):
+            continue
+        # index by both FQN and short name of target
+        for key in {edge.target_class, edge.target_class.split(".")[-1]}:
+            lst = implementers_by_fqn.setdefault(key, [])
+            if edge.source_class not in lst:
+                lst.append(edge.source_class)
+
+    def _cha_subtypes(fqn: str) -> list[str]:
+        """Recursively collect all concrete subtypes via BFS."""
+        visited: set[str] = set()
+        queue = list(
+            implementers_by_fqn.get(fqn, [])
+            + implementers_by_fqn.get(fqn.split(".")[-1], [])
+        )
+        result: list[str] = []
+        while queue:
+            cls = queue.pop()
+            if cls in visited:
+                continue
+            visited.add(cls)
+            result.append(cls)
+            queue.extend(implementers_by_fqn.get(cls, []))
+            queue.extend(implementers_by_fqn.get(cls.split(".")[-1], []))
+        return result
+
+    # Methods too common to fan out safely — inherited from Object/Enum or ubiquitous
+    # across interfaces; CHA would add thousands of false edges.
+    _cha_skip_methods = frozenset(
+        {
+            "name",
+            "toString",
+            "equals",
+            "hashCode",
+            "getClass",
+            "compareTo",
+            "ordinal",
+            "getValue",
+            "getId",
+            "getType",
+            "getCode",
+            "getKey",
+            "clone",
+            "notify",
+            "notifyAll",
+            "wait",
+            "finalize",
+        }
+    )
+    # Max subtypes before we consider the interface too broad to fan out usefully.
+    # CandidateFeature has 101 impls — fine. java.lang.Comparable has thousands — skip.
+    _CHA_MAX_SUBTYPES = 150
+
+    _already_resolved = {
+        "resolved",
+        "resolved_inherited",
+        "resolved_via_import",
+        "resolved_same_package",
+        "resolved_same_class",
+        "resolved_via_sole_implementation",
+        "candidate_global_name_arity",
+        "ambiguous_overload",
+        "resolved_impl_suffix",
+    }
+
+    for call in callsites_in_scope:
+        # Case 1: receiver type known but method not found — fan out to subtypes
+        if call.resolution_status == "unresolved_method":
+            if call.callee_name in _cha_skip_methods:
+                continue
+            recv_fqn = call.receiver_type_normalized
+            if not recv_fqn:
+                continue
+            subtypes = _cha_subtypes(recv_fqn)
+            if not subtypes or len(subtypes) > _CHA_MAX_SUBTYPES:
+                continue
+            cha_candidates: list[MethodEntry] = []
+            for sub_fqn in subtypes:
+                sub_matches = methods_by_full_class_and_name.get(
+                    (sub_fqn, call.callee_name), []
+                )
+                if call.argument_count >= 0:
+                    sub_arity = [
+                        m
+                        for m in sub_matches
+                        if len(m.parameter_types) == call.argument_count
+                    ]
+                    cha_candidates.extend(sub_arity if sub_arity else sub_matches)
+                else:
+                    cha_candidates.extend(sub_matches)
+            if not cha_candidates:
+                continue
+            call.resolved_candidates = sorted({m.id for m in cha_candidates})
+            call.candidate_count = len(call.resolved_candidates)
+            call.resolution_status = "resolved_cha"
+            call.resolution_reason = f"CHA: {recv_fqn.split('.')[-1]} → {len(subtypes)} subtypes, {len(cha_candidates)} candidates"
+
+        # Case 2: already resolved to an interface/abstract method — expand to concrete impls
+        elif call.resolution_status in _already_resolved and call.resolved_candidates:
+            if call.callee_name in _cha_skip_methods:
+                continue
+            cand_method = method_by_id.get(call.resolved_candidates[0])
+            if not cand_method:
+                continue
+            callee_class = cand_method.class_full_name
+            subtypes = _cha_subtypes(callee_class)
+            if not subtypes or len(subtypes) > _CHA_MAX_SUBTYPES:
+                continue
+            extra: list[MethodEntry] = []
+            for sub_fqn in subtypes:
+                sub_matches = methods_by_full_class_and_name.get(
+                    (sub_fqn, call.callee_name), []
+                )
+                if call.argument_count >= 0:
+                    sub_arity = [
+                        m
+                        for m in sub_matches
+                        if len(m.parameter_types) == call.argument_count
+                    ]
+                    extra.extend(sub_arity if sub_arity else sub_matches)
+                else:
+                    extra.extend(sub_matches)
+            if not extra:
+                continue
+            # Merge original candidates + subtype candidates
+            all_ids = sorted({*call.resolved_candidates, *(m.id for m in extra)})
+            call.resolved_candidates = all_ids
+            call.candidate_count = len(all_ids)
+            call.resolution_status = "resolved_cha"
+            call.resolution_reason = f"CHA: {callee_class.split('.')[-1]} → {len(subtypes)} subtypes, {len(extra)} extra"
+
     edges: list[ResolvedCallEdge] = []
     for call in callsites_in_scope:
         for callee_id in call.resolved_candidates:
@@ -1669,6 +2072,81 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         graph.resolved_call_edges = sorted(kept + edges, key=lambda e: e.id)
 
 
+def diagnose_unresolved(graph: "Graph") -> dict:
+    """Group unresolved callsites by status and reason for gap analysis."""
+    from collections import defaultdict, Counter
+
+    method_by_id = {m.id: m for m in graph.methods}
+
+    def _is_test(caller_id: str) -> bool:
+        m = method_by_id.get(caller_id)
+        if not m:
+            return False
+        fp = (m.file_path or "").replace("\\", "/")
+        return (
+            "/test/" in fp
+            or "/tests/" in fp
+            or fp.endswith("Test.java")
+            or "Test" in fp.split("/")[-1]
+        )
+
+    buckets: dict[str, list[dict]] = defaultdict(list)
+    for c in graph.callsites:
+        if c.resolution_status in (
+            "unresolved_receiver",
+            "unresolved_method",
+            "ambiguous_type",
+            "ambiguous_global_name_arity",
+        ):
+            buckets[c.resolution_status].append(
+                {
+                    "caller": c.caller_method_id,
+                    "callee": c.callee_name,
+                    "receiver": c.receiver,
+                    "receiver_raw": c.receiver_type_raw,
+                    "receiver_normalized": c.receiver_type_normalized,
+                    "reason": c.resolution_reason,
+                    "is_test": _is_test(c.caller_method_id),
+                }
+            )
+
+    summary = {}
+    for status, items in buckets.items():
+        main_items = [i for i in items if not i["is_test"]]
+        test_items = [i for i in items if i["is_test"]]
+        summary[status] = {
+            "count": len(items),
+            "main_count": len(main_items),
+            "test_count": len(test_items),
+            "top_reasons": Counter(i["reason"] for i in items).most_common(5),
+            "sample_receivers": list(
+                {i["receiver_raw"] for i in main_items if i["receiver_raw"]}
+            )[:10],
+            "sample_receiver_text": list(
+                {i["receiver"] for i in main_items if i["receiver"]}
+            )[:10],
+            "sample_callees": list({i["callee"] for i in main_items})[:10],
+        }
+
+    total_unresolved = sum(v["count"] for v in summary.values())
+    main_unresolved = sum(v["main_count"] for v in summary.values())
+    test_unresolved = sum(v["test_count"] for v in summary.values())
+    total_callsites = len(graph.callsites)
+    summary["_totals"] = {
+        "unresolved": total_unresolved,
+        "main_unresolved": main_unresolved,
+        "test_unresolved": test_unresolved,
+        "total": total_callsites,
+        "unresolved_pct": round(100 * total_unresolved / total_callsites, 1)
+        if total_callsites
+        else 0,
+        "main_unresolved_pct": round(100 * main_unresolved / total_callsites, 1)
+        if total_callsites
+        else 0,
+    }
+    return summary
+
+
 def _build_java_graph(
     codebase_root: Path,
     on_progress=None,
@@ -1686,13 +2164,13 @@ def _build_java_graph(
             codebase_root, extra_roots=extra_java_roots, skip_folders=skip_folders
         )
     )
+
     for result in parallel_map(_extract_file, file_paths):
         all_classes.extend(result.classes)
         all_methods.extend(result.methods)
         all_fields.extend(result.fields)
         all_calls.extend(result.callsites)
         all_inheritance_edges.extend(result.inheritance_edges)
-
         if on_progress:
             on_progress(len(all_classes))
 
@@ -1704,7 +2182,9 @@ def _build_java_graph(
         inheritance_edges=all_inheritance_edges,
         resolved_call_edges=[],
     )
+
     _resolve_calls(graph)
+
     return graph
 
 
