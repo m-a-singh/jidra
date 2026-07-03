@@ -336,71 +336,73 @@ function extractFile(sourceFile, root) {
   const fileCId = classId(fileFullName, relPath);
   let hasTopLevel = false;
 
-  for (const fn of sourceFile.getFunctions()) {
-    if (!hasTopLevel) {
-      // Emit a synthetic "file module" class to hang these methods on
-      allRecords.push({
-        _type: "class",
-        id: fileCId,
-        package_name: ns,
-        name: fileClass,
-        full_name: fileFullName,
-        file_path: relPath,
-        start_line: 1,
-        end_line: sourceFile.getEndLineNumber(),
-        modifiers: [],
-        annotations: [],
-        extends: null,
-        implements: [],
-        imports,
-        stereotypes: getStereotypes([], relPath),
-      });
-      hasTopLevel = true;
-    }
-    extractMethod(fn, fileFullName, fileCId, relPath, imports, [], allRecords);
+  // Collision guard: don't emit a module pseudo-class if a real class already
+  // has the same name as the file stem (e.g. a file named UserCard.tsx that
+  // exports class UserCard would collide).
+  const realClassNames = new Set(
+    sourceFile.getClasses().map(c => c.getName()).filter(Boolean)
+  );
+  const moduleClassCollides = realClassNames.has(fileClass);
+
+  function ensureModuleClass() {
+    if (hasTopLevel || moduleClassCollides) return;
+    allRecords.push({
+      _type: "class",
+      id: fileCId,
+      package_name: ns,
+      name: fileClass,
+      full_name: fileFullName,
+      file_path: relPath,
+      start_line: 1,
+      end_line: sourceFile.getEndLineNumber(),
+      modifiers: [],
+      annotations: [],
+      extends: null,
+      implements: [],
+      imports,
+      stereotypes: getStereotypes([], relPath),
+      is_interface: false,
+      language: "typescript",
+    });
+    hasTopLevel = true;
   }
 
-  // Arrow functions assigned to const (common React pattern)
-  for (const varDecl of sourceFile.getVariableDeclarations()) {
-    const initializer = varDecl.getInitializer();
-    if (!initializer) continue;
-    const kind = initializer.getKind();
-    if (
-      kind !== SyntaxKind.ArrowFunction &&
-      kind !== SyntaxKind.FunctionExpression
-    )
-      continue;
-
-    if (!hasTopLevel) {
-      allRecords.push({
-        _type: "class",
-        id: fileCId,
-        package_name: ns,
-        name: fileClass,
-        full_name: fileFullName,
-        file_path: relPath,
-        start_line: 1,
-        end_line: sourceFile.getEndLineNumber(),
-        modifiers: [],
-        annotations: [],
-        extends: null,
-        implements: [],
-        imports,
-        stereotypes: getStereotypes([], relPath),
-      });
-      hasTopLevel = true;
+  for (const fn of sourceFile.getFunctions()) {
+    ensureModuleClass();
+    if (!moduleClassCollides) {
+      extractMethod(fn, fileFullName, fileCId, relPath, imports, [], allRecords);
     }
+  }
 
-    extractMethod(
-      initializer,
-      fileFullName,
-      fileCId,
-      relPath,
-      imports,
-      [],
-      allRecords,
-      varDecl.getName()
-    );
+  // Arrow functions / function expressions assigned to a const at the TOP LEVEL
+  // of the file only (not nested inside other functions or classes).
+  // sourceFile.getVariableDeclarations() is a deep walk, so we restrict to
+  // variable statements that are direct children of the source file.
+  for (const varStmt of sourceFile.getVariableStatements()) {
+    for (const varDecl of varStmt.getDeclarations()) {
+      const initializer = varDecl.getInitializer();
+      if (!initializer) continue;
+      const kind = initializer.getKind();
+      if (
+        kind !== SyntaxKind.ArrowFunction &&
+        kind !== SyntaxKind.FunctionExpression
+      )
+        continue;
+
+      ensureModuleClass();
+      if (!moduleClassCollides) {
+        extractMethod(
+          initializer,
+          fileFullName,
+          fileCId,
+          relPath,
+          imports,
+          [],
+          allRecords,
+          varDecl.getName()
+        );
+      }
+    }
   }
 }
 
