@@ -278,13 +278,20 @@ def _is_spring_data_repository(cls: ClassEntry) -> bool:
 
 _GENERATED_PATH_MARKERS = (
     "build/generated",
-    "build/generated-src",
     "generated-sources",
     ".jidra/generated",
 )
 
+# Paths that look generated but are intentionally indexed (e.g. smithy4j contract output).
+_GENERATED_PATH_ALLOWLIST = (
+    "smithy4j",
+    "smithy4s",
+)
+
 
 def _is_generated_path(file_path: str) -> bool:
+    if any(a in file_path for a in _GENERATED_PATH_ALLOWLIST):
+        return False
     return any(m in file_path for m in _GENERATED_PATH_MARKERS)
 
 
@@ -1466,8 +1473,12 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         return status, reason, candidates
 
     def _resolve_one(call: CallSite, _seen: frozenset[str] | None = None) -> None:
-        caller_method = method_by_id[call.caller_method_id]
-        caller_class = class_by_id[caller_method.class_id]
+        caller_method = method_by_id.get(call.caller_method_id)
+        if caller_method is None:
+            return
+        caller_class = class_by_id.get(caller_method.class_id)
+        if caller_class is None:
+            return
 
         _seen = _seen or frozenset()
         _cycle_key = f"{call.id}:{call.receiver_type_raw}"

@@ -31,7 +31,7 @@ from ..filters.file_filters import apply_filters
 from ..utils.parser import make_ts_parser
 from ..filters.ts_filters import EXCLUDED_DIRS as _IGNORE_DIRS
 
-_SOURCE_GLOBS = ("*.ts", "*.tsx", "*.js", "*.jsx")
+_SOURCE_GLOBS = ("*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs")
 _COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
 _CONFIG_FILE_RE = re.compile(
     r"(webpack|vite|jest|babel|rollup|esbuild|next|nuxt|tailwind|postcss|prettier|eslint)"

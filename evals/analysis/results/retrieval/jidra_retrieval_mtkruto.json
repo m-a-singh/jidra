@@ -1,0 +1,194 @@
+{
+  "timestamp": "2026-07-03T08:59:03Z",
+  "repo": "mtkruto",
+  "summary": {
+    "total": 12,
+    "passed": 11,
+    "mean_recall": 0.6806,
+    "mean_mrr": 0.4181,
+    "explore_recall": 0.5278
+  },
+  "results": [
+    {
+      "case_id": "search-class-client",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.058823529411764705,
+      "found": [
+        "Client"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 6.152041954919696
+    },
+    {
+      "case_id": "search-method-sendMessage",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "sendMessage"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 1.8255840404890478
+    },
+    {
+      "case_id": "search-method-serialize",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "serializeObject"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 0.964250008109957
+    },
+    {
+      "case_id": "search-class-transport",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.2,
+      "found": [
+        "Transport"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 1.0189999593421817
+    },
+    {
+      "case_id": "search-class-session",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "found": [],
+      "missed": [
+        "SessionEncrypted"
+      ],
+      "node_count": 0,
+      "latency_ms": 0.1794170239008963
+    },
+    {
+      "case_id": "search-method-invoke",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.25,
+      "found": [
+        "invoke"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 1.8918749992735684
+    },
+    {
+      "case_id": "explore-send-flow",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.6666666666666666,
+      "mrr": 0.0,
+      "found": [
+        "sendMessage",
+        "send"
+      ],
+      "missed": [
+        "serializeObject"
+      ],
+      "node_count": 40,
+      "latency_ms": 13.991040992550552
+    },
+    {
+      "case_id": "explore-session",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "send"
+      ],
+      "missed": [
+        "SessionEncrypted"
+      ],
+      "node_count": 40,
+      "latency_ms": 5.779708037152886
+    },
+    {
+      "case_id": "explore-client-invoke",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "invoke"
+      ],
+      "missed": [
+        "Client"
+      ],
+      "node_count": 40,
+      "latency_ms": 15.199583023786545
+    },
+    {
+      "case_id": "explore-connection",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "connect"
+      ],
+      "missed": [
+        "Transport"
+      ],
+      "node_count": 40,
+      "latency_ms": 13.137041998561472
+    },
+    {
+      "case_id": "explore-storage",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "Storage"
+      ],
+      "missed": [
+        "SessionEncrypted"
+      ],
+      "node_count": 40,
+      "latency_ms": 6.897833023685962
+    },
+    {
+      "case_id": "explore-error-handling",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "RPCError"
+      ],
+      "missed": [
+        "handleError"
+      ],
+      "node_count": 40,
+      "latency_ms": 5.250875023193657
+    }
+  ]
+}
