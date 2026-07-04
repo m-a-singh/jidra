@@ -45,7 +45,7 @@ from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parent
+REPO_ROOT = HERE.parent.parent.parent  # evals/harness/java -> project root
 VENV_PY = str(REPO_ROOT / "venv" / "bin" / "python")
 
 PROJECT_PKGS = ("[REDACTED]",)

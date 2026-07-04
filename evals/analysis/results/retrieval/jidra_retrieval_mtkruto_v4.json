@@ -1,0 +1,231 @@
+{
+  "timestamp": "2026-07-03T09:23:26Z",
+  "repo": "mtkruto",
+  "eval_type": "method-level",
+  "summary": {
+    "total": 12,
+    "passed": 12,
+    "mean_recall": 0.8472,
+    "mean_mrr": 0.875,
+    "explore_only_recall": 0.6944,
+    "flow_only_recall": 0.0833,
+    "combined_explore_recall": 0.6944
+  },
+  "results": [
+    {
+      "case_id": "search-method-sendMessage",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "sendMessage"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 2.030332980211824,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "search-method-invoke",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.25,
+      "found": [
+        "invoke"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 1.9949169945903122,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "search-method-serializeObject",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "serializeObject"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 0.9167499956674874,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "search-method-getMe",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "getMe"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 2.0187500049360096,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "search-method-signIn",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "signIn"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 1.3460000045597553,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "search-method-forwardMessages",
+      "repo": "mtkruto",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "forwardMessages"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 0.18429203191772103,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "explore-send-flow",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.6666666666666666,
+      "mrr": 0.0,
+      "found": [
+        "sendMessage",
+        "send"
+      ],
+      "missed": [
+        "serializeObject"
+      ],
+      "node_count": 43,
+      "latency_ms": 26.491082971915603,
+      "explore_recall": 0.6666666666666666,
+      "flow_recall": 0.0,
+      "combined_recall": 0.6666666666666666
+    },
+    {
+      "case_id": "explore-session",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.0,
+      "found": [
+        "send",
+        "receive"
+      ],
+      "missed": [],
+      "node_count": 43,
+      "latency_ms": 14.74662497639656,
+      "explore_recall": 1.0,
+      "flow_recall": 0.0,
+      "combined_recall": 1.0
+    },
+    {
+      "case_id": "explore-client-invoke",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.0,
+      "found": [
+        "invoke",
+        "sendMessage"
+      ],
+      "missed": [],
+      "node_count": 43,
+      "latency_ms": 34.02941604144871,
+      "explore_recall": 1.0,
+      "flow_recall": 0.0,
+      "combined_recall": 1.0
+    },
+    {
+      "case_id": "explore-connection",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "connect"
+      ],
+      "missed": [
+        "send"
+      ],
+      "node_count": 43,
+      "latency_ms": 29.554791981354356,
+      "explore_recall": 0.5,
+      "flow_recall": 0.5,
+      "combined_recall": 0.5
+    },
+    {
+      "case_id": "explore-auth",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "signIn"
+      ],
+      "missed": [
+        "getMe"
+      ],
+      "node_count": 43,
+      "latency_ms": 28.87129201553762,
+      "explore_recall": 0.5,
+      "flow_recall": 0.0,
+      "combined_recall": 0.5
+    },
+    {
+      "case_id": "explore-messaging",
+      "repo": "mtkruto",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "sendMessage"
+      ],
+      "missed": [
+        "forwardMessages"
+      ],
+      "node_count": 43,
+      "latency_ms": 16.1487499717623,
+      "explore_recall": 0.5,
+      "flow_recall": 0.0,
+      "combined_recall": 0.5
+    }
+  ]
+}

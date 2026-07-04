@@ -1,0 +1,43 @@
+[
+  {
+    "task": "TS1",
+    "backend": "jidra",
+    "correct": false,
+    "note": "caller_hit 0 (need>=3)",
+    "answer": "**Your source files** (ignoring `node_modules`):\n\n`isPlainObject` defined 4 times \u2014 each file has its own local copy:\n\n| File | Defined at | Callers |\n|---|---|---|\n| `src/lib/searchStringUtils.ts` | `:59` | `:8` `parseBodyString`, `:19` `normalizeBodyString` |\n| `src/lib/pageState.ts` | `:354` | `:331` `restorePageState`, `:338` `restorePageState`, `:343` `restorePageState` |\n| `src/lib/retrievalUtils.ts` | `:339` | 14 call sites across `normalizeHits`, `extractHits`, `getNestedValue`, `isEmptyValue`, and others |\n| `src/features/TestPage.tsx` | `:2342` | ~18 call sites across form field update handlers, payload cloning, import/export logic, cursor validation |\n| `src/lib/useSearchWorkbench.ts` | `:525` | 12 call sites across body parsing, field merging, cursor/next-page logic |\n\n**Key impact notes:**\n- Each copy is independent \u2014 changing one doesn't affect others\n- `retrievalUtils.ts` and `useSearchWorkbench.ts` are highest-density users; changes there ripple into hit normalization and search body construction\n- `TestPage.tsx` uses it as a type guard for payload/form/import flows \u2014 wrong semantics break form field handling at `:616`, `:1906`, `:2163`",
+    "cost_usd": 0.26462895,
+    "wall_ms": 41832,
+    "rc": 0
+  },
+  {
+    "task": "TS1",
+    "backend": "blind",
+    "correct": false,
+    "note": "caller_hit 0 (need>=3)",
+    "answer": "",
+    "cost_usd": 0.0,
+    "wall_ms": 60000,
+    "rc": -1,
+    "timedout": true
+  },
+  {
+    "task": "TS6",
+    "backend": "jidra",
+    "correct": false,
+    "note": "file_hit 0 (need>=3)",
+    "answer": "Grep found no matches. `rowsToHeaders` not present in this repo \u2014 either it lives in a different codebase or name differs. Check exact spelling?",
+    "cost_usd": 0.0812434,
+    "wall_ms": 21166,
+    "rc": 0
+  },
+  {
+    "task": "TS6",
+    "backend": "blind",
+    "correct": false,
+    "note": "file_hit 0 (need>=3)",
+    "answer": "`rowsToHeaders` not defined or called anywhere in codebase. Only hit: string literal in test prompt at `evals/test_claude_backend.py:43` \u2014 won't break at runtime.\n\nSafe to rename (or define fresh as `headersFromRows`).",
+    "cost_usd": 0.0637098,
+    "wall_ms": 22002,
+    "rc": 0
+  }
+]

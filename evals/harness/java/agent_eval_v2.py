@@ -35,7 +35,7 @@ from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parent
+REPO_ROOT = HERE.parent.parent.parent  # evals/harness/java -> project root
 VENV_PY = str(REPO_ROOT / "venv" / "bin" / "python")
 
 PROJECT_PKGS = "[REDACTED_PKG]"
@@ -43,7 +43,7 @@ MAX_ITERS = 14
 AGENT_MAX_TOKENS = 1500
 TRACE_RESPONSE_CAP = 3000  # chars saved per tool response in trace
 
-VERBOSE = True  # set False via --quiet; streams live progress during a run
+VERBOSE = True
 _T0 = time.perf_counter()
 
 # Pricing per model ($/token). Add rows as needed.
@@ -71,7 +71,7 @@ def log(label: str, msg: str) -> None:
 def _compact(obj: Any, n: int = 140) -> str:
     """One-line snippet of tool args/results for logging."""
     s = obj if isinstance(obj, str) else json.dumps(obj, default=str)
-    s = " ".join(s.split())  # collapse whitespace/newlines
+    s = " ".join(s.split())
     return s[:n] + ("…" if len(s) > n else "")
 
 
@@ -591,6 +591,8 @@ def make_tasks() -> list[Task]:
     #         REDACTED) which are absent from the controller's 31-param signature.
     def t8(ans: str, o: Oracle) -> tuple[bool, str]:
         a = _lc(ans)
+        # Interface params: locale, feedtype, searchstring, resultsize, filtertype
+        # Controller params: sessionid, tenant, deviceplatform, mono<containerresponse>
         has_iface_params = any(
             k in a for k in ("REDACTED", "REDACTED", "REDACTED", "REDACTED", "REDACTED")
         )
@@ -781,6 +783,364 @@ def selfcheck(graph: str) -> bool:
     return all_ok
 
 
+# ---------------------------------------------------------------------------
+# Config-driven checker factory (JSON config support)
+# ---------------------------------------------------------------------------
+
+_ABSENT_PHRASES = (
+    "does not exist",
+    "doesn't exist",
+    "no such",
+    "not found",
+    "could not find",
+    "couldn't find",
+    "no method",
+    "not present",
+    "no implementations",
+    "no class",
+    "did not find",
+    "unable to find",
+)
+
+
+def _gt_caller_files(oracle: Oracle, method: str) -> set[str]:
+    rows = oracle.conn.execute(
+        """SELECT DISTINCT cm.file_path FROM resolved_call_edges e
+           JOIN methods callee ON callee.id=e.callee_method_id AND callee.variant=e.variant
+           JOIN methods cm     ON cm.id=e.caller_method_id     AND cm.variant=e.variant
+           WHERE e.variant='validated' AND callee.method_name=?""",
+        (method,),
+    ).fetchall()
+    return {r[0] for r in rows}
+
+
+def _gt_callees_filtered(oracle: Oracle, method: str, class_filter: str) -> set[str]:
+    rows = oracle.conn.execute(
+        """SELECT DISTINCT callee.method_name FROM resolved_call_edges e
+           JOIN methods caller ON caller.id=e.caller_method_id AND caller.variant=e.variant
+           JOIN methods callee ON callee.id=e.callee_method_id AND callee.variant=e.variant
+           WHERE e.variant='validated' AND caller.method_name=?
+             AND caller.class_full_name LIKE ?""",
+        (method, f"%{class_filter}"),
+    ).fetchall()
+    return {r[0] for r in rows}
+
+
+def _build_checker_java(cfg: dict, oracle: Oracle):
+    kind = cfg["checker"]
+    method = cfg.get("method", "")
+
+    if kind == "impl_count":
+        iface = cfg["interface"]
+        _min_count = cfg.get("min_count", 1)
+
+        def check(ans: str, _o: Oracle):
+            impls = oracle.implementers(iface)
+            n = len(impls)
+            a = _lc(ans)
+            has_count = str(n) in a
+            signals_many = any(
+                k in a
+                for k in ("multiple", "many", "several", "implementations", "dozens")
+            )
+            confident_single = (
+                bool(re.search(r"\bthe (single |sole )?implementation\b", a))
+                and len([c for c in impls if c.split(".")[-1].lower() in a]) <= 1
+            )
+            ok = has_count or (signals_many and not confident_single)
+            return (
+                ok,
+                f"impls={n} has_count={has_count} many={signals_many} single={confident_single}",
+            )
+
+        return check
+
+    if kind == "caller_hit":
+        min_hits = cfg.get("min_hits", 3)
+
+        def check(ans: str, _o: Oracle):
+            callers = {c.split(".")[-1].lower() for c in oracle.callers_of(method)}
+            if not callers:
+                return False, "no GT callers"
+            a = _lc(ans)
+            hit = {c for c in callers if len(c) > 4 and c in a}
+            return len(
+                hit
+            ) >= min_hits, f"caller_hit {len(hit)}/{len(callers)} (need>={min_hits})"
+
+        return check
+
+    if kind == "callee_hit":
+        min_hits = cfg.get("min_hits", 3)
+        class_filter = cfg.get("class_filter", "")
+
+        def check(ans: str, _o: Oracle):
+            if class_filter:
+                callees = _gt_callees_filtered(oracle, method, class_filter)
+            else:
+                callees = {
+                    r[0]
+                    for r in oracle.conn.execute(
+                        """SELECT DISTINCT callee.method_name FROM resolved_call_edges e
+                       JOIN methods caller ON caller.id=e.caller_method_id AND caller.variant=e.variant
+                       JOIN methods callee ON callee.id=e.callee_method_id AND callee.variant=e.variant
+                       WHERE e.variant='validated' AND caller.method_name=?""",
+                        (method,),
+                    ).fetchall()
+                }
+            if not callees:
+                return False, "no GT callees"
+            a = _lc(ans)
+            hit = {c for c in callees if len(c) > 3 and c in a}
+            return len(
+                hit
+            ) >= min_hits, f"callee_hit {len(hit)}/{len(callees)} (need>={min_hits})"
+
+        return check
+
+    if kind == "negative":
+        class_filter = cfg.get("class_filter", "")
+        class_check = cfg.get("class_check", "").lower()
+        _use_class_check = cfg.get("use_class_check", False)
+        absent_phrases = cfg.get("absent_phrases", list(_ABSENT_PHRASES))
+
+        def check(ans: str, _o: Oracle):
+            if class_filter:
+                exists = oracle.method_exists(class_filter, method)
+            else:
+                exists = any(
+                    c.rsplit(".", 1)[-1] == method for c in oracle.class_full_names
+                )
+            a = _lc(ans)
+            says_absent = any(k in a for k in absent_phrases)
+            checked = (class_check in a) if class_check else True
+            ok = (not exists) and says_absent and checked
+            return ok, f"exists={exists} says_absent={says_absent} checked={checked}"
+
+        return check
+
+    if kind == "locate_method":
+        file_hint = cfg.get("file_hint", "").lower()
+        purpose_kws = [k.lower() for k in cfg.get("purpose_keywords", [])]
+
+        def check(ans: str, _o: Oracle):
+            exists = method in oracle.method_names
+            a = _lc(ans)
+            located = file_hint in a if file_hint else True
+            purpose = any(k in a for k in purpose_kws) if purpose_kws else True
+            return (
+                exists and located and purpose,
+                f"exists={exists} located={located} purpose={purpose}",
+            )
+
+        return check
+
+    if kind == "named_class":
+        expected = cfg["expected_class"].lower()
+
+        def check(ans: str, _o: Oracle):
+            ok = expected in _lc(ans)
+            return ok, f"named_{expected}={ok}"
+
+        return check
+
+    if kind == "get_source":
+        file_hint = cfg.get("file_hint", "").lower()
+        source_kws = [k.lower() for k in cfg.get("source_keywords", [])]
+        anti_kws = [k.lower() for k in cfg.get("anti_keywords", [])]
+        class_filter = cfg.get("class_filter", "")
+
+        def check(ans: str, _o: Oracle):
+            if class_filter:
+                exists = oracle.method_exists(class_filter, method)
+            else:
+                exists = method in oracle.method_names
+            a = _lc(ans)
+            located = file_hint in a if file_hint else True
+            has_source = any(k in a for k in source_kws) if source_kws else True
+            is_wrong = any(k in a for k in anti_kws) if anti_kws else False
+            ok = exists and located and has_source and not is_wrong
+            return (
+                ok,
+                f"exists={exists} located={located} has_source={has_source} wrong={is_wrong}",
+            )
+
+        return check
+
+    if kind == "change_impact":
+        min_files = cfg.get("min_files", 3)
+
+        def check(ans: str, _o: Oracle):
+            caller_files = _gt_caller_files(oracle, method)
+            if not caller_files:
+                return False, "no GT caller files"
+            a = _lc(ans)
+            stems = {
+                re.sub(r"\.[^.]+$", "", f.split("/")[-1]).lower() for f in caller_files
+            }
+            hit_path = {f for f in caller_files if f.lower() in a}
+            hit_stem = {s for s in stems if len(s) >= 5 and s in a}
+            hit = len(hit_path | hit_stem)
+            return (
+                hit >= min_files,
+                f"file_hit {hit}/{len(caller_files)} files (need>={min_files})",
+            )
+
+        return check
+
+    raise ValueError(f"Unknown checker type: {kind!r}")
+
+
+def selfcheck_config(graph: str, config_path: str) -> bool:
+    config = json.loads(Path(config_path).read_text())
+    oracle = Oracle.load(graph)
+    checks = []
+    for tc in config["tasks"]:
+        kind = tc["checker"]
+        method = tc.get("method", "")
+        tid = tc["id"]
+
+        if kind == "negative":
+            class_filter = tc.get("class_filter", "")
+            if class_filter:
+                absent = not oracle.method_exists(class_filter, method)
+            else:
+                absent = not any(
+                    c.rsplit(".", 1)[-1] == method for c in oracle.class_full_names
+                )
+            checks.append(
+                (f"{tid} {method} ABSENT", absent, "absent" if absent else "PRESENT!")
+            )
+
+        elif kind == "impl_count":
+            iface = tc["interface"]
+            n = len(oracle.implementers(iface))
+            min_count = tc.get("min_count", 1)
+            checks.append(
+                (f"{tid} {iface} impls>={min_count}", n >= min_count, f"{n} impls")
+            )
+
+        elif kind == "caller_hit":
+            n = len(oracle.callers_of(method))
+            min_hits = tc.get("min_hits", 3)
+            checks.append(
+                (f"{tid} {method} callers>={min_hits}", n >= min_hits, f"{n} callers")
+            )
+
+        elif kind == "callee_hit":
+            class_filter = tc.get("class_filter", "")
+            if class_filter:
+                callees = _gt_callees_filtered(oracle, method, class_filter)
+            else:
+                callees = set()
+            n = len(callees)
+            min_hits = tc.get("min_hits", 3)
+            checks.append(
+                (f"{tid} {method} callees>={min_hits}", n >= min_hits, f"{n} callees")
+            )
+
+        elif kind == "change_impact":
+            n = len(_gt_caller_files(oracle, method))
+            min_files = tc.get("min_files", 3)
+            checks.append(
+                (
+                    f"{tid} {method} caller_files>={min_files}",
+                    n >= min_files,
+                    f"{n} caller files",
+                )
+            )
+
+        elif kind == "named_class":
+            expected = tc["expected_class"]
+            present = any(
+                c.rsplit(".", 1)[-1] == expected for c in oracle.class_full_names
+            )
+            checks.append(
+                (
+                    f"{tid} {expected} in graph",
+                    present,
+                    "found" if present else "MISSING",
+                )
+            )
+
+        else:  # locate_method, get_source
+            class_filter = tc.get("class_filter", "")
+            if class_filter:
+                present = oracle.method_exists(class_filter, method)
+            else:
+                present = method in oracle.method_names
+            checks.append(
+                (
+                    f"{tid} {method} PRESENT",
+                    present,
+                    "present" if present else "MISSING",
+                )
+            )
+
+    print("=== deterministic self-check (no LLM) ===")
+    all_ok = True
+    for name, ok, detail in checks:
+        all_ok &= ok
+        print(f"  [{'ok ' if ok else 'BAD'}] {name:45} {detail}")
+    print("=== ALL GT RESOLVES ===" if all_ok else "=== FIX TASKS ===")
+    return all_ok
+
+
+async def run_config_async(args) -> None:
+    config = json.loads(Path(args.config).read_text())
+    halluc_max = config.get("halluc_max", 0)
+    oracle = Oracle.load(args.graph)
+    client = make_client()
+    backends = [
+        jidra_backend(args.graph, args.codebase),
+        codegraph_backend(args.codebase),
+    ]
+
+    tasks = []
+    for tc in config["tasks"]:
+        checker = _build_checker_java(tc, oracle)
+        tasks.append(Task(tc["id"], tc["prompt"], checker))
+
+    if args.tasks:
+        want = set(args.tasks.split(","))
+        tasks = [t for t in tasks if t.id in want]
+
+    results: list[dict] = []
+    for task in tasks:
+        for be in backends:
+            print(
+                f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
+            )
+            rr = await run_agent(
+                client, args.model, be, task.prompt, label=f"{task.id}/{be.name}"
+            )
+            rr.task = task.id
+            note = "run_error"
+            if not rr.error:
+                try:
+                    rr.correct, note = task.check(rr.answer, oracle)
+                except Exception as e:
+                    note = f"check_error: {e!r}"
+                rr.hallucinated = oracle.hallucinated_refs(rr.answer)
+                if len(rr.hallucinated) > halluc_max:
+                    rr.correct = False
+                    note += f" [HALLUC_FAIL: {rr.hallucinated}]"
+            d = asdict(rr)
+            d["check_note"] = note
+            d["cost_usd"] = _cost(d, args.model)
+            results.append(d)
+            tag = "ERR" if rr.error else ("OK " if rr.correct else "XX ")
+            print(
+                f"    {tag} {be.name:9} calls={rr.tool_calls:2} tok={rr.total_tokens:5} "
+                f"cost=${d['cost_usd']:.4f} halluc={len(rr.hallucinated)} {note}",
+                flush=True,
+            )
+
+    Path(args.out).write_text(json.dumps(results, indent=2, default=str))
+    _summary(results)
+    print(f"\nwrote {args.out}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Agent-in-loop eval v2: JIDRA vs CodeGraph"
@@ -792,14 +1152,22 @@ def main() -> None:
     ap.add_argument("--out", default="agent_eval_results.json")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--selfcheck", action="store_true")
+    ap.add_argument(
+        "--config", default="", help="JSON task config (enables config-driven mode)"
+    )
     args = ap.parse_args()
     if args.selfcheck:
+        if args.config:
+            raise SystemExit(0 if selfcheck_config(args.graph, args.config) else 1)
         raise SystemExit(0 if selfcheck(args.graph) else 1)
     if not args.codebase:
         ap.error("--codebase required (except with --selfcheck)")
     global VERBOSE
     VERBOSE = not args.quiet
-    asyncio.run(main_async(args))
+    if args.config:
+        asyncio.run(run_config_async(args))
+    else:
+        asyncio.run(main_async(args))
 
 
 if __name__ == "__main__":
