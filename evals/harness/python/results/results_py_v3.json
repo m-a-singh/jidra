@@ -1,0 +1,187 @@
+[
+  {
+    "backend": "jidra",
+    "task": "PY1",
+    "answer": "Based on the impact analysis, there is **1 function** that calls `load_graph`:\n\n**`load_nodes`** (in `src/jidra/graph/graph_store.py`, line 1168)\n\nThis is the only direct caller of `load_graph` in the codebase. If you're planning to change `load_graph`, you'll need to ensure that `load_nodes` is compatible with your changes.",
+    "tool_calls": 1,
+    "in_tokens": 4278,
+    "out_tokens": 182,
+    "wall_ms": 3931.4634159673005,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "jidra_find_callers"
+    ],
+    "error": "",
+    "check_note": "caller_hit 2 (need>=2)"
+  },
+  {
+    "backend": "codegraph",
+    "task": "PY1",
+    "answer": "Perfect! Now I have a clear picture. Let me compile the full list based on what I found:\n\nBased on my analysis of the codebase, here are all the functions that call `load_graph`:\n\n## Functions Calling `load_graph` (27 total callers):\n\n### Core Functions (within module files):\n1. **`_load_graph_by_type`** (in `src/jidra/cli.py` line 1150) - CLI utility function\n2. **`JidraEngine.__init__`** (in `src/jidra/engine/engine.py` line 224) - Engine initialization\n3. **`incremental_reindex`** (in `src/jidra/engine/reindexer.py` line 362) - Reindexer orchestration\n\n### Additional Callers in `graph_store.py`:\n- Multiple internal functions within the same module (exact count and names not fully exposed in output)\n\n### Test Files (with coverage):\n- `tests/conftest.py` - Test configuration/fixtures\n- `tests/test_frameworks.py` - Framework tests\n- `tests/test_incremental_index.py` - Incremental indexing tests\n- `tests/test_module_partitioning.py` - Module partitioning tests\n\n### Other files mentioned as callers:\n- `src/jidra/cli.py` (multiple uses within different CLI commands)\n- `src/jidra/engine/engine.py` (via JidraEngine)\n- `src/jidra/engine/reindexer.py` \n- `src/jidra/graph/graph_store.py` (internal)\n- Plus 4 additional modules (not fully detailed in output)\n\n**Summary:** The `load_graph` function has **27 total callers** across production code, tests, and internal functions, with the primary impact points being:\n- **JidraEngine initialization** (loads graph on engine startup)\n- **CLI commands** (via `_load_graph_by_type`)\n- **Reindexing** (incremental and full reindex operations)\n- **Test suite** (4 test files with coverage)\n\nAny changes to `load_graph` signature or behavior will affect all these call sites, particularly the engine initialization and reindexing logic.",
+    "tool_calls": 6,
+    "in_tokens": 134264,
+    "out_tokens": 1176,
+    "wall_ms": 21528.793499979656,
+    "correct": false,
+    "hallucinated": [],
+    "tools_used": [
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore"
+    ],
+    "error": "",
+    "check_note": "caller_hit 1 (need>=2)"
+  },
+  {
+    "backend": "jidra",
+    "task": "PY2",
+    "answer": "Based on the source code and call graph analysis, here's what the `build_mcp` function does:\n\n## Direct Function Calls in `build_mcp`\n\nThe `build_mcp` function directly calls the following functions:\n\n1. **`dispatch_tool(name, p, ...)`** - Called within the `invoke` lambda defined at line 641-645. This is the main work function that either dispatches locally or forwards to a daemon.\n\n2. **`visible_tool_names()`** - Called at line 1056 to get the set of visible tool names for filtering.\n\n3. **`JidraEngine(resolved_graph)`** - Used inside the `jidra_find_callers` tool handler (line 740) to create an engine instance.\n\n4. **`_log_session_call(str(graph_dir), \"jidra_find_callers\", method)`** - Logging call at line 737.\n\n5. **`_maybe_add_stale_hint(result, graph_dir)`** - Post-processing call at line 741 for the find_callers result.\n\n6. **Various `invoke()` calls** - The function extensively uses the `invoke` parameter/lambda to dispatch 30+ MCP tool definitions, each calling `invoke` with different operation names like `\"jidra_get_method_context\"`, `\"jidra_get_flow\"`, `\"jidra_search\"`, etc.\n\n## Downstream Call Graph\n\nThe downstream functions reachable from `build_mcp` include (top nodes by impact):\n\n- **`dispatch_tool`** (depth 1) - The main dispatcher with 90 reachable sinks\n- **`JidraEngine.get_flow`** (depth 2)\n- **`JidraEngine.get_method_context`** (depth 2)\n\nAnd transitively, 91+ total reachable sinks including methods in the `JidraEngine` class and various utility functions.",
+    "tool_calls": 3,
+    "in_tokens": 17099,
+    "out_tokens": 745,
+    "wall_ms": 10760.47199999448,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "jidra_explore",
+      "jidra_get_method_source",
+      "jidra_get_agent_flow"
+    ],
+    "error": "",
+    "check_note": "callee_hit 4/4"
+  },
+  {
+    "backend": "codegraph",
+    "task": "PY2",
+    "answer": "Based on the tool output, I can now provide a comprehensive answer about the `build_mcp` function and what it calls directly.\n\n## Direct Function Calls in `build_mcp`\n\nThe `build_mcp` function (defined at `src/jidra/server/mcp_server.py:628`) calls the following functions **directly**:\n\n1. **`FastMCP`** \u2014 imported from `mcp.server.fastmcp`; creates the MCP server instance\n2. **`visible_tool_names()`** \u2014 called at line 1055 to determine which tools should be visible\n3. **`invoke(name, params)`** \u2014 defined locally within `build_mcp` or passed as parameter; calls either the default implementation or a custom one\n\n## Downstream Functions Invoked\n\nThrough the nested tool functions and the `invoke` callback, `build_mcp` triggers these functions:\n\n1. **`dispatch_tool()`** \u2014 the core dispatcher that routes all MCP tool calls\n2. **`_log_session_call()`** \u2014 logs tool invocations to session logs\n3. **`_maybe_add_stale_hint()`** \u2014 adds staleness warnings to results\n4. **`JidraEngine`** \u2014 instantiated by `get_engine()` and used by various tools like `find_callers()`, `get_method_context()`, `get_flow()`, etc.\n5. **`_parse_stack_trace()`**, **`_match_stack_frames_to_methods()`**, **`_no_stack_frame_error_payload()`** \u2014 for stack trace analysis\n6. **`FlowDocAgent`** \u2014 for building flow analysis\n\nThe tool surface includes 30+ @mcp.tool() decorated functions that, when invoked, call back through the `invoke` parameter to `dispatch_tool()`, which then orchestrates the actual work via the JidraEngine and related utilities.",
+    "tool_calls": 2,
+    "in_tokens": 22495,
+    "out_tokens": 640,
+    "wall_ms": 9435.180708998814,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "codegraph_explore",
+      "codegraph_explore"
+    ],
+    "error": "",
+    "check_note": "callee_hit 4/4"
+  },
+  {
+    "backend": "jidra",
+    "task": "PY3",
+    "answer": "Based on my searches, **the function `reindex_all_tenants()` does not exist in this codebase**. \n\nI searched for:\n- Exact match: \"reindex_all_tenants\"\n- Related terms: \"reindex tenant\", \"reindex\", and \"all_tenants\"\n\nThe search results show various reindex-related functions like `reindex()`, `jidra_reindex_impl()`, `incremental_reindex()`, and `_do_structural_reindex()`, but no function named `reindex_all_tenants()`.",
+    "tool_calls": 4,
+    "in_tokens": 23554,
+    "out_tokens": 462,
+    "wall_ms": 10638.68629198987,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "jidra_explore",
+      "jidra_explore",
+      "jidra_explore",
+      "jidra_explore"
+    ],
+    "error": "",
+    "check_note": "exists=False says_absent=True"
+  },
+  {
+    "backend": "codegraph",
+    "task": "PY3",
+    "answer": "Based on the code exploration, **`reindex_all_tenants()` does not exist** in this codebase.\n\nHowever, I found a closely related function: **`incremental_reindex()`** in `src/jidra/engine/reindexer.py` (lines 277\u2013516), which appears to be the primary reindexing orchestration function in this codebase.\n\nHere's what **`incremental_reindex()` does:**\n\n1. **Loads manifest + graph** \u2014 retrieves the existing index or triggers a full rebuild if absent\n2. **Fingerprints diff** \u2014 detects changed files by comparing current fingerprints with stored ones; unions with optional hints\n3. **Builds mini-graph** \u2014 parses only the changed files via `build_graph_for_files()`\n4. **Diffs records** \u2014 compares the mini-graph against the existing graph and categorizes changes into: `no_change`, `metadata_only`, `callsite_change`, or `structural`\n5. **Dispatches by change type:**\n   - For `metadata_only`: patches line numbers in-place\n   - For `callsite_change`: re-resolves call edges for affected methods\n   - For `structural`: strips old records for changed files, merges in the new graph, and fully re-resolves edges\n6. **Bean filtering** (Java-specific) \u2014 filters edges based on confirmed Spring beans if applicable\n7. **Persists incrementally** \u2014 uses targeted SQL deletes/inserts scoped only to changed files, not the entire graph\n\nIt calls: `build_graph()`, `build_graph_for_files()`, `compute_fingerprints()`, `diff_fingerprints()`, `load_confirmed_beans_for_reindex()`, `_patch_metadata_only()`, `_update_callsite_edges()`, `_do_structural_reindex()`, and various `graph_store` functions.",
+    "tool_calls": 1,
+    "in_tokens": 8491,
+    "out_tokens": 530,
+    "wall_ms": 7681.576250004582,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "codegraph_explore"
+    ],
+    "error": "",
+    "check_note": "exists=False says_absent=True"
+  },
+  {
+    "backend": "jidra",
+    "task": "PY4",
+    "answer": "## Answer\n\n**File location:** `src/jidra/engine/engine.py`\n\n**Class:** `JidraEngine`\n\n**What it does:**\n\nThe `query_by_annotation` method searches for classes and/or methods that have a specific annotation or framework_role. Here's what it does:\n\n1. **Searches by annotation name** - It finds classes and methods decorated with a matching annotation (e.g., `@RestController`, `@RequestMapping`)\n\n2. **Lenient matching** - The annotation matching is flexible:\n   - Ignores leading `@` symbol\n   - Ignores annotation parameters (e.g., `@RequestMapping(\"/x\")`)\n   - Case-insensitive\n   - Matches bare annotation names\n\n3. **Filters by kind** - Can search for `\"class\"`, `\"method\"`, or `\"any\"` (both)\n\n4. **Returns structured results** - Returns a dictionary containing:\n   - Matching classes with their full name, file path, and line number\n   - Matching methods with their signature, class name, file path, and line number\n   - Optional stereotypes and framework roles (if `detail=\"full\"`)\n   - Omitted count if results exceed the limit\n   - Suggestions if no matches found\n\n5. **Respects limit parameter** - Can cap the number of results returned and report how many were omitted",
+    "tool_calls": 2,
+    "in_tokens": 11079,
+    "out_tokens": 511,
+    "wall_ms": 8532.173208950553,
+    "correct": true,
+    "hallucinated": [
+      "RestController"
+    ],
+    "tools_used": [
+      "jidra_explore",
+      "jidra_get_method_source"
+    ],
+    "error": "",
+    "check_note": "exists=True located=True purpose=True"
+  },
+  {
+    "backend": "codegraph",
+    "task": "PY4",
+    "answer": "Based on my multiple searches and the consistent information from the blast radius analysis, I can provide you with the answer based on the metadata I've successfully retrieved:\n\n**`query_by_annotation` is defined in `src/jidra/engine/engine.py` at line 937 in the `JidraEngine` class.**\n\nUnfortunately, due to tool output truncation limitations, I cannot retrieve the full source code of the method body itself from the tool. However, from the search results, I can confirm:\n\n1. **File**: `src/jidra/engine/engine.py`\n2. **Class**: `JidraEngine`\n3. **Line**: 937\n4. **Caller**: It has 1 caller in `src/jidra/server/mcp_server.py`\n5. **Test coverage**: No covering tests found\n\nThe method appears to be related to querying components by annotation, given the context of other methods in the `JidraEngine` class that deal with graph operations, components, and framework analysis. However, I cannot provide the specific implementation details without being able to retrieve the actual method code due to tool truncation.",
+    "tool_calls": 12,
+    "in_tokens": 468203,
+    "out_tokens": 1570,
+    "wall_ms": 40094.12316698581,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore"
+    ],
+    "error": "",
+    "check_note": "exists=True located=True purpose=True"
+  },
+  {
+    "backend": "jidra",
+    "task": "PY5",
+    "answer": "## Implementation of `_resolve_calls`\n\nThis is a comprehensive method resolution engine. Here's what it does:\n\n### **What it resolves:**\n- **Callsites into resolved methods**: Takes unresolved `graph.callsites` and maps each call to its actual target method(s), storing results in `graph.resolved_call_edges`\n- Handles multiple resolution strategies in order of specificity (same class \u2192 inherited \u2192 global candidates \u2192 interface dispatch)\n- Supports incremental reindexing via optional `only_caller_ids` parameter\n\n### **How it builds edges:**\n\n**1. Candidate lookup indexes** (lines 1389-1406):\n   - `methods_by_full_class_and_name`: FQN + method name \u2192 methods\n   - `methods_by_short_class_and_name`: Short class name + method name \u2192 methods\n   - `methods_by_name_arity`: (name, param count) \u2192 methods\n   - `methods_by_name`: name \u2192 methods\n   - Similar indexes for fields, classes, and inheritance relationships\n\n**2. Resolution strategy** (`_resolve_one` inner function, lines 1454-1794):\n   - **No receiver** (implicit call): Look in same class \u2192 inherited \u2192 global by arity\n   - **With receiver**:\n     - Normalize receiver type (handle imports, same package, etc.)\n     - Look up exact full-class match\n     - Fall back to inheritance hierarchy search\n     - Handle inner classes with `$` or `.` separators\n     - Try short-class name matches as last resort\n     - Handle `this`/`super` by recursing with caller's class\n\n**3. Chain resolution** (lines 1804-1824):\n   - For chained calls like `a.b().c()`, retries stuck calls using resolved inner call return types\n   - Bounded to 6 passes to avoid infinite loops\n\n**4. Special case handling** (lines 1826-1831):\n   - TypeScript/JavaScript files: Mark known globals (console, Math, fetch) and React hooks as `external_library`\n\n**5. Relaxed hierarchy fallback** (lines 1833-1897):\n   - Second pass for `unresolved_method`: BFS through inheritance with fallback to short-name lookup when parent FQN can't be resolved\n\n**6. Impl-suffix heuristic** (lines 1899-1945):\n   - Spring pattern recognition: If field type is an interface, try `{TypeName}Impl`\n   - Only matches if exactly one such class exists\n\n**7. Class Hierarchy Analysis (CHA)** (lines 1947-2051):\n   - For `unresolved_method`: Fan out to ALL concrete implementers/subclasses\n   - For already-resolved interface methods: Expand to concrete implementations\n   - Skips common methods like `toString`, `equals` and interfaces with >150 subtypes\n   - Creates multiple edges (ambiguous_cha) for all matching implementations\n\n### **Edge building** (lines 2053-2061):\n```python\nedges: list[ResolvedCallEdge] = []\nfor call in callsites_in_scope:\n    for callee_id in call.resolved_candidates:\n        edges.append(\n            ResolvedCallEdge(\n                id=resolved_call_edge_id(call.id, callee_id),\n                callsite_id=call.id,\n                caller_method_id=call.caller_method_id,\n                callee_method_id=callee_id,\n            )\n        )\n```\nFor each callsite, creates **one edge per resolved candidate**. If a callsite resolves to multiple candidates (overload or interface dispatch), **multiple edges are created**.\n\nFinally, either replaces all edges (if `only_caller_ids` is None) or merges with kept edges from unaffected callers (incremental mode).",
+    "tool_calls": 1,
+    "in_tokens": 14213,
+    "out_tokens": 984,
+    "wall_ms": 12875.537416955922,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "jidra_get_method_source"
+    ],
+    "error": "",
+    "check_note": "exists=True has_source=True"
+  },
+  {
+    "backend": "codegraph",
+    "task": "PY5",
+    "answer": "Perfect! Here's the implementation of `_resolve_calls` from `src/jidra/extractors/go_extractor.py` (lines 545\u2013678):\n\n## What it resolves:\n`_resolve_calls` resolves **function/method calls** in Go code by matching call expressions to their target methods in the graph.\n\n## How it builds edges:\n\n1. **Builds lookup indexes** (lines 546\u2013567):\n   - `methods_by_class_and_name`: map class + method name \u2192 method entries\n   - `classes_by_short_name`: map class name \u2192 class entries\n   - `embeds_by_full_name`: tracks struct embedding relationships\n   - `func_return_types`: maps package-level function names to their return types\n\n2. **Defines `find_methods` helper** (lines 569\u2013585):\n   - Finds direct methods on a class\n   - Also recursively searches embedded structs for promoted methods\n\n3. **Iterates through pending call expressions** (lines 590\u2013675):\n   - For each `call_expression` node in pending bodies:\n     - **Simple calls** (identifiers): looks up methods in module-level functions\n     - **Selector expressions** (e.g., `obj.method()`): resolves receiver type from local symbol table, then finds matching methods\n\n4. **Builds `CallSite` and `ResolvedCallEdge` records**:\n   - Creates a `CallSite` entry with resolution status (exact, ambiguous, or unresolved)\n   - For each matched candidate method, creates a `ResolvedCallEdge` (lines 668\u2013675):\n     ```python\n     ResolvedCallEdge(\n         id=resolved_call_edge_id(cid, cm.id),\n         callsite_id=cid,\n         caller_method_id=p.method.id,\n         callee_method_id=cm.id,\n     )\n     ```\n\n5. **Stores results** (lines 677\u2013678):\n   - Attaches `callsites` and `resolved_call_edges` to the graph\n\nThe edges connect caller methods to callee methods, with resolution confidence levels based on how many matching candidates were found.",
+    "tool_calls": 1,
+    "in_tokens": 5894,
+    "out_tokens": 576,
+    "wall_ms": 7613.46320802113,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "codegraph_explore"
+    ],
+    "error": "",
+    "check_note": "exists=True has_source=True"
+  }
+]

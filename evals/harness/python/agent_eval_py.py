@@ -25,7 +25,9 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "java")
+)
 
 import agent_eval as ae  # noqa: E402
 from agent_eval import Oracle, Task, _lc  # noqa: E402
@@ -238,11 +240,12 @@ async def run_async(args) -> None:
                 note = "run_error"
             d = asdict(rr)
             d["check_note"] = note
+            d["cost_usd"] = ae._cost(d, args.model)
             results.append(d)
             tag = "ERR" if rr.error else ("OK " if rr.correct else "XX ")
             print(
                 f"    {tag} {be.name:9} calls={rr.tool_calls:2} tok={rr.total_tokens:5} "
-                f"halluc={len(rr.hallucinated)} {note}",
+                f"cost=${d['cost_usd']:.4f} halluc={len(rr.hallucinated)} {note}",
                 flush=True,
             )
 
@@ -261,7 +264,7 @@ def main() -> None:
     ap.add_argument("--codebase", help="repo root (CG reads its .codegraph here)")
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
     ap.add_argument("--tasks", default="", help="comma list e.g. PY1,PY2")
-    ap.add_argument("--out", default="eval_agent_results_python.json")
+    ap.add_argument("--out", default="results/eval_agent_results_python.json")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--selfcheck", action="store_true")
     args = ap.parse_args()
