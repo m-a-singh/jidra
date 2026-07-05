@@ -42,14 +42,14 @@ async def call_tool(req: CallRequest) -> dict:
     import asyncio
 
     from ...server.mcp_server import dispatch_tool
-    from ...cli import _repo_output_dir
 
     if req.output_path:
         graph_path = req.output_path
     elif req.repo_path:
         from ...graph.graph_store import resolve_graph_db_path
+        from .util_routes import resolve_out_dir
 
-        graph_path = str(resolve_graph_db_path(_repo_output_dir(Path(req.repo_path))))
+        graph_path = str(resolve_graph_db_path(resolve_out_dir(req.repo_path)))
     else:
         graph_path = None
 
@@ -77,14 +77,14 @@ async def call_tool(req: CallRequest) -> dict:
 async def session_log(
     repo_path: str, output_path: str | None = None, limit: int = 100
 ) -> list[dict]:
-    from ...cli import _repo_output_dir
     from ...graph.graph_store import resolve_graph_db_path
     from ...server.mcp_server import _resolve_graph_dir
+    from .util_routes import resolve_out_dir
 
     if output_path:
         graph_path = output_path
     else:
-        graph_path = str(resolve_graph_db_path(_repo_output_dir(Path(repo_path))))
+        graph_path = str(resolve_graph_db_path(resolve_out_dir(repo_path)))
     graph_dir = _resolve_graph_dir(graph_path)
 
     log_path = graph_dir / ".jidra" / "session_log.jsonl"

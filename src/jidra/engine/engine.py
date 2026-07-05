@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 import threading
 from collections import Counter, deque
@@ -9,6 +10,7 @@ from typing import Any
 from ..utils.context_builder import build_method_context
 from ..flow.flow_stitcher import stitch_flow
 from ..graph import graph_store
+from .ranking import RankingConfig, score_hit as _rank_score_hit, DEFAULT_CONFIG as _DEFAULT_RANKING
 from ..utils.selector import (
     _fuzzy_suggestions,
     _method_ambiguous_error,
@@ -99,54 +101,30 @@ _GENERATED_MARKERS = (
 
 
 def _tokenize_query(text: str) -> set[str]:
+    from ..graph.graph_store import _NL_STOPWORDS, _stem_word as _stem, _is_nl_word
     tokens: set[str] = set()
     for part in re.split(r"[^A-Za-z0-9]+", text or ""):
         if not part:
             continue
-        tokens.add(part.lower())
+        low = part.lower()
+        if low in _NL_STOPWORDS:
+            continue
+        tokens.add(low)
+        # Stem plain English words; leave identifiers (CamelCase etc.) as-is
+        if _is_nl_word(part):
+            tokens.add(_stem(low))
         for sub in _CAMEL_RE.findall(part):
             if sub:
-                tokens.add(sub.lower())
+                s = sub.lower()
+                tokens.add(s)
+                if _is_nl_word(sub):
+                    tokens.add(_stem(s))
     return tokens
 
 
-def _score_hit(row: dict, tokens: set[str]) -> float:
-    """Relevance score for explore ranking (higher = better).
-
-    BM25 is the primary signal. Heuristic boosts are small adjustments — they
-    nudge ties, they don't override BM25 ranking.
-    """
-    bm25 = -float(row.get("score", 0.0))  # BM25 is negative; invert so higher = better
-
-    name = (row.get("method_name") or "").lower()
-    sig = (row.get("signature") or "").lower()
-    path = (row.get("file_path") or "").lower()
-
-    boost = 0.0
-    for tok in tokens:
-        if tok == name:
-            boost += 2.0  # exact name match
-        elif tok in name:
-            boost += 1.0  # substring
-        if tok in sig:
-            boost += 0.5  # signature hit
-
-    stereotype = row.get("stereotypes") or ""
-    if "controller" in stereotype or "service" in stereotype:
-        boost += 1.5
-    elif "repository" in stereotype:
-        boost += 0.5
-
-    if (
-        "/test/" in path
-        or "/tests/" in path
-        or path.endswith(("test.java", "tests.java"))
-    ):
-        boost -= 1.0
-    if any(marker in path for marker in _GENERATED_MARKERS):
-        boost -= 10.0
-
-    return bm25 + boost
+def _score_hit(row: dict, tokens: set[str], cfg: RankingConfig = _DEFAULT_RANKING) -> float:
+    """Thin wrapper — delegates to ranking.score_hit with the active RankingConfig."""
+    return _rank_score_hit(row, tokens, cfg)
 
 
 def _summarize_uncertain_edges(edges: list[dict], limit: int = 8) -> dict:
@@ -1145,7 +1123,7 @@ class JidraEngine:
         def _fts_sort_key(r: dict) -> tuple:
             path = r.get("file_path", "")
             is_generated = any(m in path for m in _GENERATED_MARKERS)
-            return (1 if is_generated else 0, float(r.get("score", 0.0)))
+            return (1 if is_generated else 0, float(r.get("score") or 0.0))
 
         rows = sorted(rows, key=_fts_sort_key)
 
@@ -1185,7 +1163,7 @@ class JidraEngine:
                     "class_full_name": r["class_full_name"],
                     "file_path": r["file_path"],
                     "language": r["language"],
-                    "score": round(-float(r.get("score", 0.0)), 6),
+                    "score": round(-float(r.get("score") or 0.0), 6),
                     "source": "fts",
                 }
             )
@@ -1226,6 +1204,7 @@ class JidraEngine:
             candidates = graph_store.search_methods(self.conn, query, limit=fetch)
         if not candidates:
             candidates = self._search_fallback(query, limit=fetch)
+
         method_by_id = {m.id: m for m in self.graph.methods}
         class_by_full = {c.full_name: c for c in self.graph.classes}
 
