@@ -9,7 +9,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from ...indexing.resources_indexer import discover_resource_files, index_resource_file
 
-from ...indexing.resources_indexer import discover_resource_files, index_resource_file
 
 router = APIRouter()
 
