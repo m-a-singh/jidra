@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from ...indexing.resources_indexer import discover_resource_files, index_resource_file
 
+
 router = APIRouter()
 
 
@@ -83,7 +84,13 @@ def _sse(event: str, data: dict) -> str:
 def _out_dir(repo_path: str, output_path: str | None) -> Path:
     from ...cli import _repo_output_dir
 
-    return Path(output_path) if output_path else _repo_output_dir(Path(repo_path))
+    if output_path:
+        return Path(output_path)
+    # Prefer .jidra/ in the target repo (jidra init model)
+    jidra_dir = Path(repo_path) / ".jidra"
+    if jidra_dir.exists():
+        return jidra_dir
+    return _repo_output_dir(Path(repo_path))
 
 
 async def _stream_process(req: ProcessRequest):
@@ -260,6 +267,7 @@ async def _stream_process(req: ProcessRequest):
         if req.write_mcp_config:
             try:
                 import sys as _sys
+
                 from ...graph.graph_store import resolve_graph_db_path
 
                 repo = Path(req.repo_path).resolve()
@@ -347,6 +355,7 @@ async def list_folders(repo_path: str, subpath: str = "") -> dict:
 @router.get("/status")
 async def index_status(repo_path: str, output_path: str | None = None) -> dict:
     import sqlite3
+
     from ...graph.graph_store import resolve_graph_db_path
 
     out_dir = _out_dir(repo_path, output_path)
