@@ -299,6 +299,26 @@ function extractFile(sourceFile, root) {
       });
     }
 
+    // Constructor parameter properties (e.g. constructor(private repo: UserRepo))
+    for (const ctor of cls.getConstructors()) {
+      for (const p of ctor.getParameters()) {
+        if (!p.isParameterProperty()) continue;
+        const fName = p.getName();
+        const fType = safeTypeName(p);
+        const fId = fieldId(fullName, fName, relPath, startLine(p));
+        allRecords.push({
+          _type: "field",
+          id: fId,
+          class_id: cId,
+          name: fName,
+          type_name: fType,
+          modifiers: p.getModifiers().map(m => m.getText()),
+          file_path: relPath,
+          line: startLine(p),
+        });
+      }
+    }
+
     // Methods
     for (const method of cls.getMethods()) {
       extractMethod(method, fullName, cId, relPath, imports, decoratorNames, allRecords);
@@ -316,71 +336,73 @@ function extractFile(sourceFile, root) {
   const fileCId = classId(fileFullName, relPath);
   let hasTopLevel = false;
 
-  for (const fn of sourceFile.getFunctions()) {
-    if (!hasTopLevel) {
-      // Emit a synthetic "file module" class to hang these methods on
-      allRecords.push({
-        _type: "class",
-        id: fileCId,
-        package_name: ns,
-        name: fileClass,
-        full_name: fileFullName,
-        file_path: relPath,
-        start_line: 1,
-        end_line: sourceFile.getEndLineNumber(),
-        modifiers: [],
-        annotations: [],
-        extends: null,
-        implements: [],
-        imports,
-        stereotypes: getStereotypes([], relPath),
-      });
-      hasTopLevel = true;
-    }
-    extractMethod(fn, fileFullName, fileCId, relPath, imports, [], allRecords);
+  // Collision guard: don't emit a module pseudo-class if a real class already
+  // has the same name as the file stem (e.g. a file named UserCard.tsx that
+  // exports class UserCard would collide).
+  const realClassNames = new Set(
+    sourceFile.getClasses().map(c => c.getName()).filter(Boolean)
+  );
+  const moduleClassCollides = realClassNames.has(fileClass);
+
+  function ensureModuleClass() {
+    if (hasTopLevel || moduleClassCollides) return;
+    allRecords.push({
+      _type: "class",
+      id: fileCId,
+      package_name: ns,
+      name: fileClass,
+      full_name: fileFullName,
+      file_path: relPath,
+      start_line: 1,
+      end_line: sourceFile.getEndLineNumber(),
+      modifiers: [],
+      annotations: [],
+      extends: null,
+      implements: [],
+      imports,
+      stereotypes: getStereotypes([], relPath),
+      is_interface: false,
+      language: "typescript",
+    });
+    hasTopLevel = true;
   }
 
-  // Arrow functions assigned to const (common React pattern)
-  for (const varDecl of sourceFile.getVariableDeclarations()) {
-    const initializer = varDecl.getInitializer();
-    if (!initializer) continue;
-    const kind = initializer.getKind();
-    if (
-      kind !== SyntaxKind.ArrowFunction &&
-      kind !== SyntaxKind.FunctionExpression
-    )
-      continue;
-
-    if (!hasTopLevel) {
-      allRecords.push({
-        _type: "class",
-        id: fileCId,
-        package_name: ns,
-        name: fileClass,
-        full_name: fileFullName,
-        file_path: relPath,
-        start_line: 1,
-        end_line: sourceFile.getEndLineNumber(),
-        modifiers: [],
-        annotations: [],
-        extends: null,
-        implements: [],
-        imports,
-        stereotypes: getStereotypes([], relPath),
-      });
-      hasTopLevel = true;
+  for (const fn of sourceFile.getFunctions()) {
+    ensureModuleClass();
+    if (!moduleClassCollides) {
+      extractMethod(fn, fileFullName, fileCId, relPath, imports, [], allRecords);
     }
+  }
 
-    extractMethod(
-      initializer,
-      fileFullName,
-      fileCId,
-      relPath,
-      imports,
-      [],
-      allRecords,
-      varDecl.getName()
-    );
+  // Arrow functions / function expressions assigned to a const at the TOP LEVEL
+  // of the file only (not nested inside other functions or classes).
+  // sourceFile.getVariableDeclarations() is a deep walk, so we restrict to
+  // variable statements that are direct children of the source file.
+  for (const varStmt of sourceFile.getVariableStatements()) {
+    for (const varDecl of varStmt.getDeclarations()) {
+      const initializer = varDecl.getInitializer();
+      if (!initializer) continue;
+      const kind = initializer.getKind();
+      if (
+        kind !== SyntaxKind.ArrowFunction &&
+        kind !== SyntaxKind.FunctionExpression
+      )
+        continue;
+
+      ensureModuleClass();
+      if (!moduleClassCollides) {
+        extractMethod(
+          initializer,
+          fileFullName,
+          fileCId,
+          relPath,
+          imports,
+          [],
+          allRecords,
+          varDecl.getName()
+        );
+      }
+    }
   }
 }
 
@@ -527,20 +549,37 @@ function extractCallSites(node, callerMethodId, relPath, records) {
         const sym = expr.getSymbol();
         if (sym) {
           const decls = sym.getDeclarations();
+          const declName = sym.getName();
           for (const decl of decls) {
             const declFile = decl.getSourceFile().getFilePath();
             if (declFile.includes("node_modules")) continue; // Option A: skip external
-            // Build a rough signature to look up in registry
-            const declName = sym.getName();
-            const parent = decl.getParent();
-            let parentName = "";
+            const declNs = filePathToNamespace(declFile, repoRoot);
+            const declClassName = filePathToClassName(declFile);
+            const declFullName = `${declNs}.${declClassName}`;
+            // Try module-level function: <ns>.<file>#name(
+            const moduleKeyPrefix = `${declFullName}#${declName}(`;
+            for (const [sig, mId] of methodRegistry.entries()) {
+              if (sig.startsWith(moduleKeyPrefix) && !resolvedCandidates.includes(mId)) {
+                resolvedCandidates.push(mId);
+                break;
+              }
+            }
+            // Try parent class method: <ns>.<ClassName>#name(
             try {
-              parentName = parent.getName ? parent.getName() : "";
+              const parent = decl.getParent();
+              if (parent && parent.getName) {
+                const parentName = parent.getName();
+                if (parentName) {
+                  const classKeyPrefix = `${declNs}.${parentName}#${declName}(`;
+                  for (const [sig, mId] of methodRegistry.entries()) {
+                    if (sig.startsWith(classKeyPrefix) && !resolvedCandidates.includes(mId)) {
+                      resolvedCandidates.push(mId);
+                      break;
+                    }
+                  }
+                }
+              }
             } catch {}
-            const candidateSig = parentName
-              ? `${parentName}#${declName}`
-              : declName;
-            resolvedCandidates.push(candidateSig);
           }
           if (resolvedCandidates.length > 0) {
             resolutionStatus = "resolved";
@@ -569,14 +608,15 @@ function extractCallSites(node, callerMethodId, relPath, records) {
         candidate_count: resolvedCandidates.length,
       });
 
-      if (calleeMethodId) {
-        const reId = resolvedCallEdgeId(csId, calleeMethodId);
+      // Emit resolved_call_edge records for every candidate found via symbol resolution.
+      for (const mId of resolvedCandidates) {
+        const reId = resolvedCallEdgeId(csId, mId);
         records.push({
           _type: "resolved_call_edge",
           id: reId,
           callsite_id: csId,
           caller_method_id: callerMethodId,
-          callee_method_id: calleeMethodId,
+          callee_method_id: mId,
         });
       }
     } catch {
@@ -653,31 +693,9 @@ function extractCallSites(node, callerMethodId, relPath, records) {
 
 // ── Resolve call edges after all files processed ──────────────────────────────
 
-function resolveCallEdges(records) {
-  const callsites = records.filter((r) => r._type === "callsite");
-  const extra = [];
-
-  for (const cs of callsites) {
-    if (cs.resolution_status !== "resolved") continue;
-    for (const candidate of cs.resolved_candidates) {
-      // Look up by partial signature match
-      for (const [sig, mId] of methodRegistry.entries()) {
-        if (sig.includes(candidate) || sig.endsWith(`#${cs.callee_name}(`)) {
-          const reId = resolvedCallEdgeId(cs.id, mId);
-          extra.push({
-            _type: "resolved_call_edge",
-            id: reId,
-            callsite_id: cs.id,
-            caller_method_id: cs.caller_method_id,
-            callee_method_id: mId,
-          });
-          break;
-        }
-      }
-    }
-  }
-
-  return extra;
+function resolveCallEdges(_records) {
+  // Edges are now emitted inline during extraction (resolved_candidates holds real method IDs).
+  return [];
 }
 
 // ── JS/Frontend source root detection ────────────────────────────────────────
@@ -718,16 +736,17 @@ function isSourceFile(filePath) {
 
 function findAllTsConfigs(root) {
   const found = [];
+  const TSCONFIG_NAMES = /^tsconfig(\.[a-z]+)?\.json$/i;
 
   function walk(dir) {
-    const direct = path.join(dir, "tsconfig.json");
-    if (fs.existsSync(direct)) found.push(direct);
-
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
-      if (!e.isDirectory() || EXCLUDE_DIRS.has(e.name)) continue;
-      walk(path.join(dir, e.name));
+      if (e.isDirectory()) {
+        if (!EXCLUDE_DIRS.has(e.name)) walk(path.join(dir, e.name));
+      } else if (TSCONFIG_NAMES.test(e.name)) {
+        found.push(path.join(dir, e.name));
+      }
     }
   }
 

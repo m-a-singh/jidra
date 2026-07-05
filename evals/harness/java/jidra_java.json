@@ -1,0 +1,84 @@
+{
+  ,"repo": "thingsboard",,
+  "language": "java",
+  "halluc_max": 0,
+  "tasks": [
+    {
+      "id": "T1",
+      "prompt": "The interface `thingsboard` is implemented in this codebase. How many concrete implementations are there — is there a single class that 'is' thingsboard, or many? Answer precisely.",
+      "checker": "impl_count",
+      "interface": "thingsboard",
+      "min_count": 50
+    },
+    {
+      "id": "T2",
+      "prompt": "Which concrete class implements the `thingsboard` interface, and where is the `thingsboard` method actually implemented? Name the class.",
+      "checker": "locate_method",
+      "method": "thingsboard",
+      "class_hint": "thingsboard",
+      "file_hint": "thingsboard",
+      "purpose_keywords": ["thingsboard", "thingsboard", "thingsboard"]
+    },
+    {
+      "id": "T3",
+      "prompt": "Which classes call the `thingsboard` method? List the calling classes — this is impact analysis before changing it. Name the actual callers.",
+      "checker": "caller_hit",
+      "method": "thingsboard",
+      "min_hits": 3
+    },
+    {
+      "id": "T4",
+      "prompt": "Explain what the method `thingsboard()` on `thingsboard` does and what it calls. If it is not present, say so explicitly.",
+      "checker": "negative",
+      "method": "thingsboard",
+      "class_filter": "thingsboard",
+      "absent_phrases": ["does not exist", "doesn't exist", "no such", "not found", "could not find", "couldn't find", "no method", "not present"],
+      "class_check": "thingsboard"
+    },
+    {
+      "id": "T5",
+      "prompt": "Trace the method `thingsboard` in `thingsboard`: what does it call directly? List the downstream methods/services it invokes.",
+      "checker": "callee_hit",
+      "method": "thingsboard",
+      "class_filter": "thingsboard",
+      "min_hits": 3
+    },
+    {
+      "id": "T6",
+      "prompt": "Describe the `thingsboard` interface and list its implementations. If it does not exist in this codebase, say so explicitly.",
+      "checker": "negative",
+      "method": "thingsboard",
+      "use_class_check": true
+    },
+    {
+      "id": "T7",
+      "prompt": "Among the implementations of `thingsboard`, which single class is responsible for matching on a thingsboard's NAME? Name it, or say if it can't be determined.",
+      "checker": "named_class",
+      "expected_class": "thingsboard"
+    },
+    {
+      "id": "T8",
+      "prompt": "Use the code graph tool to fetch the source of the `search` method on `thingsboard` directly. Show its implementation — what parameters does it take and what does it return?",
+      "checker": "get_source",
+      "method": "search",
+      "class_filter": "thingsboard",
+      "file_hint": "thingsboard",
+      "source_keywords": ["thingsboard", "thingsboard", "thingsboard", "thingsboard", "thingsboard"],
+      "anti_keywords": ["thingsboard", "thingsboard", "thingsboard"]
+    },
+    {
+      "id": "J9",
+      "prompt": "I'm renaming `thingsboard` to `thingsboard`. List every file that calls it — I need to know every place that will break.",
+      "checker": "change_impact",
+      "method": "thingsboard",
+      "min_files": 5
+    },
+    {
+      "id": "J10",
+      "prompt": "I'm changing the signature of `thingsboard`. List every file that calls it — I need to know the full blast radius.",
+      "checker": "change_impact",
+      "method": "thingsboard",
+      "min_files": 5
+    }
+  ]
+}

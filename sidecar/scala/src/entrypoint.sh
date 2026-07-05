@@ -21,43 +21,6 @@ rsync -a --delete \
   "$REPO"/ "$WORKDIR"/
 cd "$WORKDIR"
 
-# ── Artifactory configuration (mirrors thingsboard behaviour) ────
-#
-# ARTIFACTORY_URL, ARTIFACTORY_USER, ARTIFACTORY_TOKEN are injected by the
-# jidra scala extractor via `docker run -e`.  When present, sbt resolves
-# everything (boot, plugins, dependencies) through Artifactory instead of
-# Maven Central.
-
-if [ -n "$ARTIFACTORY_URL" ]; then
-  REPOS_FILE=$(mktemp /tmp/sbt-repositories-XXXXXX)
-  cat > "$REPOS_FILE" <<EOF
-[repositories]
-  local
-  artifactory-maven: $ARTIFACTORY_URL/maven
-  artifactory-snapshots: $ARTIFACTORY_URL/maven-snapshots
-  artifactory-sbt-plugins: $ARTIFACTORY_URL/sbt-plugin-releases-remote, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
-EOF
-
-  SBT_OPTS="-Dsbt.override.build.repos=true -Dsbt.repository.config=$REPOS_FILE"
-
-  if [ -n "$ARTIFACTORY_USER" ] && [ -n "$ARTIFACTORY_TOKEN" ]; then
-    CREDS_FILE=$(mktemp /tmp/sbt-credentials-XXXXXX)
-    ARTIFACTORY_HOST=$(echo "$ARTIFACTORY_URL" | sed 's|https\?://||' | cut -d/ -f1)
-    cat > "$CREDS_FILE" <<EOF
-realm=Artifactory Realm
-host=$ARTIFACTORY_HOST
-user=$ARTIFACTORY_USER
-password=$ARTIFACTORY_TOKEN
-EOF
-    SBT_OPTS="$SBT_OPTS -Dsbt.boot.credentials=$CREDS_FILE"
-    export COURSIER_CREDENTIALS="$ARTIFACTORY_HOST($ARTIFACTORY_USER:$ARTIFACTORY_TOKEN)"
-  fi
-
-  export SBT_OPTS
-  echo "[jidra] sbt configured to resolve via $ARTIFACTORY_URL" >&2
-else
-  echo "[jidra] ARTIFACTORY_URL not set — sbt will use default resolvers" >&2
-fi
 
 # ── Scala version detection ──────────────────────────────────────────────────
 SCALA3=false
