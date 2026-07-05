@@ -1,0 +1,232 @@
+{
+  "timestamp": "2026-07-05T19:04:52Z",
+  "repo": "shapeshift",
+  "eval_type": "method-level",
+  "summary": {
+    "repo": "shapeshift",
+    "total": 12,
+    "passed": 12,
+    "mean_recall": 0.7917,
+    "mean_mrr": 0.7,
+    "explore_only_recall": 0.5833,
+    "flow_only_recall": 0.0,
+    "combined_explore_recall": 0.5833
+  },
+  "results": [
+    {
+      "case_id": "shapeshift-search-getTradeQuote",
+      "repo": "shapeshift",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "getTradeQuote"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 6.2623749836348,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "shapeshift-search-signTransaction",
+      "repo": "shapeshift",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "signTransaction"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 9.765291993971914,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "shapeshift-search-estimateFees",
+      "repo": "shapeshift",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.1,
+      "found": [
+        "estimateFees"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 5.1369169959798455,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "shapeshift-search-broadcastTransaction",
+      "repo": "shapeshift",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "broadcastTransaction"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 5.268959037493914,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "shapeshift-search-getRates",
+      "repo": "shapeshift",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.1,
+      "found": [
+        "getRates"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 5.199542036280036,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "shapeshift-search-getAssets",
+      "repo": "shapeshift",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "getAssets"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 5.475417012348771,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "shapeshift-explore-swap",
+      "repo": "shapeshift",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "getTradeQuote"
+      ],
+      "missed": [
+        "broadcastTransaction"
+      ],
+      "node_count": 53,
+      "latency_ms": 148.8925000303425,
+      "explore_recall": 0.5,
+      "flow_recall": 0.0,
+      "combined_recall": 0.5
+    },
+    {
+      "case_id": "shapeshift-explore-assets",
+      "repo": "shapeshift",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "getAssets"
+      ],
+      "missed": [
+        "getRates"
+      ],
+      "node_count": 70,
+      "latency_ms": 632.2486249846406,
+      "explore_recall": 0.5,
+      "flow_recall": 0.0,
+      "combined_recall": 0.5
+    },
+    {
+      "case_id": "shapeshift-explore-fees",
+      "repo": "shapeshift",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "getTradeQuote"
+      ],
+      "missed": [
+        "estimateFees"
+      ],
+      "node_count": 61,
+      "latency_ms": 241.05729203438386,
+      "explore_recall": 0.5,
+      "flow_recall": 0.0,
+      "combined_recall": 0.5
+    },
+    {
+      "case_id": "shapeshift-explore-signing",
+      "repo": "shapeshift",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "signTransaction"
+      ],
+      "missed": [
+        "broadcastTransaction"
+      ],
+      "node_count": 63,
+      "latency_ms": 139.59091604920104,
+      "explore_recall": 0.5,
+      "flow_recall": 0.0,
+      "combined_recall": 0.5
+    },
+    {
+      "case_id": "shapeshift-explore-broadcast",
+      "repo": "shapeshift",
+      "api": "explore",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.0,
+      "found": [
+        "broadcastTransaction",
+        "signTransaction"
+      ],
+      "missed": [],
+      "node_count": 56,
+      "latency_ms": 126.70008296845481,
+      "explore_recall": 1.0,
+      "flow_recall": 0.0,
+      "combined_recall": 1.0
+    },
+    {
+      "case_id": "shapeshift-explore-rates",
+      "repo": "shapeshift",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "getRates"
+      ],
+      "missed": [
+        "getAssets"
+      ],
+      "node_count": 61,
+      "latency_ms": 358.7648749817163,
+      "explore_recall": 0.5,
+      "flow_recall": 0.0,
+      "combined_recall": 0.5
+    }
+  ]
+}

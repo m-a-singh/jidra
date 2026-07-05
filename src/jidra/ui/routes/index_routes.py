@@ -82,15 +82,11 @@ def _sse(event: str, data: dict) -> str:
 
 
 def _out_dir(repo_path: str, output_path: str | None) -> Path:
-    from ...cli import _repo_output_dir
-
     if output_path:
         return Path(output_path)
-    # Prefer .jidra/ in the target repo (jidra init model)
     jidra_dir = Path(repo_path) / ".jidra"
-    if jidra_dir.exists():
-        return jidra_dir
-    return _repo_output_dir(Path(repo_path))
+    jidra_dir.mkdir(exist_ok=True)
+    return jidra_dir
 
 
 async def _stream_process(req: ProcessRequest):
@@ -301,6 +297,19 @@ async def _stream_process(req: ProcessRequest):
                 )
             except Exception as mcp_err:
                 yield _sse("warn", {"msg": f"MCP config skipped: {mcp_err}"})
+
+        # Install jidra-investigator agent + skills (same as jidra init)
+        try:
+            from ...cli import _install_agent
+
+            repo = Path(req.repo_path).resolve()
+            await loop.run_in_executor(None, lambda: _install_agent(repo))
+            yield _sse(
+                "status",
+                {"msg": "Agent + skills installed (.claude/agents, .claude/skills)", "phase": "agents"},
+            )
+        except Exception as agent_err:
+            yield _sse("warn", {"msg": f"Agent install skipped: {agent_err}"})
 
         yield _sse("status", {"msg": "Done", "phase": "complete"})
 
