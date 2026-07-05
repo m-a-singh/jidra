@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import re
 import threading
 from collections import Counter, deque
@@ -10,7 +9,11 @@ from typing import Any
 from ..utils.context_builder import build_method_context
 from ..flow.flow_stitcher import stitch_flow
 from ..graph import graph_store
-from .ranking import RankingConfig, score_hit as _rank_score_hit, DEFAULT_CONFIG as _DEFAULT_RANKING
+from .ranking import (
+    RankingConfig,
+    score_hit as _rank_score_hit,
+    DEFAULT_CONFIG as _DEFAULT_RANKING,
+)
 from ..utils.selector import (
     _fuzzy_suggestions,
     _method_ambiguous_error,
@@ -102,6 +105,7 @@ _GENERATED_MARKERS = (
 
 def _tokenize_query(text: str) -> set[str]:
     from ..graph.graph_store import _NL_STOPWORDS, _stem_word as _stem, _is_nl_word
+
     tokens: set[str] = set()
     for part in re.split(r"[^A-Za-z0-9]+", text or ""):
         if not part:
@@ -122,7 +126,9 @@ def _tokenize_query(text: str) -> set[str]:
     return tokens
 
 
-def _score_hit(row: dict, tokens: set[str], cfg: RankingConfig = _DEFAULT_RANKING) -> float:
+def _score_hit(
+    row: dict, tokens: set[str], cfg: RankingConfig = _DEFAULT_RANKING
+) -> float:
     """Thin wrapper — delegates to ranking.score_hit with the active RankingConfig."""
     return _rank_score_hit(row, tokens, cfg)
 

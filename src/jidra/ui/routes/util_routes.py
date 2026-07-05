@@ -17,6 +17,7 @@ def resolve_out_dir(repo_path: str, output_path: str | None = None) -> Path:
     if jidra_dir.exists():
         return jidra_dir
     from ...cli import _repo_output_dir
+
     return _repo_output_dir(Path(repo_path))
 
 
