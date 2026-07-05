@@ -846,6 +846,19 @@ def _parse_args() -> argparse.Namespace:
         "--codebase", help="Path to Java codebase (for reindex tool)"
     )
 
+    # 'serve' is an alias for 'mcp' — used in portable MCP configs (no absolute paths)
+    serve_parser = subparsers.add_parser(
+        "serve", help="Alias for 'mcp' — run JIDRA MCP server over stdio"
+    )
+    serve_parser.add_argument(
+        "--mcp", action="store_true", help="(ignored, for compatibility)"
+    )
+    serve_parser.add_argument("--graph", help="Path to graph.db")
+    serve_parser.add_argument("--graph-type", choices=("main", "test"), default="main")
+    serve_parser.add_argument(
+        "--codebase", help="Path to Java codebase (for reindex tool)"
+    )
+
     reindex_parser = subparsers.add_parser(
         "reindex", help="Incrementally update graph.db after file changes"
     )
@@ -1118,6 +1131,21 @@ def _parse_args() -> argparse.Namespace:
     subparsers.add_parser(
         "up",
         help="One-command setup: build graph, write MCP config, optionally watch for changes",
+    )
+
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Initialize JIDRA for a project: build graph in .jidra/, write global MCP config",
+    )
+    init_parser.add_argument(
+        "--codebase",
+        default=None,
+        help="Path to project root (default: cwd)",
+    )
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force full rebuild even if .jidra/graph.db exists",
     )
 
     ui_parser = subparsers.add_parser("ui", help="Launch the JIDRA web UI")
@@ -1765,6 +1793,175 @@ glob — for any question about code structure, call flows, or method implementa
             encoding="utf-8",
         )
         ui.success("Appended JIDRA section to existing CLAUDE.md")
+
+
+def _write_mcp_json(repo: Path, graph_path: Path) -> None:
+    """Write .mcp.json into repo with explicit graph + codebase paths. Replaces if exists."""
+    import json as _json
+    import sys as _sys
+
+    pkg_dir = Path(__file__).resolve().parents[2]
+    venv_py = pkg_dir / "venv" / "bin" / "python"
+    python = str(venv_py) if venv_py.exists() else _sys.executable
+
+    entry = {
+        "mcpServers": {
+            "jidra": {
+                "type": "stdio",
+                "command": python,
+                "args": [
+                    "-m",
+                    "jidra.server.mcp_server",
+                    "--graph",
+                    str(graph_path),
+                    "--codebase",
+                    str(repo),
+                ],
+            }
+        }
+    }
+    mcp_json = repo / ".mcp.json"
+    mcp_json.write_text(_json.dumps(entry, indent=2), encoding="utf-8")
+    ui.success(f".mcp.json written → {mcp_json}")
+
+
+def _install_agent(repo: Path) -> None:
+    """Copy jidra-investigator agent and jidra-navigate skill into repo (idempotent)."""
+    jidra_root = Path(__file__).resolve().parents[2]
+
+    # Agent
+    agent_src = jidra_root / ".claude" / "agents" / "jidra-investigator.md"
+    if agent_src.exists():
+        dest_dir = repo / ".claude" / "agents"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        (dest_dir / "jidra-investigator.md").write_text(
+            agent_src.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        ui.success("Agent installed: .claude/agents/jidra-investigator.md")
+    else:
+        ui.warn(f"Agent definition not found at {agent_src}, skipping")
+
+    # Skills
+    for skill_name in (
+        "jidra-navigate",
+        "jidra-blast-radius",
+        "jidra-error-investigate",
+    ):
+        skill_src = jidra_root / ".claude" / "skills" / skill_name / "SKILL.md"
+        if skill_src.exists():
+            skill_dir = repo / ".claude" / "skills" / skill_name
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            (skill_dir / "SKILL.md").write_text(
+                skill_src.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            ui.success(f"Skill installed: .claude/skills/{skill_name}/SKILL.md")
+        else:
+            ui.warn(f"Skill not found at {skill_src}, skipping")
+
+
+def _init(codebase_arg: str | None = None, force: bool = False) -> None:
+    """Initialize JIDRA for a project: build graph in .jidra/, write global MCP config."""
+    ui.banner("JIDRA init", "Build code graph · write global MCP config")
+
+    repo = Path(codebase_arg).resolve() if codebase_arg else Path.cwd()
+    if not repo.exists():
+        raise SystemExit(f"Path does not exist: {repo}")
+
+    jidra_dir = repo / ".jidra"
+    jidra_dir.mkdir(exist_ok=True)
+    graph_path = jidra_dir / "graph.db"
+
+    # Detect languages
+    from .filters.ts_filters import detect_languages
+
+    langs = detect_languages(repo)
+    if not langs:
+        langs = ["java"]
+    ui.success(f"Detected languages: {', '.join(langs)}")
+
+    # Prompts — essentials only
+    skip_input = _prompt(
+        "Folders to skip, comma-separated (optional)",
+        "",
+        optional=True,
+    )
+    skip_folders = {s.strip() for s in skip_input.split(",") if s.strip()} or None
+    install_hooks = _prompt_yn("Install git hooks for auto-reindex?", True)
+
+    has_java = "java" in langs or "kotlin" in langs or "scala" in langs
+    actuator_url: str | None = None
+    use_docker = False
+    skip_build = False
+    if has_java:
+        actuator_url = (
+            _prompt(
+                "Spring Boot actuator URL (leave blank to skip / use static analysis)",
+                "",
+                optional=True,
+            )
+            or None
+        )
+        if not actuator_url:
+            use_docker = _prompt_yn(
+                "Run Docker to fetch live actuator beans? (N = static analysis only)",
+                False,
+            )
+        skip_build = _prompt_yn("Skip Java build step (assume already built)?", False)
+
+    # Index: incremental if graph exists, full rebuild if --force or no graph
+    if graph_path.exists() and not force:
+        ui.section(1, 3, "Incremental reindex")
+        from .engine.reindexer import incremental_reindex
+
+        result = incremental_reindex(repo, graph_path)
+        ui.success(
+            f"Reindexed: {result.get('change_type', 'done')} ({result.get('elapsed_ms', 0)}ms)"
+        )
+    else:
+        if force and graph_path.exists():
+            graph_path.unlink()
+        ui.section(1, 3, "Indexing codebase")
+        if actuator_url or use_docker:
+            _process(
+                codebase=str(repo),
+                actuator_url=actuator_url,
+                port=8080,
+                timeout=30,
+                output=str(jidra_dir),
+                skip_build=skip_build,
+                build_dir=None,
+                use_docker=use_docker,
+                skip_folders=skip_folders,
+            )
+        else:
+            _index(str(repo), str(jidra_dir), force=force, skip_folders=skip_folders)
+
+    # CLAUDE.md — disabled: injecting JIDRA instructions forces main session to use
+    # tools directly, preventing jidra-investigator agent from being spawned via skill.
+    # ui.section(2, 3, "Updating CLAUDE.md")
+    # _write_claude_md(repo, langs)
+
+    # MCP config — write .mcp.json into repo with explicit paths
+    ui.section(3, 3, "MCP configuration")
+    _write_mcp_json(repo, graph_path)
+
+    # Git hooks
+    if install_hooks:
+        from .utils.git_hooks import install_hooks as _install_hooks
+
+        try:
+            installed = _install_hooks(repo, graph_path)
+            if installed:
+                ui.success(f"Git hooks installed: {', '.join(installed)}")
+        except Exception as exc:
+            ui.warn(f"Git hooks skipped: {exc}")
+
+    # Copy jidra-investigator agent into target repo
+    _install_agent(repo)
+
+    ui.success(
+        f"✓ Initialized. Graph at {graph_path.relative_to(repo)} — restart your agent."
+    )
 
 
 def _up() -> None:
@@ -2936,6 +3133,13 @@ def main() -> None:
         _up()
         return
 
+    if args.command == "init":
+        _init(
+            codebase_arg=getattr(args, "codebase", None),
+            force=getattr(args, "force", False),
+        )
+        return
+
     if args.command == "cost-roi":
         _cost_roi(
             args.graph,
@@ -3021,12 +3225,14 @@ def main() -> None:
         )
         return
 
-    if args.command == "mcp":
-        graph_path = _resolve_graph_db_path(args.graph)
+    if args.command in ("mcp", "serve"):
+        graph_path = _resolve_graph_db_path(getattr(args, "graph", None))
         try:
             from .server.mcp_server import run_mcp_server
 
-            run_mcp_server(str(graph_path), codebase_path=args.codebase)
+            run_mcp_server(
+                str(graph_path), codebase_path=getattr(args, "codebase", None)
+            )
             return
         except RuntimeError as exc:
             raise SystemExit(str(exc))
