@@ -701,12 +701,6 @@ def stitch_flow(
             "important_unresolved_calls": important_unresolved,
             "uncertain_edges": uncertain_edges,
             "stopped_paths": stopped_paths,
-            "notes": [
-                "Tier labels are heuristic hints, not ground truth.",
-                "Nodes are preserved by default unless explicitly excluded by config.",
-                "Agents should fetch source by method_id/file_path only when needed.",
-                "Uncertain edges represent unresolved or ambiguous static analysis.",
-            ],
         },
         "summary": {
             "node_count": len(kept_nodes),

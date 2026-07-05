@@ -37,7 +37,7 @@ import os
 import re
 import sqlite3
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -45,7 +45,7 @@ from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parent
+REPO_ROOT = HERE.parent.parent.parent  # evals/harness/java -> project root
 VENV_PY = str(REPO_ROOT / "venv" / "bin" / "python")
 
 PROJECT_PKGS = ("[REDACTED]",)
@@ -54,6 +54,21 @@ AGENT_MAX_TOKENS = 1500
 
 VERBOSE = True  # set False via --quiet; streams live progress during a run
 _T0 = time.perf_counter()
+
+# Pricing per model ($/token). Add rows as needed.
+_MODEL_PRICING: dict[str, tuple[float, float]] = {
+    "claude-haiku-4-5": (0.80 / 1_000_000, 4.00 / 1_000_000),
+    "claude-haiku-4-5-20251001": (0.80 / 1_000_000, 4.00 / 1_000_000),
+    "claude-sonnet-4-6": (3.00 / 1_000_000, 15.00 / 1_000_000),
+    "claude-sonnet-4-6-20251001": (3.00 / 1_000_000, 15.00 / 1_000_000),
+    "claude-opus-4-8": (15.0 / 1_000_000, 75.00 / 1_000_000),
+}
+_DEFAULT_PRICING = (3.00 / 1_000_000, 15.00 / 1_000_000)  # fallback: Sonnet rates
+
+
+def _cost(r: dict, model: str) -> float:
+    p_in, p_out = _MODEL_PRICING.get(model, _DEFAULT_PRICING)
+    return r["in_tokens"] * p_in + r["out_tokens"] * p_out
 
 
 def log(label: str, msg: str) -> None:
@@ -141,8 +156,10 @@ class Oracle:
     def hallucinated_refs(self, text: str) -> list[str]:
         """Project FQNs, short class names, or .java paths mentioned in `text` that don't exist."""
         bad: list[str] = []
-        # project-package FQNs e.g. [REDACTED_PKG].search.Foo or ...Foo#bar(...)
-        for m in re.findall(r"\b(?:[REDACTED])[w.$]*", text):
+        # project-package FQNs e.g. com.sxmpandora.search.Foo or ...Foo#bar(...)
+        for m in re.findall(
+            r"\b(?:com\.REDACTED|REDACTED|com\.REDACTED|com\.REDACTED)[\w.$]*", text
+        ):
             head = m.split("#")[0].rstrip(".")
             # accept if it's a known class, OR a known class prefix (package), OR
             # a class.method dotted form whose class is known
@@ -160,10 +177,10 @@ class Oracle:
         for m in re.findall(r"\b[A-Z]\w+\.java\b", text):
             if m not in self.file_basenames:
                 bad.append(m)
-        # Interface/impl short names e.g. "[REDACTED_INTERFACE]", "SearchServiceImpl"
+        # Interface/impl short names e.g. "CandidateFeature", "SearchServiceImpl"
         # Extract PascalCase identifiers that sound like classes (not common words)
         for m in re.findall(
-            r"\b[A-Z][a-zA-Z0-9]*(?:Service|Controller|Repository|Manager|Factory|Handler|Listener|Helper|Util|Impl|Interface|Abstract)(?:Impl)?\b",
+            r"\b[A-Z][a-zA-Z0-9]*(?:REDACTED|Controller|Repository|Manager|Factory|Handler|Listener|Helper|Util|Impl|Interface|Abstract)(?:Impl)?\b",
             text,
         ):
             short = m.split("#")[0].rstrip(".")
@@ -189,7 +206,7 @@ def jidra_backend(graph: str, codebase: str) -> Backend:
             command=VENV_PY,
             args=[
                 "-m",
-                "jidra.mcp_server",
+                "jidra.server.mcp_server",
                 "--mode",
                 "direct",
                 "--graph",
@@ -322,7 +339,7 @@ async def run_agent(
                             out = await asyncio.wait_for(
                                 session.call_tool(tu.name, tu.input or {}), 60
                             )
-                            payload = _mcp_text(out)[:8000]
+                            payload = _mcp_text(out)
                             log(
                                 label,
                                 f"  ← {len(payload)} chars · {_compact(payload, 110)}",
@@ -371,7 +388,7 @@ def make_tasks() -> list[Task]:
 
     # T1 — ambiguity / strategy pattern. Must NOT fabricate a single impl.
     def t1(ans: str, o: Oracle) -> tuple[bool, str]:
-        impls = o.implementers("[REDACTED_INTERFACE]")
+        impls = o.implementers("REDACTED")
         n = len(impls)
         a = _lc(ans)
         signals_many = any(
@@ -401,31 +418,31 @@ def make_tasks() -> list[Task]:
     tasks.append(
         Task(
             "T1",
-            "The interface `[REDACTED_INTERFACE]` is implemented in this codebase. "
+            "The interface `REDACTED` is implemented in this codebase. "
             "How many concrete implementations are there, and is there a single class "
-            "that 'is' the [REDACTED_INTERFACE], or many? Answer precisely.",
+            "that 'is' the REDACTED, or many? Answer precisely.",
             t1,
         )
     )
 
     # T2 — interface -> concrete impl resolution.
     def t2(ans: str, o: Oracle) -> tuple[bool, str]:
-        ok = "[REDACTED_INTERFACE]" in _lc(ans)
-        return ok, "names [REDACTED_INTERFACE]" if ok else "missed [REDACTED_INTERFACE]"
+        ok = "REDACTED" in _lc(ans)
+        return ok, "names REDACTED" if ok else "missed REDACTED"
 
     tasks.append(
         Task(
             "T2",
-            "Which concrete class implements the `REDACTED_INTERFACE` interface, and "
-            "where is the `templateSearch` method actually implemented? Name the class.",
+            "Which concrete class implements the `REDACTED` interface, and "
+            "where is the `REDACTED` method actually implemented? Name the class.",
             t2,
         )
     )
 
-    # T3 — caller / impact analysis. `REDACTED_INTERFACE` has many real
+    # T3 — caller / impact analysis. `REDACTED` has many real
     # internal callers (unlike an HTTP endpoint, which has none). Pass = surfaces
     # >=3 genuine caller classes; fabricated callers are caught by hallucinated_refs.
-    T3_METHOD = "REDACTED_INTERFACE"
+    T3_METHOD = "REDACTED"
 
     def t3(ans: str, o: Oracle) -> tuple[bool, str]:
         callers = {c.split(".")[-1].lower() for c in o.callers_of(T3_METHOD)}
@@ -446,7 +463,7 @@ def make_tasks() -> list[Task]:
 
     # T4 — negative / hallucination resistance. Method does not exist.
     def t4(ans: str, o: Oracle) -> tuple[bool, str]:
-        exists = o.method_exists("REDACTED_INTERFACE", "reindexAllTenants")
+        exists = o.method_exists("REDACTED", "reindexAllTenants")
         a = _lc(ans)
         says_absent = any(
             k in a
@@ -468,7 +485,7 @@ def make_tasks() -> list[Task]:
     tasks.append(
         Task(
             "T4",
-            "Explain what the method `reindexAllTenants()` on `REDACTED_INTERFACE` "
+            "Explain what the method `reindexAllTenants()` on `REDACTED` "
             "does and what it calls. If it is not present, say so explicitly.",
             t4,
         )
@@ -476,7 +493,7 @@ def make_tasks() -> list[Task]:
 
     # T5 — flow trace: immediate downstream of the search endpoint.
     def t5(ans: str, o: Oracle) -> tuple[bool, str]:
-        # ground truth: callees of REDACTED_INTERFACE (a real endpoint)
+        # ground truth: callees of REDACTED.REDACTED (a real endpoint)
         rows = o.conn.execute(
             """SELECT DISTINCT callee.method_name
                FROM resolved_call_edges e
@@ -562,7 +579,7 @@ def make_tasks() -> list[Task]:
         Task(
             "T7",
             "Among the implementations of `REDACTED`, which single class is "
-            "responsible for matching on a channel's NAME? Name it, or say if it can't "
+            "responsible for matching on a REDACTED's NAME? Name it, or say if it can't "
             "be determined.",
             t7,
         )
@@ -572,16 +589,16 @@ def make_tasks() -> list[Task]:
     def t8(ans: str, o: Oracle) -> tuple[bool, str]:
         a = _lc(ans)
         has_source = any(
-            k in a for k in ("query", "request", "index", "result", "return")
+            k in a for k in ("REDACTED", "REDACTED", "REDACTED", "REDACTED", "REDACTED")
         )
-        located = any(k in a for k in ("searchservice", "service", "search"))
+        located = any(k in a for k in ("REDACTED", "REDACTED", "REDACTED"))
         ok = has_source and located
         return ok, f"has_source={has_source} located={located}"
 
     tasks.append(
         Task(
             "T8",
-            "Use the code graph tool to fetch the source of the `search` method on `REDACTED` directly. "
+            "Use the code graph tool to fetch the source of the `REDACTED` method on `REDACTED` directly. "
             "Show its implementation — what parameters does it take and what does it return?",
             t8,
         )
@@ -636,13 +653,14 @@ async def main_async(args) -> None:
                 note = "run_error"
             d = asdict(rr)
             d["check_note"] = note
+            d["cost_usd"] = _cost(d, args.model)
             results.append(d)
             tag = "OK " if rr.correct else "XX "
             if rr.error:
                 tag = "ERR"
             print(
                 f"    {tag} {be.name:9} calls={rr.tool_calls:2} tok={rr.total_tokens:5} "
-                f"halluc={len(rr.hallucinated)} {note}",
+                f"cost=${d['cost_usd']:.4f} halluc={len(rr.hallucinated)} {note}",
                 flush=True,
             )
 
@@ -652,9 +670,9 @@ async def main_async(args) -> None:
 
 
 def _summary(results: list[dict]) -> None:
-    print("\n" + "=" * 72)
+    print("\n" + "=" * 80)
     print(
-        f"{'':12}{'correct':>9}{'tool_calls':>12}{'tokens':>10}{'halluc':>9}{'wall_ms':>10}"
+        f"{'':12}{'correct':>9}{'tool_calls':>12}{'tokens':>10}{'cost_usd':>10}{'halluc':>9}{'wall_ms':>10}"
     )
     for name in ("jidra", "codegraph"):
         rs = [r for r in results if r["backend"] == name and not r["error"]]
@@ -665,14 +683,18 @@ def _summary(results: list[dict]) -> None:
         corr = sum(1 for r in rs if r["correct"])
         tc = sum(r["tool_calls"] for r in rs) / n
         tok = sum(r["in_tokens"] + r["out_tokens"] for r in rs) / n
+        cost_avg = sum(r.get("cost_usd", 0.0) for r in rs) / n
+        cost_total = sum(r.get("cost_usd", 0.0) for r in rs)
         hal = sum(1 for r in rs if r["hallucinated"])
         wall = sum(r["wall_ms"] for r in rs) / n
         print(
-            f"{name:12}{corr:>4}/{n:<4}{tc:>12.1f}{tok:>10.0f}{hal:>6}/{n:<2}{wall:>10.0f}"
+            f"{name:12}{corr:>4}/{n:<4}{tc:>12.1f}{tok:>10.0f}"
+            f"  ${cost_avg:.4f}({cost_total:.3f}){hal:>6}/{n:<2}{wall:>10.0f}"
         )
-    print("=" * 72)
+    print("=" * 80)
     print(
-        "correct=task solved · tool_calls/tokens/wall=avg per task · halluc=#runs citing a fake project symbol"
+        "correct=task solved · tool_calls/tokens/wall=avg per task · "
+        "cost=avg(total) · halluc=#runs citing a fake project symbol"
     )
 
 
@@ -698,14 +720,26 @@ def selfcheck(graph: str) -> bool:
 
     checks = [
         ("T1 REDACTED impls == 101", len(impls_cf) == 101, f"{len(impls_cf)}"),
-        ("T2 REDACTED in impls", "REDACTED" in impls_os, str(sorted(impls_os))),
-        ("T3 REDACTED callers >=3", len(callers_t3) >= 3, f"{len(callers_t3)} callers"),
+        (
+            "T2 REDACTED in impls",
+            "REDACTED" in impls_os,
+            str(sorted(impls_os)),
+        ),
+        (
+            "T3 REDACTED callers >=3",
+            len(callers_t3) >= 3,
+            f"{len(callers_t3)} callers",
+        ),
         (
             "T4 reindexAllTenants ABSENT",
             t4_absent,
             "absent" if t4_absent else "PRESENT!",
         ),
-        ("T5 REDACTED callees >0", len(callees_t5) > 0, f"{len(callees_t5)} callees"),
+        (
+            "T5 REDACTED callees >0",
+            len(callees_t5) > 0,
+            f"{len(callees_t5)} callees",
+        ),
         (
             "T6 TenantRoutingStrategy ABSENT",
             fake_absent,
@@ -713,9 +747,9 @@ def selfcheck(graph: str) -> bool:
         ),
         ("T7 REDACTED is a CF impl", chan, "found" if chan else "missing"),
         (
-            "T8 REDACTED fetchable",
-            o.method_exists("REDACTED", "search"),
-            "found" if o.method_exists("REDACTED", "search") else "missing",
+            "T8 REDACTED.REDACTED fetchable",
+            o.method_exists("REDACTED", "REDACTED"),
+            "found" if o.method_exists("REDACTED", "REDACTED") else "missing",
         ),
     ]
     print("=== deterministic self-check (no LLM) ===")

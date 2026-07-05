@@ -411,6 +411,7 @@ def incremental_reindex(
 
     if confirmed_beans:
         # Filter edges
+
         confirmed_ids = {
             c.id for c in result_graph.classes if c.full_name in confirmed_beans
         }
