@@ -6,7 +6,9 @@ __pycache__/
 flow_docs/
 .jidra/
 .jidra_test/
-.claude/
+.claude/settings.local.json
+.claude/launch.json
+.claude/worktrees/
 *.egg-info/
 .mcp.json
 CLAUDE.md
