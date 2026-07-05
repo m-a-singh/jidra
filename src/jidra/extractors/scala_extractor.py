@@ -436,6 +436,9 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
                     )
 
     # ── Pass 2: Call sites ───────────────────────────────────────────────────
+    # Build a method-by-id lookup for call resolution
+    _method_by_id: dict[str, MethodEntry] = {m.id: m for m in methods}
+
     # We need to map each definition occ back to its enclosing method for caller_method_id.
     # Re-scan docs to find reference occurrences and correlate with enclosing method.
     for sdb_path in semanticdb_files:

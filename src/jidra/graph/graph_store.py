@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS methods (
     full_route TEXT,
     language TEXT,
     framework_role TEXT,
+    generated INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (id, variant, module_id)
 );
 CREATE INDEX IF NOT EXISTS idx_methods_scope ON methods (variant, module_id, file_path);
@@ -455,6 +456,7 @@ def _method_row(m: MethodEntry, variant: str, module_id: str | None) -> tuple:
         m.full_route,
         m.language,
         m.framework_role,
+        1 if m.generated else 0,
     )
 
 
@@ -748,7 +750,7 @@ def _insert_graph(
         [_class_row(c, variant_of(c.file_path), module_id) for c in graph.classes],
     )
     conn.executemany(
-        "INSERT INTO methods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO methods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [_method_row(m, variant_of(m.file_path), module_id) for m in graph.methods],
     )
     conn.executemany(
@@ -997,26 +999,34 @@ def _fts_query(text: str) -> str:
             if low and low not in seen:
                 seen.add(low)
                 token_set.append(part)
+    if len(token_set) > 1:
+        return " ".join(f'"{t}"*' for t in token_set)  # AND (FTS5 implicit)
     return " OR ".join(f'"{t}"*' for t in token_set)
 
 
-def search_methods(
-    conn: sqlite3.Connection,
-    query: str,
-    *,
-    limit: int = 20,
-    language: str | None = None,
-    variant: str = "main",
-) -> list[dict]:
-    """FTS5 keyword search over method name/signature/class/source.
+def _fts_query_or(text: str) -> str:
+    """OR fallback — same tokenisation as _fts_query but forces OR between tokens."""
+    raw_tokens = re.findall(r"[A-Za-z0-9_]+", text)
+    if not raw_tokens:
+        return ""
+    token_set: list[str] = []
+    seen: set[str] = set()
+    for tok in raw_tokens:
+        for part in [tok] + _CAMEL_SPLIT_RE.findall(tok):
+            low = part.lower()
+            if low and low not in seen:
+                seen.add(low)
+                token_set.append(part)
+    return " OR ".join(f'"{t}"*' for t in token_set)
 
-    Returns raw candidate rows ordered by bm25 relevance (best first). Callers
-    that want richer ranking (e.g. `engine.explore`) re-score these. Returns an
-    empty list when the query has no usable tokens or the FTS table is absent.
-    """
-    match = _fts_query(query)
-    if not match:
-        return []
+
+def _run_fts(
+    conn: sqlite3.Connection,
+    match: str,
+    variant: str,
+    language: str | None,
+    limit: int,
+) -> list[dict]:
     conn.row_factory = sqlite3.Row
     sql = (
         "SELECT m.id AS id, m.method_name AS method_name, m.signature AS signature, "
@@ -1033,11 +1043,34 @@ def search_methods(
     params.append(limit)
     try:
         cur = conn.execute(sql, params)
+        return [dict(r) for r in cur.fetchall()]
     except sqlite3.OperationalError:
-        # FTS table missing (e.g. very old DB the migration didn't touch) —
-        # let the caller fall back to an in-memory scan.
         return []
-    return [dict(r) for r in cur.fetchall()]
+
+
+def search_methods(
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    limit: int = 20,
+    language: str | None = None,
+    variant: str = "main",
+) -> list[dict]:
+    """FTS5 keyword search over method name/signature/class/source.
+
+    Multi-token queries use AND first (higher precision); falls back to OR if
+    AND returns no results. Single-token queries use OR (prefix match only).
+    Returns an empty list when the query has no usable tokens or FTS table is absent.
+    """
+    match_and = _fts_query(query)
+    if not match_and:
+        return []
+    rows = _run_fts(conn, match_and, variant, language, limit)
+    if not rows:
+        match_or = _fts_query_or(query)
+        if match_or and match_or != match_and:
+            rows = _run_fts(conn, match_or, variant, language, limit)
+    return rows
 
 
 def fetch_methods_by_ids(
@@ -1395,7 +1428,7 @@ def insert_methods(
     module_id: str | None = None,
 ) -> None:
     conn.executemany(
-        "INSERT INTO methods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO methods VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [_method_row(m, variant, module_id) for m in methods],
     )
 

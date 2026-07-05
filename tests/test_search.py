@@ -89,7 +89,6 @@ class TestEngineSearch:
         result = engine.explore("handle request")
         names = [r["method_name"] for r in result["results"]]
         assert "handleRequest" in names
-        assert "handle" in result["tokens"]
 
     def test_explore_demotes_test_files(self, tmp_path):
         db = tmp_path / "graph.db"

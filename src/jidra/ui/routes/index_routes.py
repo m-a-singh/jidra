@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from ...indexing.resources_indexer import discover_resource_files, index_resource_file
 
 from ...indexing.resources_indexer import discover_resource_files, index_resource_file
 
@@ -124,7 +125,6 @@ async def _stream_process(req: ProcessRequest):
 
         try:
             from collections import Counter
-
             from ...graph import graph_store as _gs
 
             _db = _gs.resolve_graph_db_path(out_dir)
