@@ -1,0 +1,216 @@
+[
+  {
+    "backend": "jidra",
+    "task": "TS1",
+    "answer": "Perfect! I found **59 functions that call `getDb`**. Here's the impact analysis summary:\n\n## Functions Calling `getDb` (59 total)\n\n### Core Database/Session Management\n1. `bootstrapDb()` - apps/server/src/db.ts:167\n2. `getSession(string)` - apps/server/src/processManager.ts:400\n3. `updateSessionFields(string, ...)` - apps/server/src/processManager.ts:415\n4. `insertMarker(string, string)` - apps/server/src/processManager.ts:380\n5. `insertPtyChunk(string, string)` - apps/server/src/processManager.ts:390\n6. `autoStopIdleChatSessions()` - apps/server/src/processManager.ts:559\n\n### Claude SDK Related (12 functions)\n7. `loadClaudeSdkConfig(string)` - apps/server/src/claudeSdk.ts:65\n8. `storeClaudeSdkConfig(string, ...)` - apps/server/src/claudeSdk.ts:48\n9. `storeClaudeSdkMessage(string, ...)` - apps/server/src/claudeSdk.ts:127\n10. `storeClaudeSdkToolApproval(string, ...)` - apps/server/src/claudeSdk.ts:142\n11. `storeClaudeSdkToolResult(string, ...)` - apps/server/src/claudeSdk.ts:159\n12. `loadClaudeSdkTranscript(string)` - apps/server/src/claudeSdk.ts:176\n13. `storeClaudeSdkUsage(string, ...)` - apps/server/src/claudeSdk.ts:200\n14. `updateSessionEstimatesFromUsage(string, ...)` - apps/server/src/claudeSdk.ts:456\n15. `assertClaudeSdkSession(string)` - apps/server/src/claudeSdk.ts:438\n\n### LiteLLM Related (9 functions)\n16. `storeLiteLlmConfig(string, ...)` - apps/server/src/litellm.ts:130\n17. `loadLiteLlmConfig(string)` - apps/server/src/litellm.ts:144\n18. `storeLiteLlmMessage(string, ...)` - apps/server/src/litellm.ts:162\n19. `storeLiteLlmUsage(string, ...)` - apps/server/src/litellm.ts:187\n20. `updateLiteLlmSessionEstimatesFromUsage(string, ...)` - apps/server/src/litellm.ts:204\n21. `assertLiteLlmSession(string)` - apps/server/src/litellm.ts:218\n22. `loadLiteLlmTranscript(string)` - apps/server/src/litellm.ts:174\n\n### WebSocket Handlers (8 functions)\n23. `handleClaudeSdkSend(unknown, string, string)` - apps/server/src/ws.ts:334\n24. `handleClaudeSdkSend(WebSocket, string, string)` - apps/server/src/ws.ts:334\n25. `handleLiteLlmSend(WebSocket, string, string)` - apps/server/src/ws.ts:578\n26. `handleLiteLlmSend(unknown, string, string)` - apps/server/src/ws.ts:578\n27. `handleSubscribe(unknown, string)` - apps/server/src/ws.ts:127\n28. `handleSubscribe(WebSocket, string)` - apps/server/src/ws.ts:127\n29. `handleInput(unknown, string, string)` - apps/server/src/ws.ts:156\n30. `handleInput(WebSocket, string, string)` - apps/server/src/ws.ts:156\n\n### Route Handlers (4 functions)\n31. `claudeSdkRouter(ProcessManager)` - apps/server/src/routes/claudeSdk.ts:71\n32. `claudeSdkRouter(import(...).ProcessManager)` - apps/server/src/routes/claudeSdk.ts:71\n33. `sessionsRouter(ProcessManager)` - apps/server/src/routes/sessions.ts:41\n34. `sessionsRouter(import(...).ProcessManager)` - apps/server/src/routes/sessions.ts:41\n35. `liteLlmRouter(ProcessManager)` - apps/server/src/routes/litellm.ts:41\n36. `liteLlmRouter(import(...).ProcessManager)` - apps/server/src/routes/litellm.ts:41\n37. `analyticsRouter()` - apps/server/src/routes/analytics.ts:83\n38. `aiCoachAnalyticsRouter()` - apps/server/src/routes/aiCoachAnalytics.ts:94\n39. `dashboardRouter()` - apps/server/src/routes/dashboard.ts:34\n\n### Other Utilities (6 functions)\n40. `captureResumeArtifact(string, string)` - apps/server/src/gitArtifacts.ts:117\n41. `storeSessionArtifact({...})` - apps/server/src/gitArtifacts.ts:97\n42. `storeSessionArtifact(unknown)` - apps/server/src/gitArtifacts.ts:97\n43. `parseDbSession(string, \"claude-sdk\" | \"litellm\", ...)` - apps/server/src/analytics-adapter.ts:127\n44. `analyzeCompletedSession(string, string, string, ...)` - apps/server/src/analytics-worker.ts:5\n45. `pollOnce()` - apps/server/src/headroom-snapshot-poller.ts:19\n46. `main()` - apps/server/scripts/backfill-analytics.ts:18\n\n## Impact Summary\nChanging `getDb()` will impact **59 call sites** across:\n- **Database operations** (ProcessManager,",
+    "tool_calls": 1,
+    "in_tokens": 9499,
+    "out_tokens": 1582,
+    "wall_ms": 11231.77208303241,
+    "correct": true,
+    "hallucinated": [
+      "adapter.ts",
+      "poller.ts",
+      "worker.ts"
+    ],
+    "tools_used": [
+      "jidra_find_callers"
+    ],
+    "error": "",
+    "check_note": "caller_hit 37 (need>=2)"
+  },
+  {
+    "backend": "codegraph",
+    "task": "TS1",
+    "answer": "Based on the tool output, here are the **80 callers of `getDb`** across the codebase:\n\n**Files that call `getDb` (listed with \"80 callers in\"):**\n\n1. `apps/server/scripts/backfill-analytics.ts`\n2. `apps/server/src/analytics-adapter.ts`\n3. `apps/server/src/analytics-worker.ts`\n4. `apps/server/src/claudeSdk.ts`\n5. (12 more files not individually named in the summary)\n\nThe tool identified that `getDb` is defined at `apps/server/src/db.ts:29` and has **80 total callers** spread across these files. The output also notes that \u26a0\ufe0f **no covering tests were found** for this function, which is important for impact analysis before making changes.\n\n**Key locations confirmed from source:**\n- `getDb()` is called within `bootstrapDb()` at line 176 of `apps/server/src/db.ts` itself\n- `getDbPath()` (a related utility) is called by `getDb()` and also by `bootstrapDb()`\n\n**Recommendation:** Before modifying `getDb()`, review the 80 calling functions across those 15 files and consider the lack of test coverage \u2014 this is a critical dependency with high blast radius.",
+    "tool_calls": 1,
+    "in_tokens": 6588,
+    "out_tokens": 397,
+    "wall_ms": 6250.482208037283,
+    "correct": false,
+    "hallucinated": [
+      "adapter.ts",
+      "worker.ts"
+    ],
+    "tools_used": [
+      "codegraph_explore"
+    ],
+    "error": "",
+    "check_note": "caller_hit 1 (need>=2)"
+  },
+  {
+    "backend": "jidra",
+    "task": "TS2",
+    "answer": "Based on my analysis of the code graph, here's what I found:\n\n## Direct Functions Called by `spawnSession`\n\nThe `spawnSession` function in `ProcessManager` directly calls:\n\n1. **`updateSessionFields`** - Updates the session fields with status and PID\n2. **`this.hub.broadcastSession`** - Broadcasts the updated session via WebSocket\n3. **`fetch`** - HTTP request to get stats (when headroom is enabled)\n\nIt also uses library functions like:\n- `stripAnsi` - to remove ANSI escape codes from terminal output\n- `pty.spawn` - to create a pseudo-terminal process\n\n## Downstream Functions (Multi-level Call Chain)\n\nThe graph shows these primary downstream functions that `spawnSession` eventually invokes:\n\n1. **`analyzeCompletedSession`** (`analytics-worker.ts`) - Analyzes completed sessions at depth 1\n2. **`captureGitArtifactBestEffort`** (`claudeSdk.ts`) - Captures git artifacts at depth 1\n3. **`analyzeDbSession`** (`analytics-adapter.ts`) - Analyzes database sessions at depth 2\n\nAdditionally, the function has several methods on the `ProcessManager` instance (`this`) that are called but unresolved in the graph:\n- `applyUsageTick` - Applied when usage is detected (lines 870, etc.)\n- `enforceBudget` - Enforces budget constraints (lines 732, 822)\n- `flushPty` - Flushes PTY output (lines 744, 902)\n\nThe downstream analysis shows approximately **28 reachable sinks**, indicating a fairly complex downstream call chain with multiple branches handling session lifecycle, analytics, and budget enforcement.",
+    "tool_calls": 3,
+    "in_tokens": 18935,
+    "out_tokens": 673,
+    "wall_ms": 10332.955749996472,
+    "correct": true,
+    "hallucinated": [
+      "adapter.ts",
+      "worker.ts"
+    ],
+    "tools_used": [
+      "jidra_explore",
+      "jidra_get_method_source",
+      "jidra_get_agent_flow"
+    ],
+    "error": "",
+    "check_note": "callee_hit 7/17"
+  },
+  {
+    "backend": "codegraph",
+    "task": "TS2",
+    "answer": "Based on the code I've gathered so far, let me compile the complete list of direct function calls made by `spawnSession`. Let me verify I have the complete onExit handler by looking for it directly:\n\nBased on my exploration of the codebase, here are the functions that `spawnSession` calls directly:\n\n## Direct Function Calls in `spawnSession`:\n\n1. **pty.spawn** - Spawns the PTY process (external library)\n2. **updateSessionFields** - Updates session status and PID to \"running\" \n3. **this.hub.broadcastSession** - Broadcasts session state to WebSocket clients\n4. **setInterval** - Sets up headroom stats polling (for headroom sessions)\n5. **fetch** - Fetches stats from headroom server (inside setInterval)\n6. **stripAnsi** - Strips ANSI codes from text (inside handleOutputText and onData)\n7. **estimateTokens** - Estimates token count from text\n8. **getSession** - Retrieves current session from database\n9. **computeCostUsd** - Computes cost from token counts\n10. **this.hub.broadcastPty** - Broadcasts PTY data via WebSocket (inside p.onData handler)\n11. **parseCodexUsageTotalsFromText** - Parses Codex usage from output (inside p.onData handler)\n12. **this.flushPty** - Flushes buffered PTY data via setTimeout\n13. **insertPtyChunk** - Inserts PTY data into database (called by flushPty)\n14. **this.enforceBudget** - Enforces budget constraints (inside async handlers)\n15. **insertMarker** - Inserts session markers into database (in idle timeout handler)\n16. **isClaudeCmd** - Checks if command is a Claude command\n17. **captureGitArtifactBestEffort** - Captures git snapshot on session end (in onExit)\n18. **captureResumeArtifact** - Captures resume command artifact (in onExit)\n19. **clearTimeout** - Clears PTY flush timer (in flushPty)\n20. **clearInterval** - Clears headroom stats poller (in onExit)\n21. **nowIso** - Gets current timestamp in ISO format (various places)\n\n## Downstream Functions Invoked (second-level):\n\nThe direct calls then invoke downstream functions including:\n- `buildGitArtifactContent` (called by captureGitArtifactBestEffort)\n- `captureGitSnapshot` (called by captureGitArtifactBestEffort)\n- `storeSessionArtifact` (called by both captureGitArtifactBestEffort and captureResumeArtifact)\n- `getDb` (called by various database functions)\n- Database prepare/run operations for SQL\n- WebSocket broadcast operations",
+    "tool_calls": 8,
+    "in_tokens": 238891,
+    "out_tokens": 1494,
+    "wall_ms": 30468.429417000152,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore"
+    ],
+    "error": "",
+    "check_note": "callee_hit 15/17"
+  },
+  {
+    "backend": "jidra",
+    "task": "TS3",
+    "answer": "Based on my searches through the codebase, the function `purgeStaleSessions()` **does not exist** in this codebase. My searches for:\n- \"purgeStaleSessions\"\n- \"purge stale sessions\"\n- \"purge\"\n\nall returned no results. The codebase contains various session-related functions (like `listSessions()`, `sessionsForRepo()`, `sessionsInWindow()`, etc.), but there is no function named `purgeStaleSessions()`.",
+    "tool_calls": 3,
+    "in_tokens": 17871,
+    "out_tokens": 372,
+    "wall_ms": 8025.522625015583,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "jidra_explore",
+      "jidra_explore",
+      "jidra_explore"
+    ],
+    "error": "",
+    "check_note": "exists=False says_absent=True"
+  },
+  {
+    "backend": "codegraph",
+    "task": "TS3",
+    "answer": "Based on my extensive search through the codebase, I have not found a function named `purgeStaleSessions()` in this codebase. The search has covered:\n\n1. Direct searches for \"purgeStaleSessions\"\n2. Related session cleanup and database operations\n3. Session routing files (sessions.ts)\n4. WebSocket management files (ws.ts)\n5. Database initialization files\n6. Type definitions and shared files\n\nAll searches came back either with no results for that specific function name, or with results showing other session-related functions like `deleteSession()` (which is an API endpoint handler), `cleanupClient()` (WebSocket cleanup), and various session query/management operations.\n\n**The function `purgeStaleSessions()` does not exist in this codebase.**",
+    "tool_calls": 8,
+    "in_tokens": 177820,
+    "out_tokens": 890,
+    "wall_ms": 21136.937999981456,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore"
+    ],
+    "error": "",
+    "check_note": "exists=False says_absent=True"
+  },
+  {
+    "backend": "jidra",
+    "task": "TS4",
+    "answer": "Perfect! Here's the information you requested:\n\n## File Path\n**`apps/server/src/processManager.ts`** (lines 1127-1191)\n\n## What It Does\nThe `enforceBudget` function is a private method in the `ProcessManager` class that monitors and enforces budget limits for a running session. Specifically, it:\n\n1. **Tracks token and USD budgets**: Calculates total tokens used and checks if either the token budget or USD budget has been exceeded.\n\n2. **Sends 80% warning**: When a session reaches 80% of its budget (but hasn't exceeded it), it sends a one-time budget warning broadcast to notify the user that they're approaching their limit. It tracks whether this warning has been sent using the `budgetWarning80Sent` flag to ensure it only fires once.\n\n3. **Enforces budget hard limits**: When either the token budget or USD budget is exceeded, it:\n   - Logs a \"budget_exceeded\" marker\n   - Inserts a system message into the PTY (pseudo-terminal) chunk stream notifying the user\n   - Updates the session record with `status: \"stopped\"`, `ended_at`, `budget_exceeded_at`, and `stop_reason: \"budget_exceeded\"`\n   - Broadcasts the updated session to clients\n   - Stops the session with the reason \"budget_exceeded\"\n\nThis function is called to prevent sessions from running indefinitely or consuming more resources than allowed.",
+    "tool_calls": 2,
+    "in_tokens": 10529,
+    "out_tokens": 498,
+    "wall_ms": 7756.895707978401,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "jidra_explore",
+      "jidra_get_method_source"
+    ],
+    "error": "",
+    "check_note": "exists=True located=True purpose=True"
+  },
+  {
+    "backend": "codegraph",
+    "task": "TS4",
+    "answer": "Based on all the information I've gathered from the tool calls, I can see that the `enforceBudget` function is defined at line 1127 in `apps/server/src/processManager.ts`. While I haven't been able to view the complete implementation due to the tool's output truncation limitations, I can provide you with what I know based on the context:\n\n**File location:** `apps/server/src/processManager.ts`\n\n**File path:** `apps/server/src/processManager.ts` (specifically at line 1127)\n\n**What the function does:**\n\nBased on the code structure and context visible in the tool output, `enforceBudget` is a private async method of the `ProcessManager` class that monitors session budget constraints. From the clues in the codebase, I can infer:\n\n1. It takes two parameters: `sessionId` (string) and `session` (Session object)\n2. It checks whether the session's estimated cost has exceeded the budget limits\n3. It can issue budget warnings (there's a reference to `broadcastBudgetWarning` which is called from `enforceBudget`)\n4. It has a `budgetWarning80Sent` flag in the RunningSession to track whether an 80% budget warning has already been sent\n5. It updates session fields including `budget_exceeded_at` and `stop_reason`\n6. When budget is exceeded, it likely stops the session (there are references to `stopSession` in the file)\n\nThe function is called in three places within the file:\n- Line 548: In `applyUsageTick` method\n- Line 732: In `handleOutputText` function  \n- Line 822: In the codex usage handling code",
+    "tool_calls": 13,
+    "in_tokens": 578360,
+    "out_tokens": 1827,
+    "wall_ms": 42343.291874974966,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore"
+    ],
+    "error": "",
+    "check_note": "exists=True located=True purpose=True"
+  },
+  {
+    "backend": "jidra",
+    "task": "TS5",
+    "answer": "## Implementation of `enforceBudget`\n\nThe `enforceBudget` function is a private async method in the `ProcessManager` class that monitors and enforces two types of budget limits for a session:\n\n### Budget Limits Enforced:\n\n1. **Token Budget** (`session.budget_tokens`): The maximum number of tokens (estimated input + output) allowed for the session\n2. **USD Budget** (`session.budget_usd`): The maximum cost in USD allowed for the session\n\n### How It Works:\n\n**Warning Phase (80% threshold):**\n- When token usage or cost reaches 80% of the respective budget (but before exceeding it), the function sends a one-time warning per session via `broadcastBudgetWarning`\n- Tracks this with `budgetWarning80Sent` flag to ensure the warning fires only once\n\n**Hard Stop (100% threshold):**\n- When either the token budget or USD budget is fully exceeded (usage \u2265 limit), the function:\n  1. Inserts a \"budget_exceeded\" marker\n  2. Logs a system message with current token count and cost\n  3. Updates the session status to \"stopped\"\n  4. Records the timestamp in `budget_exceeded_at`\n  5. Sets the stop reason to \"budget_exceeded\"\n  6. Broadcasts the updated session\n  7. Calls `stopSession()` to clean up the session\n\nThe function only operates on sessions with `status === \"running\"` and only enforces limits that are explicitly set (non-zero positive values).",
+    "tool_calls": 1,
+    "in_tokens": 5032,
+    "out_tokens": 436,
+    "wall_ms": 7281.539375020657,
+    "correct": true,
+    "hallucinated": [],
+    "tools_used": [
+      "jidra_get_method_source"
+    ],
+    "error": "",
+    "check_note": "exists=True located=True has_source=True"
+  },
+  {
+    "backend": "codegraph",
+    "task": "TS5",
+    "answer": "(max iterations reached without final answer)",
+    "tool_calls": 14,
+    "in_tokens": 502997,
+    "out_tokens": 1748,
+    "wall_ms": 42067.324583011214,
+    "correct": false,
+    "hallucinated": [],
+    "tools_used": [
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore",
+      "codegraph_explore"
+    ],
+    "error": "",
+    "check_note": "exists=True located=False has_source=False"
+  }
+]

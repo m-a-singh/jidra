@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from ...indexing.resources_indexer import discover_resource_files, index_resource_file
 
 router = APIRouter()
 
@@ -114,6 +115,71 @@ async def _stream_process(req: ProcessRequest):
         )
         yield _sse("status", {"msg": "Graph indexed and validated", "phase": "indexed"})
 
+        try:
+            from collections import Counter
+            from ...graph import graph_store as _gs
+
+            _db = _gs.resolve_graph_db_path(out_dir)
+            _conn = _gs.connect(_db)
+            _graph = _gs.load_graph(_conn, variant="main")
+            _res = dict(Counter(c.resolution_status for c in _graph.callsites))
+            _rescued = sum(
+                1
+                for c in _graph.callsites
+                if (c.resolution_reason or "").startswith("second-pass")
+            )
+            # Diagnose unresolved_receiver: what does the receiver look like?
+            _unres_recv = [
+                c
+                for c in _graph.callsites
+                if c.resolution_status == "unresolved_receiver"
+            ]
+            _recv_no_dot = sum(
+                1 for c in _unres_recv if c.receiver and "." not in c.receiver
+            )
+            _recv_dotted = sum(
+                1
+                for c in _unres_recv
+                if c.receiver
+                and "." in c.receiver
+                and not c.receiver.rstrip().endswith(")")
+            )
+            _recv_chain = sum(
+                1
+                for c in _unres_recv
+                if c.receiver and c.receiver.rstrip().endswith(")")
+            )
+            _recv_none = sum(1 for c in _unres_recv if not c.receiver)
+            _impl_suffix = _res.get("resolved_impl_suffix", 0)
+            _cha = _res.get("resolved_cha", 0)
+            _total_cs = len(_graph.callsites)
+            _resolved = sum(
+                v for k, v in _res.items() if not k.startswith("unresolved")
+            )
+            _unresolved = sum(v for k, v in _res.items() if k.startswith("unresolved"))
+            yield _sse(
+                "status",
+                {
+                    "msg": (
+                        f"[resolution] total={_total_cs} resolved={_resolved} unresolved={_unresolved} "
+                        f"second-pass={_rescued} impl-suffix={_impl_suffix} cha={_cha}"
+                    ),
+                    "phase": "indexed",
+                },
+            )
+            yield _sse(
+                "status",
+                {
+                    "msg": (
+                        f"[unresolved_receiver breakdown] simple_var={_recv_no_dot} "
+                        f"dotted_field={_recv_dotted} method_chain={_recv_chain} no_receiver={_recv_none}"
+                    ),
+                    "phase": "indexed",
+                },
+            )
+        except Exception:
+            pass
+
         if req.index_docs:
             repo = Path(req.repo_path).resolve()
             doc_files = _discover_doc_files(repo)
@@ -160,6 +226,24 @@ async def _stream_process(req: ProcessRequest):
                             yield _sse(
                                 "warn", {"msg": f"  {f.name} skipped: {doc_err}"}
                             )
+
+                    # Index Spring resources files (YAML/JSON/XML)
+                    resource_files = discover_resource_files(
+                        repo,
+                        skip_folders=set(req.skip_folders)
+                        if req.skip_folders
+                        else None,
+                    )
+                    for rf in resource_files:
+                        try:
+                            n = index_resource_file(
+                                conn, str(rf), class_names, method_names
+                            )
+                            if n:
+                                total_chunks += n
+                        except Exception:
+                            pass
+
                     conn.close()
                     yield _sse(
                         "status",
@@ -190,7 +274,7 @@ async def _stream_process(req: ProcessRequest):
                             "command": python,
                             "args": [
                                 "-m",
-                                "jidra.mcp_server",
+                                "jidra.server.mcp_server",
                                 "--mode",
                                 "proxy",
                                 "--graph",

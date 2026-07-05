@@ -9,26 +9,26 @@ import threading
 import time
 from pathlib import Path
 
+from .engine.engine import JidraEngine
+from .extractors.extractor import build_graph
+from .flow.flow_doc_agent import FlowDocAgent
+from .flow.flow_stitcher import stitch_flow
 from .graph import graph_store
-from .utils import ui
+from .graph.graph_validator import parse_actuator_beans, validate_graph
+from .graph.graph_visualizer import build_graph_data, render_interactive_html
+from .llm.trace_engine import trace_method, trace_route
 from .server.actuator_client import (
     ActuatorError,
     fetch_beans_from_url,
     run_docker_and_fetch_beans,
 )
+from .utils import ui
 from .utils.context_builder import build_method_context
-from .engine.engine import JidraEngine
-from .extractors.extractor import build_graph
-from .flow.flow_doc_agent import FlowDocAgent
-from .flow.flow_stitcher import stitch_flow
-from .graph.graph_validator import parse_actuator_beans, validate_graph
-from .graph.graph_visualizer import build_graph_data, render_interactive_html
 from .utils.selector import (
     _method_ambiguous_error,
     _method_not_found_error,
     _resolve_method_selector,
 )
-from .llm.trace_engine import trace_method, trace_route
 
 OUTPUT_DIR = Path(__file__).resolve().parents[2] / "output" / "database"
 
@@ -697,6 +697,12 @@ def _parse_args() -> argparse.Namespace:
             "sidecar (higher resolution)."
         ),
     )
+    index_parser.add_argument(
+        "--diagnose",
+        "-d",
+        action="store_true",
+        help="Print unresolved callsite breakdown after indexing",
+    )
 
     trace_parser = subparsers.add_parser("trace", help="Trace a method call flow")
     trace_parser.add_argument(
@@ -1222,14 +1228,15 @@ def _index(
     force: bool = False,
     ts_backend: str = "auto",
     skip_folders: set[str] | None = None,
+    diagnose: bool = False,
 ) -> None:
+    from .models import Graph as _Graph
     from .utils.cache import (
         compute_file_manifest,
         compute_fingerprint,
         load_cache,
         save_cache,
     )
-    from .models import Graph as _Graph
 
     codebase_path = Path(codebase).resolve()
     output_path = Path(output).resolve()
@@ -1328,8 +1335,8 @@ def _index(
 
     graph_store.save_full_graph(conn, graph)
 
-    from .smithy.smithy_bridge import link_operations
     from .extractors.smithy_extractor import build_smithy_graph
+    from .smithy.smithy_bridge import link_operations
 
     smithy_shapes, smithy_operations = build_smithy_graph(codebase_path)
     smithy_links = (
@@ -1370,6 +1377,12 @@ def _index(
             f"{health['external_pct']}% external "
             f"({health['total_callsites']} callsites)"
         )
+
+        if diagnose:
+            from .extractors.extractor import diagnose_unresolved
+
+            result = diagnose_unresolved(graph)
+            print(json.dumps(result, indent=2))
 
 
 def _validate(
@@ -1505,6 +1518,27 @@ def _process(
             f"Indexed {len(graph.classes)} classes, {len(graph.methods)} methods, "
             f"{len(graph.resolved_call_edges)} edges"
         )
+        try:
+            from collections import Counter
+
+            _res = Counter(c.resolution_status for c in graph.callsites)
+            _total_cs = len(graph.callsites)
+            _resolved = sum(
+                v for k, v in _res.items() if not k.startswith("unresolved")
+            )
+            _unresolved = sum(v for k, v in _res.items() if k.startswith("unresolved"))
+            _rescued = sum(
+                1
+                for c in graph.callsites
+                if (c.resolution_reason or "").startswith("second-pass")
+            )
+            _impl_sfx = _res.get("resolved_impl_suffix", 0)
+            _cha = _res.get("resolved_cha", 0)
+            ui.info(
+                f"[resolution] total={_total_cs} resolved={_resolved} unresolved={_unresolved} second-pass={_rescued} impl-suffix={_impl_sfx} cha={_cha}"
+            )
+        except Exception:
+            pass
     except Exception as e:
         raise SystemExit(f"Indexing failed: {e}")
 
@@ -2000,8 +2034,8 @@ def _up() -> None:
         )
         _srv = (
             f"{_python} -m jidra.mcp_server --mode proxy \\\n    "
-            f"--graph {graph_validated_path} \\\n    "
-            f"--codebase {codebase_path}"
+            f"\\\n --graph {graph_validated_path} \\\n    "
+            f"\\\n --codebase {codebase_path}"
         )
         claude_cmd = f"claude mcp add --scope local jidra -- \\\n    {_srv}"
         codex_cmd = f"codex mcp add --scope local jidra -- \\\n    {_srv}"
@@ -2885,6 +2919,7 @@ def main() -> None:
     if args.command == "ui":
         try:
             import uvicorn
+
             from .ui.app import app as _ui_app
         except ImportError:
             raise SystemExit("UI dependencies missing. Run: pip install 'jidra[ui]'")
@@ -2919,6 +2954,7 @@ def main() -> None:
             args.output,
             force=args.force,
             ts_backend=getattr(args, "ts_backend", "auto"),
+            diagnose=getattr(args, "diagnose", False),
         )
         return
 
@@ -3087,6 +3123,8 @@ def main() -> None:
             table.add_column("Elapsed", style="#f59e0b", width=9, justify="right")
             table.add_column("Status", width=8)
 
+            _rows_data: list[tuple] = []
+
             def _fmt_size(b: int) -> str:
                 return f"{b / 1024:.1f}KB" if b >= 1024 else f"{b}B"
 
@@ -3101,6 +3139,10 @@ def main() -> None:
                         n_chunks = index_document(
                             conn, str(f), class_names, method_names
                         )
+                        # Count distinct linked classes across chunks for this source
+                        _src_chunks = doc_store.query_by_class(
+                            conn, "", limit=0
+                        )  # just need count
                         linked_set: set[str] = set()
                         for row in conn.execute(
                             "SELECT linked_classes FROM doc_chunks WHERE source_path=?",
@@ -3148,6 +3190,7 @@ def main() -> None:
 
             sources = doc_store.list_sources(conn)
             total_chunks = sum(s["chunk_count"] for s in sources)
+            _ok_count = sum(1 for f in files if True)  # table already shows failures
             rprint(
                 f"\n[bold #38bdf8]Done.[/bold #38bdf8] {len(files)} files · {total_chunks} total chunks in doc store"
             )
