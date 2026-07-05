@@ -306,7 +306,10 @@ async def _stream_process(req: ProcessRequest):
             await loop.run_in_executor(None, lambda: _install_agent(repo))
             yield _sse(
                 "status",
-                {"msg": "Agent + skills installed (.claude/agents, .claude/skills)", "phase": "agents"},
+                {
+                    "msg": "Agent + skills installed (.claude/agents, .claude/skills)",
+                    "phase": "agents",
+                },
             )
         except Exception as agent_err:
             yield _sse("warn", {"msg": f"Agent install skipped: {agent_err}"})

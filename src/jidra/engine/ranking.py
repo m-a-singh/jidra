@@ -29,7 +29,7 @@ Phase-2 (re-ranking, in score_hit):
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 
 
 @dataclass
@@ -60,14 +60,20 @@ class RankingConfig:
 DEFAULT_CONFIG = RankingConfig()
 
 _GENERATED_MARKERS = (
-    "/generated/", "/gen/", ".generated.", "_generated.",
-    "build/generated", "target/generated",
+    "/generated/",
+    "/gen/",
+    ".generated.",
+    "_generated.",
+    "build/generated",
+    "target/generated",
 )
 
 _CAMEL_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 
 
-def score_hit(row: dict, tokens: set[str], cfg: RankingConfig = DEFAULT_CONFIG) -> float:
+def score_hit(
+    row: dict, tokens: set[str], cfg: RankingConfig = DEFAULT_CONFIG
+) -> float:
     """Compute relevance score for a candidate row given query tokens.
 
     Higher = better. Designed to be called after BM25 retrieval as a re-ranker.

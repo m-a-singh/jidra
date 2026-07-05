@@ -19,15 +19,15 @@ Ranking config YAML example (all fields optional, unset = default):
   nl_use_or: true
   nl_strip_stopwords: true
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import sys
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -44,11 +44,12 @@ EXPLORE_TOP_N = 10
 
 # ── data classes ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Case:
     id: str
     repo: str
-    tool: str          # search | explore | find_callers | get_flow | negative
+    tool: str  # search | explore | find_callers | get_flow | negative
     query: str
     expected: list[str]
     pass_threshold: float = PASS_THRESHOLD
@@ -62,11 +63,11 @@ class CaseResult:
     tool: str
     passed: bool
     recall: float
-    mrr: float         # 0.0 for non-search tools
+    mrr: float  # 0.0 for non-search tools
     latency_ms: float
     found: list[str]
     missed: list[str]
-    rank: int          # rank of first hit (search only)
+    rank: int  # rank of first hit (search only)
 
 
 @dataclass
@@ -75,12 +76,13 @@ class RepoSummary:
     total: int
     passed: int
     mean_recall: float
-    mean_mrr: float          # search cases only
-    explore_recall: float    # explore cases only
+    mean_mrr: float  # search cases only
+    explore_recall: float  # explore cases only
     pass_rate: float
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _extract_names(results: list[dict]) -> list[str]:
     names = []
@@ -95,7 +97,9 @@ def _extract_names(results: list[dict]) -> list[str]:
     return names
 
 
-def _score(case: Case, result_names: list[str]) -> tuple[float, float, list[str], list[str], int]:
+def _score(
+    case: Case, result_names: list[str]
+) -> tuple[float, float, list[str], list[str], int]:
     """Returns (recall, mrr, found, missed, first_rank)."""
     found, missed = [], []
     first_rank = 0
@@ -120,6 +124,7 @@ def _score(case: Case, result_names: list[str]) -> tuple[float, float, list[str]
 
 
 # ── engine wrapper ────────────────────────────────────────────────────────────
+
 
 def run_case(case: Case, engine: JidraEngine) -> CaseResult:
     t0 = time.perf_counter()
@@ -149,16 +154,18 @@ def run_case(case: Case, engine: JidraEngine) -> CaseResult:
         rows = raw.get("results", [])
         names = _extract_names(rows)
         # negative: expect NO match — recall inverted
-        found_any = any(
-            e.lower() in " ".join(names) for e in case.expected
-        )
+        found_any = any(e.lower() in " ".join(names) for e in case.expected)
         latency_ms = (time.perf_counter() - t0) * 1000
         return CaseResult(
-            case_id=case.id, repo=case.repo, tool=case.tool,
+            case_id=case.id,
+            repo=case.repo,
+            tool=case.tool,
             passed=not found_any,
             recall=0.0 if found_any else 1.0,
-            mrr=0.0, latency_ms=latency_ms,
-            found=[], missed=case.expected if not found_any else [],
+            mrr=0.0,
+            latency_ms=latency_ms,
+            found=[],
+            missed=case.expected if not found_any else [],
             rank=0,
         )
     else:
@@ -169,13 +176,21 @@ def run_case(case: Case, engine: JidraEngine) -> CaseResult:
     passed = recall >= case.pass_threshold
 
     return CaseResult(
-        case_id=case.id, repo=case.repo, tool=case.tool,
-        passed=passed, recall=recall, mrr=mrr,
-        latency_ms=latency_ms, found=found, missed=missed, rank=rank,
+        case_id=case.id,
+        repo=case.repo,
+        tool=case.tool,
+        passed=passed,
+        recall=recall,
+        mrr=mrr,
+        latency_ms=latency_ms,
+        found=found,
+        missed=missed,
+        rank=rank,
     )
 
 
 # ── summary ───────────────────────────────────────────────────────────────────
+
 
 def summarise(results: list[CaseResult]) -> list[RepoSummary]:
     repos: dict[str, list[CaseResult]] = {}
@@ -188,25 +203,30 @@ def summarise(results: list[CaseResult]) -> list[RepoSummary]:
         explore_cases = [c for c in cases if c.tool == "explore"]
         mean_mrr = (
             sum(c.mrr for c in search_cases) / len(search_cases)
-            if search_cases else 0.0
+            if search_cases
+            else 0.0
         )
         explore_recall = (
             sum(c.recall for c in explore_cases) / len(explore_cases)
-            if explore_cases else 0.0
+            if explore_cases
+            else 0.0
         )
-        summaries.append(RepoSummary(
-            repo=repo,
-            total=len(cases),
-            passed=sum(1 for c in cases if c.passed),
-            mean_recall=sum(c.recall for c in cases) / len(cases),
-            mean_mrr=mean_mrr,
-            explore_recall=explore_recall,
-            pass_rate=sum(1 for c in cases if c.passed) / len(cases),
-        ))
+        summaries.append(
+            RepoSummary(
+                repo=repo,
+                total=len(cases),
+                passed=sum(1 for c in cases if c.passed),
+                mean_recall=sum(c.recall for c in cases) / len(cases),
+                mean_mrr=mean_mrr,
+                explore_recall=explore_recall,
+                pass_rate=sum(1 for c in cases if c.passed) / len(cases),
+            )
+        )
     return summaries
 
 
 # ── diff vs baseline ─────────────────────────────────────────────────────────
+
 
 def diff_baseline(
     current: list[CaseResult],
@@ -222,12 +242,18 @@ def diff_baseline(
         if not b:
             continue
         if r.passed and not b["passed"]:
-            improvements.append(f"  + {r.case_id}  recall {b['recall']:.2f}→{r.recall:.2f}")
+            improvements.append(
+                f"  + {r.case_id}  recall {b['recall']:.2f}→{r.recall:.2f}"
+            )
         elif not r.passed and b["passed"]:
-            regressions.append(f"  - {r.case_id}  recall {b['recall']:.2f}→{r.recall:.2f}")
+            regressions.append(
+                f"  - {r.case_id}  recall {b['recall']:.2f}→{r.recall:.2f}"
+            )
         elif abs(r.mrr - b["mrr"]) >= 0.1:
             direction = "↑" if r.mrr > b["mrr"] else "↓"
-            improvements.append(f"  {direction} {r.case_id}  MRR {b['mrr']:.2f}→{r.mrr:.2f}")
+            improvements.append(
+                f"  {direction} {r.case_id}  MRR {b['mrr']:.2f}→{r.mrr:.2f}"
+            )
 
     if improvements:
         print("\nImprovements:")
@@ -241,39 +267,49 @@ def diff_baseline(
 
 # ── printing ──────────────────────────────────────────────────────────────────
 
+
 def print_results(results: list[CaseResult], summaries: list[RepoSummary]) -> None:
     current_repo = None
     for r in results:
         if r.repo != current_repo:
             current_repo = r.repo
-            print(f"\n{'─'*70}")
+            print(f"\n{'─' * 70}")
             print(f"  {r.repo}")
-            print(f"{'─'*70}")
+            print(f"{'─' * 70}")
         status = "PASS" if r.passed else "FAIL"
         missed_str = f"  missed={r.missed}" if r.missed else ""
         if r.tool == "search":
-            print(f"  {r.case_id:<48} {status}  recall={r.recall:.2f}  mrr={r.mrr:.2f}  rank={r.rank}  {r.latency_ms:.0f}ms{missed_str}")
+            print(
+                f"  {r.case_id:<48} {status}  recall={r.recall:.2f}  mrr={r.mrr:.2f}  rank={r.rank}  {r.latency_ms:.0f}ms{missed_str}"
+            )
         else:
-            print(f"  {r.case_id:<48} {status}  recall={r.recall:.2f}  {r.latency_ms:.0f}ms{missed_str}")
+            print(
+                f"  {r.case_id:<48} {status}  recall={r.recall:.2f}  {r.latency_ms:.0f}ms{missed_str}"
+            )
 
-    print(f"\n{'═'*70}")
+    print(f"\n{'═' * 70}")
     print(f"  {'REPO':<15} {'PASS':>6}  {'RECALL':>7}  {'MRR':>6}  {'EXPLORE':>8}")
-    print(f"{'─'*70}")
+    print(f"{'─' * 70}")
     total_pass = total_cases = 0
     for s in summaries:
         total_pass += s.passed
         total_cases += s.total
-        print(f"  {s.repo:<15} {s.passed}/{s.total:>2}    {s.mean_recall:.3f}    {s.mean_mrr:.3f}    {s.explore_recall:.3f}")
-    print(f"{'─'*70}")
-    all_results = [r for s in summaries for r in []]  # just for totals
+        print(
+            f"  {s.repo:<15} {s.passed}/{s.total:>2}    {s.mean_recall:.3f}    {s.mean_mrr:.3f}    {s.explore_recall:.3f}"
+        )
+    print(f"{'─' * 70}")
+    # all_results = [r for s in summaries for r in []]  # just for totals
     agg_recall = sum(s.mean_recall * s.total for s in summaries) / total_cases
     agg_mrr = sum(s.mean_mrr for s in summaries) / len(summaries)
     agg_explore = sum(s.explore_recall for s in summaries) / len(summaries)
-    print(f"  {'TOTAL':<15} {total_pass}/{total_cases:>2}    {agg_recall:.3f}    {agg_mrr:.3f}    {agg_explore:.3f}")
-    print(f"{'═'*70}\n")
+    print(
+        f"  {'TOTAL':<15} {total_pass}/{total_cases:>2}    {agg_recall:.3f}    {agg_mrr:.3f}    {agg_explore:.3f}"
+    )
+    print(f"{'═' * 70}\n")
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
+
 
 def load_cases(path: str, repo_filter: str | None) -> list[Case]:
     with open(path) as f:
@@ -282,15 +318,17 @@ def load_cases(path: str, repo_filter: str | None) -> list[Case]:
     for c in raw["cases"]:
         if repo_filter and c["repo"] != repo_filter:
             continue
-        cases.append(Case(
-            id=c["id"],
-            repo=c["repo"],
-            tool=c["tool"],
-            query=c["query"],
-            expected=c["expected"],
-            pass_threshold=c.get("pass_threshold", PASS_THRESHOLD),
-            rank_threshold=c.get("rank_threshold", SEARCH_LIMIT),
-        ))
+        cases.append(
+            Case(
+                id=c["id"],
+                repo=c["repo"],
+                tool=c["tool"],
+                query=c["query"],
+                expected=c["expected"],
+                pass_threshold=c.get("pass_threshold", PASS_THRESHOLD),
+                rank_threshold=c.get("rank_threshold", SEARCH_LIMIT),
+            )
+        )
     return cases
 
 
@@ -305,7 +343,9 @@ def load_ranking_config(path: str | None) -> RankingConfig:
         return DEFAULT_CONFIG
     with open(path) as f:
         overrides = yaml.safe_load(f) or {}
-    cfg = RankingConfig(**{k: v for k, v in overrides.items() if hasattr(RankingConfig, k) or True})
+    cfg = RankingConfig(
+        **{k: v for k, v in overrides.items() if hasattr(RankingConfig, k) or True}
+    )
     return cfg
 
 
@@ -360,7 +400,9 @@ def main() -> None:
         results.append(result)
         if args.verbose:
             status = "PASS" if result.passed else "FAIL"
-            print(f"  {result.case_id:<50} {status}  recall={result.recall:.2f}  mrr={result.mrr:.2f}")
+            print(
+                f"  {result.case_id:<50} {status}  recall={result.recall:.2f}  mrr={result.mrr:.2f}"
+            )
 
     summaries = summarise(results)
     print_results(results, summaries)
