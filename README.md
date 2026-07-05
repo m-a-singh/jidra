@@ -31,6 +31,7 @@ This project is intentionally focused and graph-driven.
 - **Generate context** → 68-95% smaller prompt-ready context for Claude/Codex/Gemini
 - **Trace execution** → See likely business flow with uncertainty markers
 - **Reduce LLM cost** → Proven token reduction on code-native workflows (measured on real projects)
+- **Ship agents & skills** → `jidra init` installs a Haiku subagent + two slash commands into your repo's `.claude/` — blast radius analysis and code navigation, no manual setup
 
 **Real Proof — Claude Code sessions, same question, same model (claude-sonnet-4-6):**
 
@@ -62,7 +63,7 @@ Live progress while indexing is in flight:
   <img src="docs/assets/jidra-output-directory-structure.png" alt="jidra output directory structure" width="400">
 </p>
 
-The generated `graph_visualization.html` — interactive dark-theme call graph with a node inspector, search, and callers/callees navigation:
+The generated `graph_visualization.html` — interactive graph, Graphviz DOT, and JSON export tabs:
 
 <p align="center">
   <img src="docs/assets/jidra_main_graph_visualization.jpg" alt="Interactive graph visualization — dark theme, node inspector, physics/filter controls" width="800">
@@ -187,16 +188,60 @@ Pick a repository — the same picker drives every tab:
 
 ## Benchmarked vs CodeGraph (agent-in-loop)
 
-JIDRA was evaluated against the [CodeGraph](https://github.com/colbymchenry/codegraph) MCP server using a real coding agent: the same LLM was given a navigation task and **exactly one backend's tools**, then scored on correctness, tool calls, tokens, and hallucinations. On a Spring Boot Java repo (7 tasks, Haiku 4.5):
+JIDRA was evaluated against the [CodeGraph](https://github.com/colbymchenry/codegraph) MCP server using a real coding agent (Haiku 4.5): the same LLM was given a navigation task and **exactly one backend's tools**, then scored on correctness, tool calls, tokens, and hallucinations. Three languages evaluated.
+
+### Java (Spring Boot monorepo, ~1,200 methods, 8 tasks)
 
 | Config | Backend | correct | avg tool calls | avg tokens | halluc. |
 |---|---|---|---|---|---|
-| **A (runtime Actuator)** | **JIDRA** | **7/7** | **3.0** | **~18.9k** | 0/7 |
-| A (runtime Actuator) | CodeGraph | 7/7 | 4.9 | ~65.2k | 0/7 |
-| **B (static only)** | **JIDRA** | **7/7** | **3.9** | **~26.0k** | 0/7 |
-| B (static only) | CodeGraph | 6/7 | 5.0 | ~68.3k | 0/7 |
+| **A (runtime Actuator)** | **JIDRA** | **8/8** | **3.0** | **~18.9k** | 0/8 |
+| A (runtime Actuator) | CodeGraph | 7/8 | 4.9 | ~65.2k | 0/8 |
+| **B (static only)** | **JIDRA** | **8/8** | **3.9** | **~26.0k** | 0/8 |
+| B (static only) | CodeGraph | 7/8 | 5.0 | ~68.3k | 0/8 |
 
-JIDRA used ~3.5x fewer tokens than CodeGraph at equal correctness. Runtime Actuator grounding (Config A) cut JIDRA a further ~27% tokens and ~1 tool call per task versus static analysis (Config B) by resolving dependency injection ambiguity up front—something CodeGraph's pure-static approach cannot match. The CodeGraph 7/7→6/7 variance between configs is agent run-variance (CodeGraph never uses JIDRA's graph), not a real effect. Full methodology, per-task data, and limitations are in [FINDINGS_jidra_vs_codegraph.md](FINDINGS_jidra_vs_codegraph.md).
+JIDRA 8/8 all runs. CodeGraph permanently fails T1 (can't produce exact implementation counts — blast-radius design gap). Runtime Actuator grounding cut JIDRA ~27% tokens and ~1 tool call vs static-only.
+
+### Python (~891–1,100 methods, 5 tasks)
+
+| version | JIDRA correct | CG correct | JIDRA avg tok | CG avg tok | tok ratio | JIDRA cost | CG cost |
+|---|---|---|---|---|---|---|---|
+| v2 | **5/5** | 4/5 | 11,444 | 139,716 | **12.2×** | **$0.054** | $0.573 |
+
+CG fails PY1 (caller enumeration — same reverse-edge design gap as Java T3). PY4 (definition lookup in a 1,200-line file): CG used 13 calls / 533k tokens; JIDRA: 2 calls / 12k.
+
+### TypeScript (~630 methods, 5 tasks)
+
+| version | JIDRA correct | CG correct | JIDRA avg tok | CG avg tok | tok ratio | JIDRA cost | CG cost |
+|---|---|---|---|---|---|---|---|
+| v2 | **5/5** | 3/5 | 16,108 | 352,633 | **21.9×** | **$0.076** | $1.433 |
+
+CG fails TS1 (caller enumeration) and TS5 (source retrieval — hit 14 iterations / 592k tokens trying to scroll past truncation boundary; JIDRA: 1 call / 5k).
+
+### Cross-language summary
+
+| language | JIDRA | CG | token ratio | JIDRA cost | CG cost |
+|---|---|---|---|---|---|
+| Java | 8/8 | 7/8 | 1.35× | $0.156 | $0.205 |
+| Python | 5/5 | 4/5 | **12.2×** | $0.054 | $0.573 |
+| TypeScript | 5/5 | 3/5 | **21.9×** | $0.076 | $1.433 |
+
+Java ratio is lower because Java tasks include behavioral queries (T6/T7) where CG's inline-source dumping is competitive. Python/TypeScript tasks are traversal-heavy where CG's lack of scalpel tools is fatal. Root cause in all three languages: `codegraph_explore` cannot walk reverse call edges, extract a single method from a large file by name, or count implementations with precision. JIDRA's tools answer each in 1 call.
+
+Full methodology and per-task data: [FINDINGS_jidra_vs_codegraph.md](FINDINGS_jidra_vs_codegraph.md).
+
+## Benchmarked vs CodeGraph (method-level retrieval)
+
+Separate retrieval benchmark mirroring CodeGraph's own `runner.ts` methodology (Recall@10 + MRR). Four TypeScript repos, 48 cases total, method symbols only.
+
+| repo | methods | JIDRA passed | CG passed | JIDRA recall | CG recall |
+|---|---|---|---|---|---|
+| MTKruto | ~2,300 | **12/12 (100%)** | 11/12 (92%) | **0.847** | 0.764 |
+| Trezor Suite | ~12,600 | **10/12 (83%)** | 8/12 (67%) | **0.708** | 0.500 |
+| PostyBirb | ~2,200 | **10/12 (83%)** | 9/12 (75%) | **0.708** | 0.625 |
+| Shapeshift Web | ~6,200 | **12/12 (100%)** | 7/12 (58%) | **0.792** | 0.458 |
+| **Aggregate** | — | **44/48 (92%)** | **35/48 (73%)** | **0.764** | 0.587 |
+
+When CodeGraph misses, it returns 0 results — methods exist in the repo but aren't indexed (standalone functions, React hooks, route handlers in monorepo sub-packages). JIDRA's tree-sitter extractor captures all of these. Explore gap widens in complex monorepo structures: Shapeshift 6/6 vs 3/6 because CodeGraph's traversal doesn't cross package boundaries. Full data: [JIDRA_vs_CodeGraph_retrieval_final.md](docs/JIDRA_vs_CodeGraph_retrieval_final.md).
 
 ## What JIDRA Does NOT Do (By Design)
 
@@ -316,6 +361,96 @@ If you use the local venv:
 ./venv/bin/pip install -e .
 ```
 
+Also installable via `uvx jidra init` without a global install (`pyproject.toml` uses standard `[project.scripts]`).
+
+## `jidra init` — per-repo setup
+
+Run once per repo. Idempotent — re-running on an existing `.jidra/` does incremental reindex unless `--force`.
+
+```bash
+jidra init [--codebase PATH] [--force]
+```
+
+What it does:
+
+1. Prompts for skip folders (comma-separated, optional)
+2. Prompts for git hooks install (y/n)
+3. For Java repos: prompts for actuator URL + Docker (removes phantom edges via live bean validation)
+4. Builds graph → `<repo>/.jidra/graph.db`
+5. Writes `<repo>/.mcp.json` with explicit `--graph` and `--codebase` paths
+6. Installs **agent + skills** into `<repo>/.claude/` (see [Agents & Skills](#agents--skills) below)
+7. Installs git hooks if confirmed
+
+Output layout:
+
+```
+<repo>/
+  .jidra/
+    graph.db                      # code graph (165MB typical Java repo)
+    .java_code_intel_cache.json   # Spring bean cache
+    graph_visualization.html      # optional
+    validation_report.json
+  .mcp.json                       # MCP server config (explicit paths)
+  .claude/
+    agents/
+      jidra-investigator.md
+    skills/
+      jidra-navigate/SKILL.md
+      jidra-blast-radius/SKILL.md
+```
+
+`.mcp.json` is written with explicit `--graph` and `--codebase` paths. Using `jidra serve --mcp` without `--graph` relies on cwd discovery, which fails when Claude Code launches MCP servers from a different working directory. Explicit paths are the only reliable approach.
+
+> **What does NOT get committed** (user's responsibility): add `.jidra/`, `.mcp.json`, and `.claude/` to `.gitignore` or commit selectively. `jidra init` does not touch `.gitignore`.
+
+## Agents & Skills
+
+`jidra init` ships three files into `.claude/`:
+
+### `jidra-investigator` (agent)
+
+Read-only code locator running on **Haiku** (`mcpServers: [jidra]`). Never edits. Never proposes fixes. Returns a `file:line` table.
+
+Tool priority: `jidra_explore` → `jidra_get_method_source` → `jidra_find_callers` → `jidra_get_agent_flow` → `jidra_get_implementations` → Read/Grep only if JIDRA returns nothing.
+
+### `/jidra-navigate` (skill)
+
+Triggers on: *"who calls", "what calls", "find callers", "trace flow", "what implements", "does X exist"*
+
+Spawns `jidra-investigator` with the user's full query. Returns `file:line` table with symbol and context column.
+
+### `/jidra-blast-radius` (skill)
+
+Triggers on: *"blast radius", "impact of changing", "what breaks if", "who is affected by", "safe to change"*
+
+Protocol:
+1. `jidra_find_callers` depth=2
+2. If caller_count > 10 at depth 1, drills top 3 callers deeper
+3. Returns direct callers table + indirect callers table with chain path
+4. Flags HTTP endpoints, scheduled jobs, public API in chain
+5. Risk summary: **LOW / MEDIUM / HIGH**
+
+**Example — DeviceController.saveDevice blast radius:**
+
+Direct callers (depth 1) — 13 sites across every major search flow. Indirect callers flagged a `DeviceController#getTenantDevices` HTTP endpoint and a `DeviceController#getTenantDevices` scheduled job. Risk: **HIGH**.
+
+**Token cost comparison (same query, 4 approaches):**
+
+| Approach | Agent | in tokens | out tokens | cost |
+|---|---|---|---|---|
+| No JIDRA (grep) | cavecrew-investigator | 188,836 | 514 | $0.161 |
+| No slash cmd (main session + redundant agent) | jidra-investigator (wasted) | 276,588 | 905 | ~$0.056 |
+| Explicit `/jidra-blast-radius` | jidra-investigator | 142,219 | 1,337 | $0.182 |
+| Natural language (auto-triggered skill) | jidra-investigator | 189,736 | 1,133 | $0.217 |
+
+Key observations:
+- Grep missed depth-2 chain entirely — no HTTP endpoint flag, no risk rating
+- Explicit slash command most efficient (142k in) — clean delegation path
+- Natural language auto-trigger slightly more expensive (main session reasoning overhead) but better UX
+- Both JIDRA approaches returned correct blast radius with HTTP endpoint and scheduled job flagged
+
+**Design note:** Skills are the trigger mechanism — agent `description` alone is not reliable, as the main session (Sonnet/Opus) will handle queries itself if it has jidra tools. Skills force explicit delegation to Haiku.
+
 ## Quick Start
 
 ### Optional: configure your project package prefixes
@@ -429,6 +564,45 @@ Supported method selectors:
 - bare method name (if unique)
 
 Ambiguous selector output includes candidate ids you can use directly.
+
+## MCP Server
+
+### Setup
+
+`jidra init` writes `.mcp.json` with explicit `--graph` and `--codebase` paths. Restart Claude Code — MCP connects automatically. See [`jidra init`](#jidra-init----per-repo-setup) above.
+
+### `jidra serve`
+
+Alias for `jidra mcp`. Starts the MCP server manually:
+
+```bash
+jidra serve                          # default mode
+jidra serve --graph /path/to/graph.db
+```
+
+### Server modes
+
+| Mode | Behavior |
+|---|---|
+| `direct` (default) | Loads graph in-process. Used by `jidra mcp` / `jidra serve`. |
+| `proxy` | Thin stdio↔socket bridge — spawns a shared **daemon** and forwards calls, so multiple editor windows share one in-memory graph. Degrades to `direct` on Windows / no-socket. |
+| `daemon` | Detached background server (normally spawned by proxy, not run by hand). Holds graph in RAM, serves N proxies over Unix socket, hot-reloads on file changes. |
+
+`jidra init` writes `.mcp.json` in `--mode proxy`.
+
+### Tool surface
+
+By default only the **primary tier** (5 high-confidence tools) is visible: `jidra_explore`, `jidra_get_method_source`, `jidra_find_callers`, `jidra_get_implementations`, `jidra_analyze_stack_trace`.
+
+Set `JIDRA_FULL_TOOLS=1` to expose all 25+ tools, including lower-precision variants (`jidra_get_flow`, `jidra_search`, etc.) and grounding tools (`jidra_query_by_annotation`, `jidra_field_access`).
+
+Full tool reference: [docs/MCP.md](docs/MCP.md).
+
+### Budget-tiered output
+
+Responses auto-scale to graph size. Every context/flow response includes `budget_tier` (`XS`…`XL`, keyed on method count) and `graph_size`. Pass explicit `max_chars` / `depth` / `top_n` to override tier defaults.
+
+---
 
 ## Command Reference
 
@@ -628,7 +802,7 @@ python -m jidra.cli error-doc \
 | priority | location | reason |
 |---:|---|---|
 | 1 | `com.example.app.health.HealthIndicator#doHealthCheck(Health.Builder)` | failing project frame |
-| 2 | `org.opensearch.client.opensearch.cluster.OpenSearchClusterClient#health:360` | caller frame above failure |
+| 2 | `org.opensearch.client.cluster.ClusterClient#health:360` | caller frame above failure |
 | 3 | `this.client.cluster().health` | unresolved external call near failure |
 ```
 
@@ -672,17 +846,6 @@ delimited `# BEGIN JIDRA` / `# END JIDRA` blocks, so they compose with other hoo
 (Husky, lefthook) and `uninstall` removes only JIDRA's block. When running the MCP server
 in `--mode proxy`, the shared daemon also runs a debounced filesystem watcher that hot-reloads
 the graph on save — so on most setups you get fresh graphs with no manual reindex at all.
-
-## `ui`
-
-```bash
-jidra ui [--host 127.0.0.1] [--port 7474] [--reload]
-```
-
-Serves the React web UI (see [Web UI](#web-ui-jidra-ui) above) plus its FastAPI backend on
-one port. Requires `ui/dist` to exist — build it once with `cd ui && npm install && npm run build`.
-`--reload` enables uvicorn auto-reload for backend development; it does not rebuild the frontend
-(run `npm run dev` in `ui/` separately for frontend hot-reload during UI development).
 
 ## `trace`
 
