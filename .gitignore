@@ -16,3 +16,7 @@ CLAUDE.md
 # UI
 ui/node_modules/
 ui/dist/
+.idea
+.idea/
+jidra.iml
+jidra.iml

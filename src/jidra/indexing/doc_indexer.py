@@ -55,7 +55,8 @@ def _split_markdown(text: str) -> list[tuple[str | None, str]]:
             chunk_lines: list[str] = []
             for para in paragraphs:
                 if (
-                    sum(len(ln) for ln in chunk_lines) + len(para) > _CHUNK_TARGET_CHARS
+                    sum(len(line) for line in chunk_lines) + len(para)
+                    > _CHUNK_TARGET_CHARS
                     and chunk_lines
                 ):
                     result.append((heading, "\n\n".join(chunk_lines).strip()))

@@ -1,0 +1,43 @@
+{
+  "repo": "agents_fleet",
+  "language": "typescript",
+  "halluc_max": 0,
+  "tasks": [
+    {
+      "id": "TS1",
+      "prompt": "In this TypeScript codebase, which functions call `getDb`? List the calling functions — impact analysis before changing it.",
+      "checker": "caller_hit",
+      "method": "getDb",
+      "min_hits": 2
+    },
+    {
+      "id": "TS2",
+      "prompt": "Trace the `spawnSession` function: what functions does it call directly? List the downstream functions it invokes.",
+      "checker": "callee_hit",
+      "method": "spawnSession",
+      "min_hits": 1
+    },
+    {
+      "id": "TS3",
+      "prompt": "Explain what the function `purgeStaleSessions()` does in this codebase and what it calls. If it is not present, say so explicitly.",
+      "checker": "negative",
+      "method": "purgeStaleSessions"
+    },
+    {
+      "id": "TS4",
+      "prompt": "Where is the `enforceBudget` function defined (which file) and what does it do? Be specific about the file path.",
+      "checker": "locate_method",
+      "method": "enforceBudget",
+      "file_hint": "processmanager",
+      "purpose_keywords": ["budget"]
+    },
+    {
+      "id": "TS5",
+      "prompt": "Use the code graph tool to fetch the source of the `enforceBudget` function directly. Show its implementation and explain what budget limit it enforces.",
+      "checker": "get_source",
+      "method": "enforceBudget",
+      "file_hint": "processmanager",
+      "source_keywords": ["budget", "session", "limit", "exceed", "max"]
+    }
+  ]
+}

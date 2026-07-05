@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Agent-in-loop eval on a TypeScript repo (agents_fleet) — JIDRA vs CodeGraph.
+"""Agent-in-loop eval on a TypeScript repo (ai_watchtower) — JIDRA vs CodeGraph.
 
 Purpose: catch regressions in JIDRA's *TypeScript* parsing/resolution by giving a
 real coding agent one backend's tools and scoring it. Ground truth comes from the
@@ -7,14 +7,14 @@ JIDRA graph.db (same oracle machinery as the Java/Python evals).
 
 Setup:
     ./venv/bin/python -m jidra.cli index \
-        --codebase /Users/akhil.singh/Workflows/Personal/agents_fleet \
+        --codebase /Users/akhil.singh/Workflows/Personal/ai_watchtower \
         --output /tmp/jidra_ts.db --ts-backend treesitter --force
-    cd /Users/akhil.singh/Workflows/Personal/agents_fleet && codegraph index .
+    cd /Users/akhil.singh/Workflows/Personal/ai_watchtower && codegraph index .
 
 Run:
     ./venv/bin/python scripts/agent_eval_ts.py \
         --graph /tmp/jidra_ts.db \
-        --codebase /Users/akhil.singh/Workflows/Personal/agents_fleet
+        --codebase /Users/akhil.singh/Workflows/Personal/ai_watchtower
     ./venv/bin/python scripts/agent_eval_ts.py --graph /tmp/jidra_ts.db --selfcheck
 """
 
@@ -29,12 +29,31 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "java")
+)
 
 import agent_eval as ae  # noqa: E402
 from agent_eval import Oracle, Task, _lc  # noqa: E402
 
-DEFAULT_REPO = "/Users/akhil.singh/Workflows/Personal/agents_fleet"
+DEFAULT_REPO = "/Users/akhil.singh/Workflows/Personal/ai_watchtower"
+
+
+_JS_ECOSYSTEM = frozenset(
+    {
+        "Node.js",
+        "React.js",
+        "Vue.js",
+        "Next.js",
+        "Nuxt.js",
+        "Express.js",
+        "Nest.js",
+        "Deno.js",
+        "Bun.js",
+        "Angular.js",
+        "Svelte.js",
+    }
+)
 
 
 def ts_hallucinated_refs(text: str, o: Oracle) -> list[str]:
@@ -43,6 +62,8 @@ def ts_hallucinated_refs(text: str, o: Oracle) -> list[str]:
     # *.ts / *.tsx / *.js / *.jsx basenames
     for m in _re.findall(r"\b[A-Za-z]\w+\.(?:ts|tsx|js|jsx)\b", text):
         if m.endswith(".d.ts"):
+            continue
+        if m in _JS_ECOSYSTEM:
             continue
         if m not in o.file_basenames:
             bad.append(m)
@@ -286,11 +307,12 @@ async def run_async(args) -> None:
                 note = "run_error"
             d = asdict(rr)
             d["check_note"] = note
+            d["cost_usd"] = ae._cost(d, args.model)
             results.append(d)
             tag = "ERR" if rr.error else ("OK " if rr.correct else "XX ")
             print(
                 f"    {tag} {be.name:9} calls={rr.tool_calls:2} tok={rr.total_tokens:5} "
-                f"halluc={len(rr.hallucinated)} {note}",
+                f"cost=${d['cost_usd']:.4f} halluc={len(rr.hallucinated)} {note}",
                 flush=True,
             )
 
@@ -311,7 +333,7 @@ def main() -> None:
     )
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
     ap.add_argument("--tasks", default="", help="comma list e.g. TS1,TS2")
-    ap.add_argument("--out", default="eval_agent_results_typescript.json")
+    ap.add_argument("--out", default="results/eval_agent_results_typescript.json")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--selfcheck", action="store_true")
     args = ap.parse_args()
