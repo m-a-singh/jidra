@@ -1,0 +1,299 @@
+# Offline eval test cases
+# tool: search | explore | find_callers | get_flow | negative
+# expected: list of method name substrings that must appear in results
+# pass_threshold: min recall to pass (default 0.5)
+# rank_threshold: max rank for MRR target (search only, default 10)
+
+cases:
+
+  # ── shapeshift ──────────────────────────────────────────────────────────────
+  - id: shapeshift-search-getTradeQuote
+    repo: shapeshift
+    tool: search
+    query: getTradeQuote
+    expected: [getTradeQuote]
+
+  - id: shapeshift-search-getRates
+    repo: shapeshift
+    tool: search
+    query: getRates
+    expected: [getRates]
+
+  - id: shapeshift-search-getAssets
+    repo: shapeshift
+    tool: search
+    query: getAssets
+    expected: [getAssets]
+
+  - id: shapeshift-search-broadcastTransaction
+    repo: shapeshift
+    tool: search
+    query: broadcastTransaction
+    expected: [broadcastTransaction]
+
+  - id: shapeshift-search-estimateFees
+    repo: shapeshift
+    tool: search
+    query: estimateFees
+    expected: [estimateFees]
+
+  - id: shapeshift-search-signTransaction
+    repo: shapeshift
+    tool: search
+    query: signTransaction
+    expected: [signTransaction]
+
+  - id: shapeshift-explore-swap
+    repo: shapeshift
+    tool: explore
+    query: How does the swap flow work?
+    expected: [getTradeQuote, broadcastTransaction]
+
+  - id: shapeshift-explore-signing
+    repo: shapeshift
+    tool: explore
+    query: How are transactions signed and broadcast?
+    expected: [signTransaction, broadcastTransaction]
+
+  - id: shapeshift-explore-rates
+    repo: shapeshift
+    tool: explore
+    query: How does the app get current exchange rates?
+    expected: [getRates, getAssets]
+
+  - id: shapeshift-explore-fees
+    repo: shapeshift
+    tool: explore
+    query: How are transaction fees estimated?
+    expected: [estimateFees]
+
+  - id: shapeshift-explore-broadcast
+    repo: shapeshift
+    tool: explore
+    query: How are signed transactions broadcast to the network?
+    expected: [broadcastTransaction, signTransaction]
+
+  - id: shapeshift-explore-assets
+    repo: shapeshift
+    tool: explore
+    query: How does the app fetch and display assets?
+    expected: [getAssets, getRates]
+
+  # ── mtkruto ─────────────────────────────────────────────────────────────────
+  - id: mtkruto-search-sendMessage
+    repo: mtkruto
+    tool: search
+    query: sendMessage
+    expected: [sendMessage]
+
+  - id: mtkruto-search-invoke
+    repo: mtkruto
+    tool: search
+    query: invoke
+    expected: [invoke]
+
+  - id: mtkruto-search-serialize
+    repo: mtkruto
+    tool: search
+    query: serializeObject
+    expected: [serializeObject]
+
+  - id: mtkruto-search-getMe
+    repo: mtkruto
+    tool: search
+    query: getMe
+    expected: [getMe]
+
+  - id: mtkruto-search-signIn
+    repo: mtkruto
+    tool: search
+    query: signIn
+    expected: [signIn]
+
+  - id: mtkruto-search-forwardMessages
+    repo: mtkruto
+    tool: search
+    query: forwardMessages
+    expected: [forwardMessages]
+
+  - id: mtkruto-explore-send-flow
+    repo: mtkruto
+    tool: explore
+    query: How does sending a message work?
+    expected: [sendMessage, serializeObject]
+
+  - id: mtkruto-explore-session
+    repo: mtkruto
+    tool: explore
+    query: How does session management work?
+    expected: [signIn, send]
+
+  - id: mtkruto-explore-invoke
+    repo: mtkruto
+    tool: explore
+    query: How does invoking an RPC method work?
+    expected: [invoke, send]
+
+  - id: mtkruto-explore-connection
+    repo: mtkruto
+    tool: explore
+    query: How does the client connect and send data?
+    expected: [connect, send]
+
+  - id: mtkruto-explore-auth
+    repo: mtkruto
+    tool: explore
+    query: How does authentication work?
+    expected: [signIn, getMe]
+
+  - id: mtkruto-explore-messaging
+    repo: mtkruto
+    tool: explore
+    query: How does message forwarding work?
+    expected: [sendMessage, forwardMessages]
+
+  # ── postybirb ───────────────────────────────────────────────────────────────
+  - id: postybirb-search-validateSubmission
+    repo: postybirb
+    tool: search
+    query: validateSubmission
+    expected: [validateSubmission]
+
+  - id: postybirb-search-postSubmission
+    repo: postybirb
+    tool: search
+    query: postSubmission
+    expected: [postSubmission]
+
+  - id: postybirb-search-uploadFile
+    repo: postybirb
+    tool: search
+    query: uploadFile
+    expected: [uploadFile]
+
+  - id: postybirb-search-login
+    repo: postybirb
+    tool: search
+    query: login
+    expected: [login]
+
+  - id: postybirb-search-updateSubmission
+    repo: postybirb
+    tool: search
+    query: updateSubmission
+    expected: [updateSubmission]
+
+  - id: postybirb-search-post
+    repo: postybirb
+    tool: search
+    query: post
+    expected: [post]
+
+  - id: postybirb-explore-submit
+    repo: postybirb
+    tool: explore
+    query: How does the submission pipeline work?
+    expected: [validateSubmission, postSubmission]
+
+  - id: postybirb-explore-file
+    repo: postybirb
+    tool: explore
+    query: How are files uploaded and processed?
+    expected: [uploadFile, post]
+
+  - id: postybirb-explore-auth
+    repo: postybirb
+    tool: explore
+    query: How does authentication work?
+    expected: [login, logout]
+
+  - id: postybirb-explore-website
+    repo: postybirb
+    tool: explore
+    query: How does posting to a website work?
+    expected: [post, validateSubmission]
+
+  - id: postybirb-explore-update
+    repo: postybirb
+    tool: explore
+    query: How does updating a submission work?
+    expected: [updateSubmission, validateSubmission]
+
+  - id: postybirb-explore-posting
+    repo: postybirb
+    tool: explore
+    query: How does the posting flow work?
+    expected: [postSubmission, post]
+
+  # ── trezor ──────────────────────────────────────────────────────────────────
+  - id: trezor-search-signTransaction
+    repo: trezor
+    tool: search
+    query: signTransaction
+    expected: [signTransaction]
+
+  - id: trezor-search-getAddress
+    repo: trezor
+    tool: search
+    query: getAddress
+    expected: [getAddress]
+
+  - id: trezor-search-getFeatures
+    repo: trezor
+    tool: search
+    query: getFeatures
+    expected: [getFeatures]
+
+  - id: trezor-search-useSendForm
+    repo: trezor
+    tool: search
+    query: useSendForm
+    expected: [useSendForm]
+
+  - id: trezor-search-applySettings
+    repo: trezor
+    tool: search
+    query: applySettings
+    expected: [applySettings]
+
+  - id: trezor-search-estimateFee
+    repo: trezor
+    tool: search
+    query: estimateFee
+    expected: [estimateFee]
+
+  - id: trezor-explore-tx-flow
+    repo: trezor
+    tool: explore
+    query: How does the transaction signing flow work?
+    expected: [signTransaction, pushTransaction]
+
+  - id: trezor-explore-device
+    repo: trezor
+    tool: explore
+    query: How does device feature discovery work?
+    expected: [getFeatures, getAddress]
+
+  - id: trezor-explore-send-form
+    repo: trezor
+    tool: explore
+    query: How does the send form work?
+    expected: [useSendForm, signTransaction]
+
+  - id: trezor-explore-fees
+    repo: trezor
+    tool: explore
+    query: How are transaction fees estimated?
+    expected: [estimateFee, composeTransaction]
+
+  - id: trezor-explore-settings
+    repo: trezor
+    tool: explore
+    query: How are device settings applied?
+    expected: [applySettings, changePin]
+
+  - id: trezor-explore-account
+    repo: trezor
+    tool: explore
+    query: How does account address derivation work?
+    expected: [getAddress]

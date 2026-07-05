@@ -2024,8 +2024,9 @@ def _up() -> None:
     write_config = _prompt_yn("Write MCP config to <repo>/.mcp.json?", True)
     watch = _prompt_yn("Watch for file changes? (keeps jidra up running)", False)
 
-    jidra_dir = _repo_output_dir(repo)
-    if jidra_dir.exists():
+    jidra_dir = repo / ".jidra"
+    jidra_dir.mkdir(exist_ok=True)
+    if (graph_store.resolve_graph_db_path(jidra_dir)).exists():
         ui.info(f"Found existing JIDRA output for this repo at: {jidra_dir}")
         reuse = _prompt_yn(
             "Reuse existing database? (N = fresh rebuild in same dir)", True
@@ -2169,97 +2170,23 @@ def _up() -> None:
 
     ui.section(2, 2, "MCP configuration")
 
-    settings_path = repo / ".mcp.json"
-    _pkg_dir = Path(__file__).resolve().parent.parent
-    _venv_python = _pkg_dir / "venv" / "bin" / "python"
-    _python = str(_venv_python) if _venv_python.exists() else sys.executable
-
-    mcp_entry = {
-        "type": "stdio",
-        "command": _python,
-        "args": [
-            "-m",
-            "jidra.mcp_server",
-            "--mode",
-            "proxy",
-            "--graph",
-            str(graph_validated_path),
-            "--codebase",
-            str(codebase_path),
-        ],
-        "alwaysAllow": [
-            "jidra_get_method_context",
-            "jidra_get_method_source",
-            "jidra_find_callers",
-            "jidra_get_flow",
-            "jidra_get_agent_flow",
-            "jidra_get_call_chain",
-            "jidra_search",
-            "jidra_explore",
-            "jidra_get_file_dependents",
-            "jidra_get_file_dependencies",
-            "jidra_get_endpoints",
-            "jidra_get_components",
-            "jidra_get_framework_summary",
-            "jidra_analyze_stack_trace",
-            "jidra_check_staleness",
-            "jidra_reindex",
-            "jidra_get_docs",
-            "jidra_index_docs",
-        ],
-    }
-
-    manual_mcp_lines: list[str] = []
     if write_config:
-        settings = {}
-        if settings_path.exists():
-            try:
-                settings = json.loads(settings_path.read_text(encoding="utf-8"))
-            except Exception:
-                settings = {}
-        if not isinstance(settings, dict):
-            settings = {}
-        settings.setdefault("mcpServers", {})["jidra"] = mcp_entry
-        settings_path.write_text(
-            json.dumps(settings, indent=2, ensure_ascii=True), encoding="utf-8"
-        )
-        ui.success(f"MCP config written to: {settings_path}")
+        _write_mcp_json(repo, graph_validated_path)
     else:
-        system_prompt = (
-            "Use JIDRA for code context when available. "
-            "Fall back to built-in tools only if it fails."
+        import sys as _sys
+        _python = _sys.executable
+        ui.info(
+            f"Skipped .mcp.json — run manually:\n"
+            f"  python -m jidra.server.mcp_server --graph {graph_validated_path} --codebase {repo}"
         )
-        _srv = (
-            f"{_python} -m jidra.mcp_server --mode proxy \\\n    "
-            f"\\\n --graph {graph_validated_path} \\\n    "
-            f"\\\n --codebase {codebase_path}"
-        )
-        claude_cmd = f"claude mcp add --scope local jidra -- \\\n    {_srv}"
-        codex_cmd = f"codex mcp add --scope local jidra -- \\\n    {_srv}"
-        claude_rm_cmd = "claude mcp remove --scope local jidra"
-        codex_rm_cmd = "codex mcp remove --scope local jidra"
-        manual_mcp_lines = [
-            "No file written to the repo. Run one of these to register the MCP server:",
-            "",
-            "  Claude Code:",
-            f"    {claude_cmd}",
-            "",
-            f'  claude --system-prompt "{system_prompt}"',
-            "",
-            "  Codex:",
-            f"    {codex_cmd}",
-            "",
-            f'  codex --system "{system_prompt}"',
-            "",
-            "  To remove later:",
-            f"    {claude_rm_cmd}",
-            f"    {codex_rm_cmd}",
-            "",
-        ]
+    manual_mcp_lines: list[str] = []
+
+    # Agent + skills — same as init
+    _install_agent(repo)
 
     ready_rows = [
         ("Graph", str(graph_validated_path)),
-        ("Config", str(settings_path)),
+        ("Config", str(repo / ".mcp.json")),
         ("Repo", f"Open Claude Code in {repo}"),
     ]
 

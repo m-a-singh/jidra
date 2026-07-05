@@ -195,6 +195,40 @@ CREATE TRIGGER IF NOT EXISTS methods_fts_update AFTER UPDATE ON methods BEGIN
     );
 END;
 
+-- Full-text search index over classes/interfaces/abstract types.
+-- Same pattern as methods_fts: self-contained, rowid mirrors classes.rowid.
+CREATE VIRTUAL TABLE IF NOT EXISTS classes_fts USING fts5(
+    id UNINDEXED,
+    name,
+    full_name,
+    package_name,
+    language UNINDEXED,
+    variant UNINDEXED
+);
+
+CREATE TRIGGER IF NOT EXISTS classes_fts_insert AFTER INSERT ON classes BEGIN
+    INSERT INTO classes_fts(
+        rowid, id, name, full_name, package_name, language, variant
+    ) VALUES (
+        new.rowid, new.id, new.name, new.full_name, new.package_name,
+        new.language, new.variant
+    );
+END;
+
+CREATE TRIGGER IF NOT EXISTS classes_fts_delete AFTER DELETE ON classes BEGIN
+    DELETE FROM classes_fts WHERE rowid = old.rowid;
+END;
+
+CREATE TRIGGER IF NOT EXISTS classes_fts_update AFTER UPDATE ON classes BEGIN
+    DELETE FROM classes_fts WHERE rowid = old.rowid;
+    INSERT INTO classes_fts(
+        rowid, id, name, full_name, package_name, language, variant
+    ) VALUES (
+        new.rowid, new.id, new.name, new.full_name, new.package_name,
+        new.language, new.variant
+    );
+END;
+
 -- Smithy IDL model data (Phase A). `id` is the Smithy shape ID itself
 -- (namespace#Name) rather than a hash -- it's already globally unique and is
 -- the natural cross-repo join key for a future org-level graph.
@@ -353,6 +387,22 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                 "source, language, variant FROM methods"
             )
             conn.commit()
+
+    # Backfill classes_fts for existing DBs.
+    try:
+        cfts_count = conn.execute("SELECT count(*) FROM classes_fts").fetchone()[0]
+        if cfts_count == 0:
+            class_count = conn.execute("SELECT count(*) FROM classes").fetchone()[0]
+            if class_count > 0:
+                conn.execute(
+                    "INSERT INTO classes_fts("
+                    "rowid, id, name, full_name, package_name, language, variant) "
+                    "SELECT rowid, id, name, full_name, package_name, language, variant "
+                    "FROM classes"
+                )
+                conn.commit()
+    except sqlite3.OperationalError:
+        pass  # classes_fts not yet created on very old DBs — triggers will catch up
 
 
 def _check_schema_version(conn: sqlite3.Connection) -> None:
@@ -980,6 +1030,59 @@ def load_graph(
 _CAMEL_SPLIT_RE = re.compile(r"[A-Z][a-z0-9]+|[A-Z]+(?=[A-Z]|$)|[a-z0-9]+")
 
 
+_NL_STOPWORDS: frozenset[str] = frozenset({
+    # English function words
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "by", "from", "is", "it", "that", "this", "are", "was",
+    "be", "has", "had", "have", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "can", "shall", "not", "no", "all", "each",
+    "every", "how", "what", "where", "when", "who", "which", "why",
+    "i", "me", "my", "we", "our", "you", "your", "he", "she", "they",
+    "show", "give", "tell", "been", "done", "made", "used", "using",
+    "work", "works", "found", "also", "into", "then", "than", "just",
+    "more", "some", "such", "over", "only", "out", "its", "so", "up",
+    "as", "if", "look", "need", "needs", "want", "happen", "happens",
+    # Code-query noise (but NOT get/set/add/find/list — too often real method names)
+    "code", "file", "files", "function", "method", "class", "type",
+    "app", "codebase", "called",
+})
+
+
+def _make_stemmer():
+    try:
+        from snowballstemmer import stemmer as _SnowballStemmer
+        return _SnowballStemmer("english").stemWord
+    except Exception:
+        return lambda w: w
+
+
+_stem_word = _make_stemmer()
+
+
+def _is_nl_word(token: str) -> bool:
+    """True if token looks like a plain English word (all lowercase, no digits).
+    CamelCase and snake_case identifiers are excluded — stemming them produces
+    truncated garbage ('broadcasttransact', 'signtransact') that over-matches."""
+    return token == token.lower() and token.isalpha()
+
+
+def _strip_stopwords(text: str) -> str:
+    """Remove NL stopwords; apply Snowball stemming only to plain English words."""
+    stem = _stem_word
+
+    tokens = re.findall(r"[A-Za-z0-9_]+", text)
+    kept: list[str] = []
+    for t in tokens:
+        low = t.lower()
+        if low in _NL_STOPWORDS:
+            continue
+        # Only stem plain lowercase words; leave identifiers (CamelCase, snake_case) as-is
+        stemmed = stem(low) if _is_nl_word(t) else low
+        if stemmed and stemmed not in kept:
+            kept.append(stemmed)
+    return " ".join(kept) if kept else text
+
+
 def _fts_query(text: str) -> str:
     """Turn free text into a safe FTS5 MATCH expression.
 
@@ -1048,6 +1151,78 @@ def _run_fts(
         return []
 
 
+def _run_fts_weighted(
+    conn: sqlite3.Connection,
+    match: str,
+    variant: str,
+    language: str | None,
+    limit: int,
+) -> list[dict]:
+    """FTS5 search with method_name column weighted 10× over other columns."""
+    conn.row_factory = sqlite3.Row
+    sql = (
+        "SELECT m.id AS id, m.method_name AS method_name, m.signature AS signature, "
+        "m.class_full_name AS class_full_name, m.file_path AS file_path, "
+        "m.language AS language, bm25(methods_fts, 0, 10, 1, 1, 1) AS score "
+        "FROM methods_fts JOIN methods m ON m.rowid = methods_fts.rowid "
+        "WHERE methods_fts MATCH ? AND methods_fts.variant = ?"
+    )
+    params: list[Any] = [match, variant]
+    if language:
+        sql += " AND m.language = ?"
+        params.append(language)
+    sql += " ORDER BY score LIMIT ?"
+    params.append(limit)
+    try:
+        cur = conn.execute(sql, params)
+        return [dict(r) for r in cur.fetchall()]
+    except sqlite3.OperationalError:
+        return []
+
+
+def search_classes(
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    limit: int = 10,
+    language: str | None = None,
+    variant: str = "main",
+) -> list[dict]:
+    """FTS5 search over class/interface names.
+
+    Returns rows shaped like method results so callers can merge them:
+      method_name  → class.name
+      signature    → class.full_name
+      class_full_name → class.full_name
+      file_path, language, score, node_type="class"
+    """
+    raw_tokens = re.findall(r"[A-Za-z0-9_]+", query)
+    if not raw_tokens:
+        return []
+
+    conn.row_factory = sqlite3.Row
+    # Name-column-weighted search: col weights id(0), name(10), full_name(1), package_name(1)
+    name_match = " OR ".join(f'name : "{t}"' for t in raw_tokens)
+    sql = (
+        "SELECT c.id AS id, c.name AS method_name, c.full_name AS signature, "
+        "c.full_name AS class_full_name, c.file_path AS file_path, "
+        "c.language AS language, bm25(classes_fts, 0, 10, 1, 1) AS score, "
+        "'class' AS node_type "
+        "FROM classes_fts JOIN classes c ON c.rowid = classes_fts.rowid "
+        "WHERE classes_fts MATCH ? AND classes_fts.variant = ?"
+    )
+    params: list[Any] = [name_match, variant]
+    if language:
+        sql += " AND c.language = ?"
+        params.append(language)
+    sql += " ORDER BY score LIMIT ?"
+    params.append(limit)
+    try:
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    except sqlite3.OperationalError:
+        return []
+
+
 def search_methods(
     conn: sqlite3.Connection,
     query: str,
@@ -1058,19 +1233,85 @@ def search_methods(
 ) -> list[dict]:
     """FTS5 keyword search over method name/signature/class/source.
 
-    Multi-token queries use AND first (higher precision); falls back to OR if
-    AND returns no results. Single-token queries use OR (prefix match only).
+    Phase 1: FTS5 scoped to method_name column with heavy BM25 weight — surfaces
+    exact/prefix name matches ranked by BM25 (preserves score for tie-breaking
+    among overloads). Phase 2: full FTS5 AND query for broader recall, fallback
+    to OR. Phase 1 results are prepended and deduplicated from phase 2.
     Returns an empty list when the query has no usable tokens or FTS table is absent.
     """
-    match_and = _fts_query(query)
-    if not match_and:
+    raw_tokens = re.findall(r"[A-Za-z0-9_]+", query)
+    if not raw_tokens:
         return []
-    rows = _run_fts(conn, match_and, variant, language, limit)
-    if not rows:
-        match_or = _fts_query_or(query)
-        if match_or and match_or != match_and:
-            rows = _run_fts(conn, match_or, variant, language, limit)
-    return rows
+
+    # Phase 1: name-scoped FTS — only when query looks like an identifier.
+    # NL queries ("how does X work") skip this to avoid flooding with methods
+    # named "get", "current", "app", etc.
+    is_identifier_query = (
+        len(raw_tokens) == 1
+        or (len(raw_tokens) <= 3 and not any(t.lower() in _NL_STOPWORDS for t in raw_tokens))
+    )
+    name_rows: list[dict] = []
+    if is_identifier_query:
+        name_match = " OR ".join(f'method_name : "{t}"' for t in raw_tokens)
+        name_rows = _run_fts_weighted(conn, name_match, variant, language, limit)
+    name_ids = {r["id"] for r in name_rows}
+
+    # Phase 2: full-text FTS — NL queries use OR (not AND) so partial token
+    # matches aren't excluded entirely; identifier queries use AND first for
+    # precision then fall back to OR.
+    if is_identifier_query:
+        match_and = _fts_query(query)
+        if not match_and:
+            return name_rows[:limit]
+        fts_rows = _run_fts(conn, match_and, variant, language, limit)
+        if not fts_rows:
+            match_or = _fts_query_or(query)
+            if match_or and match_or != match_and:
+                fts_rows = _run_fts(conn, match_or, variant, language, limit)
+    else:
+        # NL: strip stopwords then OR-match so any relevant token scores
+        fts_text = _strip_stopwords(query)
+        match_or = _fts_query_or(fts_text)
+        fts_rows = _run_fts(conn, match_or, variant, language, limit) if match_or else []
+
+    # Name-scoped rows get a large score bonus so the engine's BM25 sort always
+    # ranks them above full-text matches (which hit source_text and score higher
+    # in absolute terms due to multi-token matches across all columns).
+    for r in name_rows:
+        if r.get("score") is not None:
+            r["score"] = r["score"] - 1000.0  # more-negative = higher-priority
+
+    method_combined = name_rows + [r for r in fts_rows if r["id"] not in name_ids]
+
+    # Merge class results: exact class-name hits prepended, others appended.
+    # Only for identifier queries — NL queries seed from methods, not classes.
+    if is_identifier_query:
+        class_rows = search_classes(conn, query, limit=limit // 2, language=language, variant=variant)
+        all_ids = {r["id"] for r in method_combined}
+        # Exact-name class hits go before methods; partial hits go after
+        class_exact = [r for r in class_rows if r["method_name"].lower() in {t.lower() for t in raw_tokens}]
+        class_rest = [r for r in class_rows if r["id"] not in {r2["id"] for r2 in class_exact} and r["id"] not in all_ids]
+        combined = class_exact + method_combined + class_rest
+    else:
+        combined = method_combined
+
+    return combined[:limit]
+
+
+def fetch_caller_counts(
+    conn: sqlite3.Connection,
+    method_ids: list[str],
+) -> dict[str, int]:
+    """Return {method_id: caller_count} for each id in method_ids."""
+    if not method_ids:
+        return {}
+    placeholders = ",".join("?" * len(method_ids))
+    cur = conn.execute(
+        f"SELECT callee_method_id, COUNT(*) FROM resolved_call_edges "
+        f"WHERE callee_method_id IN ({placeholders}) GROUP BY callee_method_id",
+        method_ids,
+    )
+    return {row[0]: row[1] for row in cur.fetchall()}
 
 
 def fetch_methods_by_ids(

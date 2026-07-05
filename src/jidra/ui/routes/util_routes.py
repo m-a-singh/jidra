@@ -2,10 +2,22 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
+
+
+def resolve_out_dir(repo_path: str, output_path: str | None = None) -> Path:
+    """Prefer <repo>/.jidra/ (jidra init/ui model), fall back to legacy output/database dir."""
+    if output_path:
+        return Path(output_path)
+    jidra_dir = Path(repo_path) / ".jidra"
+    if jidra_dir.exists():
+        return jidra_dir
+    from ...cli import _repo_output_dir
+    return _repo_output_dir(Path(repo_path))
 
 
 def _pick_folder_macos() -> str | None:
