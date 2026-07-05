@@ -1842,7 +1842,11 @@ def _install_agent(repo: Path) -> None:
         ui.warn(f"Agent definition not found at {agent_src}, skipping")
 
     # Skills
-    for skill_name in ("jidra-navigate", "jidra-blast-radius"):
+    for skill_name in (
+        "jidra-navigate",
+        "jidra-blast-radius",
+        "jidra-error-investigate",
+    ):
         skill_src = jidra_root / ".claude" / "skills" / skill_name / "SKILL.md"
         if skill_src.exists():
             skill_dir = repo / ".claude" / "skills" / skill_name

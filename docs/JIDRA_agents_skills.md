@@ -96,6 +96,7 @@ Spawns jidra-investigator with structured blast radius prompt:
 <repo>/.claude/agents/jidra-investigator.md
 <repo>/.claude/skills/jidra-navigate/SKILL.md
 <repo>/.claude/skills/jidra-blast-radius/SKILL.md
+<repo>/.claude/skills/jidra-error-investigate/SKILL.md
 ```
 
 Source files live in the jidra repo at `.claude/agents/` and `.claude/skills/`.
