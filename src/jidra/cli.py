@@ -2174,6 +2174,7 @@ def _up() -> None:
         _write_mcp_json(repo, graph_validated_path)
     else:
         import sys as _sys
+
         _python = _sys.executable
         ui.info(
             f"Skipped .mcp.json — run manually:\n"

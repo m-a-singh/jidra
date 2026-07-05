@@ -1030,27 +1030,119 @@ def load_graph(
 _CAMEL_SPLIT_RE = re.compile(r"[A-Z][a-z0-9]+|[A-Z]+(?=[A-Z]|$)|[a-z0-9]+")
 
 
-_NL_STOPWORDS: frozenset[str] = frozenset({
-    # English function words
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "with", "by", "from", "is", "it", "that", "this", "are", "was",
-    "be", "has", "had", "have", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "can", "shall", "not", "no", "all", "each",
-    "every", "how", "what", "where", "when", "who", "which", "why",
-    "i", "me", "my", "we", "our", "you", "your", "he", "she", "they",
-    "show", "give", "tell", "been", "done", "made", "used", "using",
-    "work", "works", "found", "also", "into", "then", "than", "just",
-    "more", "some", "such", "over", "only", "out", "its", "so", "up",
-    "as", "if", "look", "need", "needs", "want", "happen", "happens",
-    # Code-query noise (but NOT get/set/add/find/list — too often real method names)
-    "code", "file", "files", "function", "method", "class", "type",
-    "app", "codebase", "called",
-})
+_NL_STOPWORDS: frozenset[str] = frozenset(
+    {
+        # English function words
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "but",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "of",
+        "with",
+        "by",
+        "from",
+        "is",
+        "it",
+        "that",
+        "this",
+        "are",
+        "was",
+        "be",
+        "has",
+        "had",
+        "have",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "can",
+        "shall",
+        "not",
+        "no",
+        "all",
+        "each",
+        "every",
+        "how",
+        "what",
+        "where",
+        "when",
+        "who",
+        "which",
+        "why",
+        "i",
+        "me",
+        "my",
+        "we",
+        "our",
+        "you",
+        "your",
+        "he",
+        "she",
+        "they",
+        "show",
+        "give",
+        "tell",
+        "been",
+        "done",
+        "made",
+        "used",
+        "using",
+        "work",
+        "works",
+        "found",
+        "also",
+        "into",
+        "then",
+        "than",
+        "just",
+        "more",
+        "some",
+        "such",
+        "over",
+        "only",
+        "out",
+        "its",
+        "so",
+        "up",
+        "as",
+        "if",
+        "look",
+        "need",
+        "needs",
+        "want",
+        "happen",
+        "happens",
+        # Code-query noise (but NOT get/set/add/find/list — too often real method names)
+        "code",
+        "file",
+        "files",
+        "function",
+        "method",
+        "class",
+        "type",
+        "app",
+        "codebase",
+        "called",
+    }
+)
 
 
 def _make_stemmer():
     try:
         from snowballstemmer import stemmer as _SnowballStemmer
+
         return _SnowballStemmer("english").stemWord
     except Exception:
         return lambda w: w
@@ -1246,9 +1338,8 @@ def search_methods(
     # Phase 1: name-scoped FTS — only when query looks like an identifier.
     # NL queries ("how does X work") skip this to avoid flooding with methods
     # named "get", "current", "app", etc.
-    is_identifier_query = (
-        len(raw_tokens) == 1
-        or (len(raw_tokens) <= 3 and not any(t.lower() in _NL_STOPWORDS for t in raw_tokens))
+    is_identifier_query = len(raw_tokens) == 1 or (
+        len(raw_tokens) <= 3 and not any(t.lower() in _NL_STOPWORDS for t in raw_tokens)
     )
     name_rows: list[dict] = []
     if is_identifier_query:
@@ -1272,7 +1363,9 @@ def search_methods(
         # NL: strip stopwords then OR-match so any relevant token scores
         fts_text = _strip_stopwords(query)
         match_or = _fts_query_or(fts_text)
-        fts_rows = _run_fts(conn, match_or, variant, language, limit) if match_or else []
+        fts_rows = (
+            _run_fts(conn, match_or, variant, language, limit) if match_or else []
+        )
 
     # Name-scoped rows get a large score bonus so the engine's BM25 sort always
     # ranks them above full-text matches (which hit source_text and score higher
@@ -1286,11 +1379,22 @@ def search_methods(
     # Merge class results: exact class-name hits prepended, others appended.
     # Only for identifier queries — NL queries seed from methods, not classes.
     if is_identifier_query:
-        class_rows = search_classes(conn, query, limit=limit // 2, language=language, variant=variant)
+        class_rows = search_classes(
+            conn, query, limit=limit // 2, language=language, variant=variant
+        )
         all_ids = {r["id"] for r in method_combined}
         # Exact-name class hits go before methods; partial hits go after
-        class_exact = [r for r in class_rows if r["method_name"].lower() in {t.lower() for t in raw_tokens}]
-        class_rest = [r for r in class_rows if r["id"] not in {r2["id"] for r2 in class_exact} and r["id"] not in all_ids]
+        class_exact = [
+            r
+            for r in class_rows
+            if r["method_name"].lower() in {t.lower() for t in raw_tokens}
+        ]
+        class_rest = [
+            r
+            for r in class_rows
+            if r["id"] not in {r2["id"] for r2 in class_exact}
+            and r["id"] not in all_ids
+        ]
         combined = class_exact + method_combined + class_rest
     else:
         combined = method_combined

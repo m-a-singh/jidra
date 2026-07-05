@@ -22,6 +22,7 @@ def _db_path(repo_path: str, db: str) -> Path:
 
     if db == "telemetry":
         from ...llm.telemetry import _TELEMETRY_DB
+
         return _TELEMETRY_DB
     out_dir = resolve_out_dir(repo_path)
     return out_dir / "graph.db"
