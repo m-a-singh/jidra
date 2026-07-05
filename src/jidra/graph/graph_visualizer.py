@@ -39,6 +39,7 @@ def build_graph_data(
     # Build method/class lookups
     methods_by_id = {m.id: m for m in graph.methods}
     classes_by_id = {c.id: c for c in graph.classes}
+    _classes_by_fullname = {c.full_name: c for c in graph.classes}
 
     # Determine which methods to include
     filtered_method_ids = set()

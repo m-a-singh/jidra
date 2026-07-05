@@ -1,0 +1,230 @@
+{
+  "timestamp": "2026-07-03T10:18:11Z",
+  "repo": "trezor",
+  "eval_type": "method-level",
+  "summary": {
+    "repo": "trezor",
+    "total": 12,
+    "passed": 10,
+    "mean_recall": 0.7083,
+    "mean_mrr": 0.7667,
+    "explore_only_recall": 0.4167,
+    "flow_only_recall": 0.1667,
+    "combined_explore_recall": 0.4167
+  },
+  "results": [
+    {
+      "case_id": "trezor-search-signTransaction",
+      "repo": "trezor",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.5,
+      "found": [
+        "signTransaction"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 6.524666969198734,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "trezor-search-getAddress",
+      "repo": "trezor",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.1,
+      "found": [
+        "getAddress"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 8.9354999945499,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "trezor-search-getFeatures",
+      "repo": "trezor",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "getFeatures"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 7.985625008586794,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "trezor-search-useSendForm",
+      "repo": "trezor",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "useSendForm"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 10.274208034388721,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "trezor-search-applySettings",
+      "repo": "trezor",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "applySettings"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 5.494207958690822,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "trezor-search-estimateFee",
+      "repo": "trezor",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "estimateFee"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 4.990291025023907,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "trezor-explore-tx-flow",
+      "repo": "trezor",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "signTransaction"
+      ],
+      "missed": [
+        "pushTransaction"
+      ],
+      "node_count": 57,
+      "latency_ms": 248.37591702817008,
+      "explore_recall": 0.5,
+      "flow_recall": 0.0,
+      "combined_recall": 0.5
+    },
+    {
+      "case_id": "trezor-explore-device",
+      "repo": "trezor",
+      "api": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "found": [],
+      "missed": [
+        "getFeatures",
+        "getAddress"
+      ],
+      "node_count": 57,
+      "latency_ms": 237.74149996461347,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "trezor-explore-send-form",
+      "repo": "trezor",
+      "api": "explore",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.0,
+      "found": [
+        "useSendForm",
+        "signTransaction"
+      ],
+      "missed": [],
+      "node_count": 52,
+      "latency_ms": 228.2084579928778,
+      "explore_recall": 1.0,
+      "flow_recall": 0.5,
+      "combined_recall": 1.0
+    },
+    {
+      "case_id": "trezor-explore-fees",
+      "repo": "trezor",
+      "api": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "found": [],
+      "missed": [
+        "estimateFee",
+        "composeTransaction"
+      ],
+      "node_count": 58,
+      "latency_ms": 154.5779580483213,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "trezor-explore-settings",
+      "repo": "trezor",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "changePin"
+      ],
+      "missed": [
+        "applySettings"
+      ],
+      "node_count": 47,
+      "latency_ms": 112.53520799800754,
+      "explore_recall": 0.5,
+      "flow_recall": 0.5,
+      "combined_recall": 0.5
+    },
+    {
+      "case_id": "trezor-explore-account",
+      "repo": "trezor",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "getAccountInfo"
+      ],
+      "missed": [
+        "getAddress"
+      ],
+      "node_count": 50,
+      "latency_ms": 165.26970802806318,
+      "explore_recall": 0.5,
+      "flow_recall": 0.0,
+      "combined_recall": 0.5
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "repo": "REDACTED,,
+  "language": "java",
+  "halluc_max": 0,
+  "tasks": [
+    {
+      "id": "T1",
+      "prompt": "The interface `REDACTED` is implemented in this codebase. How many concrete implementations are there — is there a single class that 'is' REDACTED, or many? Answer precisely.",
+      "checker": "impl_count",
+      "interface": "REDACTED",
+      "min_count": 50
+    },
+    {
+      "id": "T2",
+      "prompt": "Which concrete class implements the `REDACTED` interface, and where is the `REDACTED` method actually implemented? Name the class.",
+      "checker": "locate_method",
+      "method": "REDACTED",
+      "class_hint": "REDACTED",
+      "file_hint": "REDACTED",
+      "purpose_keywords": ["REDACTED", "REDACTED", "REDACTED"]
+    },
+    {
+      "id": "T3",
+      "prompt": "Which classes call the `REDACTED` method? List the calling classes — this is impact analysis before changing it. Name the actual callers.",
+      "checker": "caller_hit",
+      "method": "REDACTED",
+      "min_hits": 3
+    },
+    {
+      "id": "T4",
+      "prompt": "Explain what the method `REDACTED()` on `REDACTED` does and what it calls. If it is not present, say so explicitly.",
+      "checker": "negative",
+      "method": "REDACTED",
+      "class_filter": "REDACTED",
+      "absent_phrases": ["does not exist", "doesn't exist", "no such", "not found", "could not find", "couldn't find", "no method", "not present"],
+      "class_check": "REDACTED"
+    },
+    {
+      "id": "T5",
+      "prompt": "Trace the method `REDACTED` in `REDACTED`: what does it call directly? List the downstream methods/services it invokes.",
+      "checker": "callee_hit",
+      "method": "REDACTED",
+      "class_filter": "REDACTED",
+      "min_hits": 3
+    },
+    {
+      "id": "T6",
+      "prompt": "Describe the `REDACTED` interface and list its implementations. If it does not exist in this codebase, say so explicitly.",
+      "checker": "negative",
+      "method": "REDACTED",
+      "use_class_check": true
+    },
+    {
+      "id": "T7",
+      "prompt": "Among the implementations of `REDACTED`, which single class is responsible for matching on a REDACTED's NAME? Name it, or say if it can't be determined.",
+      "checker": "named_class",
+      "expected_class": "REDACTED"
+    },
+    {
+      "id": "T8",
+      "prompt": "Use the code graph tool to fetch the source of the `search` method on `REDACTED` directly. Show its implementation — what parameters does it take and what does it return?",
+      "checker": "get_source",
+      "method": "search",
+      "class_filter": "REDACTED",
+      "file_hint": "REDACTED",
+      "source_keywords": ["REDACTED", "REDACTED", "REDACTED", "REDACTED", "REDACTED"],
+      "anti_keywords": ["REDACTED", "REDACTED", "REDACTED"]
+    },
+    {
+      "id": "J9",
+      "prompt": "I'm renaming `REDACTED` to `REDACTED`. List every file that calls it — I need to know every place that will break.",
+      "checker": "change_impact",
+      "method": "REDACTED",
+      "min_files": 5
+    },
+    {
+      "id": "J10",
+      "prompt": "I'm changing the signature of `REDACTED`. List every file that calls it — I need to know the full blast radius.",
+      "checker": "change_impact",
+      "method": "REDACTED",
+      "min_files": 5
+    }
+  ]
+}

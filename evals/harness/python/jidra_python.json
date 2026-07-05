@@ -1,0 +1,61 @@
+{
+  "repo": "jidra",
+  "language": "python",
+  "halluc_max": 0,
+  "tasks": [
+    {
+      "id": "PY1",
+      "prompt": "In this Python codebase, which functions call `load_graph`? List the calling functions \u2014 this is impact analysis before changing it.",
+      "checker": "caller_hit",
+      "method": "load_graph",
+      "min_hits": 2
+    },
+    {
+      "id": "PY2",
+      "prompt": "Trace the `build_mcp` function: what functions does it call directly? List the downstream functions it invokes.",
+      "checker": "callee_hit",
+      "method": "build_mcp",
+      "min_hits": 1
+    },
+    {
+      "id": "PY3",
+      "prompt": "Explain what the function `reindex_all_tenants()` does in this codebase and what it calls. If it is not present, say so explicitly.",
+      "checker": "negative",
+      "method": "reindex_all_tenants"
+    },
+    {
+      "id": "PY4",
+      "prompt": "Where is the `query_by_annotation` method defined (which file/class) and what does it do? Be specific about the file.",
+      "checker": "locate_method",
+      "method": "query_by_annotation",
+      "file_hint": "engine",
+      "purpose_keywords": [
+        "annotation",
+        "framework_role",
+        "framework role",
+        "decorator"
+      ]
+    },
+    {
+      "id": "PY5",
+      "prompt": "Use the code graph tool to fetch the source of `_resolve_calls` directly. Show the implementation \u2014 what does it resolve and how does it build edges?",
+      "checker": "get_source",
+      "method": "_resolve_calls",
+      "file_hint": "extractor",
+      "source_keywords": [
+        "callsite",
+        "resolve",
+        "candidate",
+        "method",
+        "receiver"
+      ]
+    },
+    {
+      "id": "PY6",
+      "prompt": "I'm changing the signature of `_stable_id`. List every file that calls it \u2014 I need to know what breaks.",
+      "checker": "change_impact",
+      "method": "_stable_id",
+      "min_files": 2
+    }
+  ]
+}

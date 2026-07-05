@@ -98,77 +98,6 @@ Every index, reindex, and doc-index run is recorded to a local telemetry dashboa
 <p align="center">
   <img src="docs/assets/graph-visualization-overview.png" alt="Interactive graph visualization overview" width="800">
   <img src="docs/assets/graph-visualization-json-export.png" alt="Graph visualization JSON export tab" width="800">
-  <img src="docs/assets/jidra_telemetry.jpg" alt="JIDRA telemetry dashboard — index history, elapsed time, doc chunk charts" width="800">
-  <img src="docs/assets/jidra_telemetry_2.jpg" alt="JIDRA telemetry — full index events and doc index events tables" width="800">
-</p>
-
-## Web UI (`jidra ui`)
-
-Everything above also runs as a single-page app — one process, no separate static HTML reports to regenerate. Pick a repo once, then move between seven tabs without re-entering anything:
-
-```bash
-cd ui && npm install && npm run build   # one-time, builds ui/dist
-jidra ui --port 7474                    # serves the React app + FastAPI backend
-```
-
-| Tab | What it does |
-|---|---|
-| **IDX** | Run the index/validate/doc-index pipeline, trigger incremental reindex, install git hooks — all from one form, with a live streaming output log |
-| **GRF** | Interactive call graph: search-to-jump, depth control, node inspector with callers/callees, endpoint filter, JSON export |
-| **SQL** | Query `graph.db` / telemetry.db directly against a live schema browser |
-| **MCP** | Call any MCP tool by hand — fill the JSON schema, see the raw result, browse the session log |
-| **TRC** | Hit the underlying graph functions directly (trace / context / flow / route / flow-doc / error-doc) without going through MCP tool-call plumbing |
-| **DOC** | Doc-to-code linkage graph — which README/spec chunks reference which classes, click through to see the actual linked classes |
-| **HIST** | Telemetry dashboard across *all* indexed repos — stat cards, growth/elapsed charts, full index/reindex/doc-index event tables |
-
-Pick a repository — the same picker drives every tab:
-
-<p align="center">
-  <img src="docs/assets/jidra-ui-repo-picker.jpg" alt="JIDRA UI — repository picker" width="800">
-</p>
-
-**IDX** — pipeline configuration as label/control rows, live output log, plus incremental reindex and git-hook install:
-
-<p align="center">
-  <img src="docs/assets/jidra-ui-index-config.jpg" alt="JIDRA UI — index pipeline configuration" width="800">
-  <img src="docs/assets/jidra-ui-index-running.jpg" alt="JIDRA UI — index pipeline running, live output log" width="800">
-</p>
-
-**GRF** — full interactive graph, fuzzy search-to-jump, and a node inspector with callers/callees:
-
-<p align="center">
-  <img src="docs/assets/jidra-ui-graph-overview.jpg" alt="JIDRA UI — graph overview" width="800">
-</p>
-
-**SQL** — schema browser plus a real query editor against `graph.db`:
-
-<p align="center">
-  <img src="docs/assets/jidra-ui-sql-editor.jpg" alt="JIDRA UI — SQL editor and schema browser" width="800">
-</p>
-
-**MCP** — call any tool by hand and watch the session log fill in:
-
-<p align="center">
-  <img src="docs/assets/jidra-ui-mcp-explore.jpg" alt="JIDRA UI — MCP tool call (jidra_explore) with live result" width="800">
-</p>
-
-**TRC** — run flow/trace/context directly against the graph, no MCP plumbing in the way:
-
-<p align="center">
-  <img src="docs/assets/jidra-ui-explore-flow.jpg" alt="JIDRA UI — TRC flow result for a selected method" width="800">
-</p>
-
-**DOC** — doc-to-code linkage graph; click a chunk or doc to see exactly which classes it links to:
-
-<p align="center">
-  <img src="docs/assets/jidra-ui-doc-graph-overview.jpg" alt="JIDRA UI — doc graph overview" width="800">
-</p>
-
-**HIST** — telemetry is top-level, not scoped to one repo: stat cards and charts across everything you've indexed:
-
-<p align="center">
-  <img src="docs/assets/jidra-ui-history-dashboard.jpg" alt="JIDRA UI — telemetry dashboard, stat cards and charts" width="800">
-  <img src="docs/assets/jidra-ui-history-tables.jpg" alt="JIDRA UI — telemetry event tables" width="800">
 </p>
 
 ## What JIDRA Does
@@ -257,91 +186,46 @@ When CodeGraph misses, it returns 0 results — methods exist in the repo but ar
 
 ```text
 jidra/
-├── README.md
 ├── pyproject.toml
-├── pytest.ini
 ├── requirements.txt
-├── LICENSE
-├── .gitignore
-├── docs/
-│   ├── MCP_VERIFICATION_RESULTS.md
-│   ├── actuator_incremental_plan.md
-│   ├── incremental_reindex_plan.md
-│   ├── quick_test_script.sh
-│   ├── testing_incremental_reindex.md
-│   ├── assets/
-│   └── archive/
-├── evals/
-│   ├── agent_eval.py
-│   ├── agent_eval_py.py
-│   ├── agent_eval_ts.py
-│   ├── analyze_session_logs.py
-│   ├── compare_chat.py
-│   ├── eval_chat.py
-│   ├── eval_queries.yaml
-│   ├── migrate_structure.py
-│   └── validate_jidra_analysis.py
-├── examples/
-│   └── sample-java/
-├── experiments/
-│   ├── compare_graph_json.py
-│   ├── enrichment_agent.py
-│   ├── enrichment_judge.py
-│   ├── enrichment_ui.py
-│   ├── method_prompt.py
-│   └── token_count.py
-├── sidecar/
-│   ├── scala/
-│   └── typescript/
-├── src/
-│   └── jidra/
-│       ├── cli.py
-│       ├── cost_calculator.py
-│       ├── context_builder.py
-│       ├── daemon.py
-│       ├── doc_indexer.py
-│       ├── engine.py
-│       ├── extractor.py
-│       ├── flow_stitcher.py
-│       ├── graph_rag.py
-│       ├── graph_validator.py
-│       ├── mcp_server.py
-│       ├── scala_extractor.py
-│       ├── session_log.py
-│       ├── ts_filters.py
-│       └── ...
-├── tests/
-│   ├── fixtures/
-│   ├── conftest.py
-│   ├── test_budget.py
-│   ├── test_context_builder.py
-│   ├── test_continuous_sync.py
-│   ├── test_cost_calculator.py
-│   ├── test_daemon.py
-│   ├── test_engine.py
-│   ├── test_file_deps.py
-│   ├── test_flow_stitcher.py
-│   ├── test_frameworks.py
-│   ├── test_go_extractor.py
-│   ├── test_graph_health.py
-│   ├── test_incremental_index.py
-│   ├── test_index_cache.py
-│   ├── test_module_partitioning.py
-│   ├── test_py_extractor.py
-│   ├── test_search.py
-│   ├── test_session_log.py
-│   ├── test_smithy.py
-│   └── test_ts_treesitter.py
-├── ui/
-│   ├── index.html
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── tsconfig.json
-│   ├── vite.config.ts
-│   └── src/
-└── validations/
-    ├── hallucination_test.py
-    └── run_validation.py
+├── README.md
+├── ENTERPRISE_TYPESCRIPT_PROOF.md
+├── ENTERPRISE_PYTHON_PROOF.md
+├── ENTERPRISE_SCALA_PROOF.md
+├── scala_sidecar/
+│   ├── Dockerfile             # JDK base + sbt launcher from Artifactory
+│   └── entrypoint.sh          # Configures Artifactory repos, runs sbt compile, exports .semanticdb
+└── jidra/
+    ├── __init__.py
+    ├── cli.py
+    ├── config.yaml
+    ├── llm_client.py
+    ├── models.py
+    ├── graph_io.py
+    ├── selector.py
+    ├── trace_engine.py
+    ├── context_builder.py
+    ├── extractor.py
+    ├── exporter.py
+    ├── ts_filters.py          # Language detection (all languages) + TypeScript file iteration
+    ├── ts_extractor.py        # TypeScript extraction (dispatches to tree-sitter or Docker sidecar)
+    ├── ts_treesitter.py       # In-process tree-sitter TypeScript backend (no Docker, default)
+    ├── daemon.py              # Shared-graph daemon (Unix socket RPC, watchdog, hot-reload)
+    ├── proxy.py               # Thin stdio<->socket MCP proxy that spawns the daemon
+    ├── watcher.py             # Debounced filesystem watcher -> incremental reindex
+    ├── git_hooks.py           # post-commit/merge/checkout hook installer
+    ├── scala_filters.py       # Scala file iteration + excluded dirs
+    ├── scala_extractor.py     # Scala extraction (SemanticDB two-pass)
+    ├── scala_proto/           # Generated protobuf bindings for SemanticDB
+    │   ├── semanticdb.proto
+    │   └── semanticdb_pb2.py
+    ├── py_filters.py          # Python language detection
+    ├── py_extractor.py        # Python extraction (AST + symbol table)
+    ├── py_type_provider.py    # Python type validation (Pyright)
+    ├── go_filters.py          # Go file iteration + excluded dirs
+    ├── go_extractor.py        # Go extraction (tree-sitter, in-process)
+    ├── filters.py             # Java file iteration
+    └── cache.py
 ```
 
 ## Installation
