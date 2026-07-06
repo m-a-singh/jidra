@@ -1546,8 +1546,12 @@ def _process(
     try:
         with ui.spinner("Parsing source...") as handle:
 
-            def on_class_parsed(class_count):
-                handle.update(f"Parsing source... {class_count} classes")
+            def on_class_parsed(files_done, files_total, label=None):
+                if label:
+                    handle.update(f"Parsing source... {label}")
+                else:
+                    pct = int(files_done / files_total * 100) if files_total else 0
+                    handle.update(f"Parsing source... {pct}% ({files_done}/{files_total} files)")
 
             _index(
                 str(codebase_path),
@@ -2045,6 +2049,7 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
         skip_build = _prompt_yn("Skip Java build step (assume already built)?", False)
 
     # Index: incremental if graph exists, full rebuild if --force or no graph
+    _init_index_start = time.time()
     if graph_path.exists() and not force:
         ui.section(1, 3, "Incremental reindex")
         from .engine.reindexer import incremental_reindex
@@ -2070,7 +2075,33 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
                 skip_folders=skip_folders,
             )
         else:
-            _index(str(repo), str(jidra_dir), force=force, skip_folders=skip_folders)
+            with ui.spinner("Parsing source...") as handle:
+
+                def on_class_parsed(files_done, files_total, label=None):
+                    if label:
+                        handle.update(f"Parsing source... {label}")
+                    else:
+                        pct = int(files_done / files_total * 100) if files_total else 0
+                        handle.update(f"Parsing source... {pct}% ({files_done}/{files_total} files)")
+
+                _index(
+                    str(repo),
+                    str(jidra_dir),
+                    force=force,
+                    skip_folders=skip_folders,
+                    on_progress=on_class_parsed,
+                    _quiet=True,
+                )
+
+    try:
+        from .llm.telemetry import record_index_event
+
+        _init_elapsed = int((time.time() - _init_index_start) * 1000)
+        _conn = graph_store.connect(graph_store.resolve_graph_db_path(jidra_dir))
+        _telem_graph = graph_store.load_graph(_conn, variant="main")
+        record_index_event(str(repo), langs, _telem_graph, _init_elapsed)
+    except Exception:
+        pass
 
     # CLAUDE.md — disabled: injecting JIDRA instructions forces main session to use
     # tools directly, preventing jidra-investigator agent from being spawned via skill.

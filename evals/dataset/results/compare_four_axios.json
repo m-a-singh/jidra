@@ -1,0 +1,60 @@
+{
+  "jidra_search_file": "evals/dataset/results/results_jidra_search.json",
+  "jidra_explore_file": "evals/dataset/results/results_jidra_explore.json",
+  "cg_search_file": "evals/dataset/results/results_cg_search.json",
+  "cg_explore_file": "evals/dataset/results/results_cg_explore.json",
+  "aggregate_jidra_search": {
+    "total": 6,
+    "passed": 6,
+    "pass_rate": 1.0,
+    "mean_recall": 0.8333,
+    "mean_mrr": 0.5403,
+    "mean_latency_ms": 28.6,
+    "p50_latency_ms": 30.0,
+    "p95_latency_ms": 42.9
+  },
+  "aggregate_jidra_explore": {
+    "total": 6,
+    "passed": 5,
+    "pass_rate": 0.8333,
+    "mean_recall": 0.8125,
+    "mean_mrr": 0.6461,
+    "mean_latency_ms": 10.3,
+    "p50_latency_ms": 10.4,
+    "p95_latency_ms": 15.6
+  },
+  "aggregate_cg_search": {
+    "total": 6,
+    "passed": 3,
+    "pass_rate": 0.5,
+    "mean_recall": 0.4167,
+    "mean_mrr": 0.1071,
+    "mean_latency_ms": 0.2,
+    "p50_latency_ms": 0.2,
+    "p95_latency_ms": 0.7
+  },
+  "aggregate_cg_explore": {
+    "total": 6,
+    "passed": 1,
+    "pass_rate": 0.1667,
+    "mean_recall": 0.1875,
+    "mean_mrr": 0.2222,
+    "mean_latency_ms": 0.4,
+    "p50_latency_ms": 0.2,
+    "p95_latency_ms": 1.2
+  },
+  "win_loss": {
+    "total": 6,
+    "both_pass": 3,
+    "jidra_only": 3,
+    "cg_only": 0,
+    "both_fail": 0,
+    "jidra_only_ids": [
+      "axios__axios-4731",
+      "axios__axios-4738",
+      "axios__axios-6539"
+    ],
+    "cg_only_ids": [],
+    "both_fail_ids": []
+  }
+}

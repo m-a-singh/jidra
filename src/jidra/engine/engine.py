@@ -1174,6 +1174,29 @@ class JidraEngine:
                 }
             )
 
+        # Class-level supplement — files whose content is classes not methods
+        # (e.g. auth/validators.py). Appended after method seeds so method MRR
+        # is never affected; only adds files not already represented.
+        with self._conn_lock:
+            class_rows = graph_store.search_classes(
+                self.conn, query, limit=limit // 2, language=language
+            )
+        seen_files = {r.get("file_path", "") for r in results}
+        for cr in class_rows:
+            if cr.get("file_path") not in seen_files:
+                seen.add(cr["id"])
+                seen_files.add(cr.get("file_path", ""))
+                results.append({
+                    "method_id": cr["id"],
+                    "method_name": cr["method_name"],
+                    "signature": cr.get("signature", ""),
+                    "class_full_name": cr.get("class_full_name", ""),
+                    "file_path": cr["file_path"],
+                    "language": cr.get("language", ""),
+                    "score": round(-float(cr.get("score") or 0.0), 6),
+                    "source": "class_fts",
+                })
+
         # Neighbors appended after all seeds, sorted by heuristic score
         scored_neighbors = sorted(
             (
