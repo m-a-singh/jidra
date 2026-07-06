@@ -44,6 +44,7 @@ EXPLORE_TOP_N = 20
 
 # ── Data ───────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Case:
     id: str
@@ -71,7 +72,10 @@ class Result:
 
 # ── Yaml loading ───────────────────────────────────────────────────────────────
 
-def load_cases(yaml_paths: list[Path], repo_filter: str | None, limit: int | None) -> list[Case]:
+
+def load_cases(
+    yaml_paths: list[Path], repo_filter: str | None, limit: int | None
+) -> list[Case]:
     cases: list[Case] = []
     for p in yaml_paths:
         raw: list[dict] = yaml.safe_load(p.read_text())
@@ -79,19 +83,22 @@ def load_cases(yaml_paths: list[Path], repo_filter: str | None, limit: int | Non
             repo = item.get("repo", "")
             if repo_filter and repo != repo_filter:
                 continue
-            cases.append(Case(
-                id=item["id"],
-                repo=repo,
-                commit=item.get("commit", ""),
-                query=item["query"].strip(),
-                expected_files=[f.strip() for f in (item.get("expected") or [])],
-            ))
+            cases.append(
+                Case(
+                    id=item["id"],
+                    repo=repo,
+                    commit=item.get("commit", ""),
+                    query=item["query"].strip(),
+                    expected_files=[f.strip() for f in (item.get("expected") or [])],
+                )
+            )
     if limit:
         cases = cases[:limit]
     return cases
 
 
 # ── CodeGraph db queries (read-only) ──────────────────────────────────────────
+
 
 def _connect(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
@@ -165,6 +172,7 @@ def _explore(conn: sqlite3.Connection, query: str, top_n: int) -> list[dict]:
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
+
 def _normalise(path: str) -> str:
     return path.replace("\\", "/").lstrip("./").lower()
 
@@ -181,7 +189,9 @@ def _file_hit(result_files: list[str], expected: str) -> bool:
     return False
 
 
-def _score(expected_files: list[str], results: list[dict]) -> tuple[float, list[str], list[str], float]:
+def _score(
+    expected_files: list[str], results: list[dict]
+) -> tuple[float, list[str], list[str], float]:
     result_files = [r.get("file_path", "") for r in results if r.get("file_path")]
     found, missed = [], []
     first_rank = 0
@@ -190,8 +200,11 @@ def _score(expected_files: list[str], results: list[dict]) -> tuple[float, list[
             found.append(exp)
             if first_rank == 0:
                 first_rank = next(
-                    (j + 1 for j, r in enumerate(results)
-                     if _file_hit([r.get("file_path", "")], exp)),
+                    (
+                        j + 1
+                        for j, r in enumerate(results)
+                        if _file_hit([r.get("file_path", "")], exp)
+                    ),
                     i + 1,
                 )
         else:
@@ -203,14 +216,27 @@ def _score(expected_files: list[str], results: list[dict]) -> tuple[float, list[
 
 # ── Per-case runner ───────────────────────────────────────────────────────────
 
-def run_case(case: Case, conn: sqlite3.Connection,
-             search_only: bool = False, explore_only: bool = False) -> Result:
+
+def run_case(
+    case: Case,
+    conn: sqlite3.Connection,
+    search_only: bool = False,
+    explore_only: bool = False,
+) -> Result:
     if not case.expected_files:
         return Result(
-            case_id=case.id, repo=case.repo, passed=False,
-            file_recall=0.0, mrr=0.0, search_recall=0.0,
-            explore_recall=0.0, combined_recall=0.0,
-            found_files=[], missed_files=[], latency_ms=0.0, n_results=0,
+            case_id=case.id,
+            repo=case.repo,
+            passed=False,
+            file_recall=0.0,
+            mrr=0.0,
+            search_recall=0.0,
+            explore_recall=0.0,
+            combined_recall=0.0,
+            found_files=[],
+            missed_files=[],
+            latency_ms=0.0,
+            n_results=0,
         )
 
     t0 = time.perf_counter()
@@ -238,33 +264,52 @@ def run_case(case: Case, conn: sqlite3.Connection,
 
     if search_only:
         return Result(
-            case_id=case.id, repo=case.repo,
+            case_id=case.id,
+            repo=case.repo,
             passed=s_recall >= PASS_THRESHOLD,
-            file_recall=s_recall, mrr=s_mrr,
-            search_recall=s_recall, explore_recall=0.0, combined_recall=s_recall,
-            found_files=s_found, missed_files=s_missed,
-            latency_ms=latency_ms, n_results=len(search_hits),
+            file_recall=s_recall,
+            mrr=s_mrr,
+            search_recall=s_recall,
+            explore_recall=0.0,
+            combined_recall=s_recall,
+            found_files=s_found,
+            missed_files=s_missed,
+            latency_ms=latency_ms,
+            n_results=len(search_hits),
         )
     if explore_only:
         return Result(
-            case_id=case.id, repo=case.repo,
+            case_id=case.id,
+            repo=case.repo,
             passed=e_recall >= PASS_THRESHOLD,
-            file_recall=e_recall, mrr=e_mrr,
-            search_recall=0.0, explore_recall=e_recall, combined_recall=e_recall,
-            found_files=e_found, missed_files=[f for f in case.expected_files if f not in e_found],
-            latency_ms=latency_ms, n_results=len(explore_hits),
+            file_recall=e_recall,
+            mrr=e_mrr,
+            search_recall=0.0,
+            explore_recall=e_recall,
+            combined_recall=e_recall,
+            found_files=e_found,
+            missed_files=[f for f in case.expected_files if f not in e_found],
+            latency_ms=latency_ms,
+            n_results=len(explore_hits),
         )
     return Result(
-        case_id=case.id, repo=case.repo,
+        case_id=case.id,
+        repo=case.repo,
         passed=c_recall >= PASS_THRESHOLD,
-        file_recall=c_recall, mrr=s_mrr,
-        search_recall=s_recall, explore_recall=e_recall, combined_recall=c_recall,
-        found_files=c_found, missed_files=c_missed,
-        latency_ms=latency_ms, n_results=len(combined),
+        file_recall=c_recall,
+        mrr=s_mrr,
+        search_recall=s_recall,
+        explore_recall=e_recall,
+        combined_recall=c_recall,
+        found_files=c_found,
+        missed_files=c_missed,
+        latency_ms=latency_ms,
+        n_results=len(combined),
     )
 
 
 # ── Output ────────────────────────────────────────────────────────────────────
+
 
 def _print_result(r: Result) -> None:
     status = "PASS" if r.passed else "FAIL"
@@ -290,35 +335,46 @@ def _print_summary(results: list[Result], label: str) -> None:
     p95 = latencies[int(n * 0.95)]
     sep = "─" * 70
     print(f"\n{sep}")
-    print(f"  {label} — {passed}/{n} passed ({100*passed//n}%)")
-    print(f"  File recall:     {sum(r.file_recall for r in results)/n:.3f}")
-    print(f"  Search MRR:      {sum(r.mrr for r in results)/n:.3f}")
-    print(f"  Search recall:   {sum(r.search_recall for r in results)/n:.3f}")
-    print(f"  Explore recall:  {sum(r.explore_recall for r in results)/n:.3f}")
+    print(f"  {label} — {passed}/{n} passed ({100 * passed // n}%)")
+    print(f"  File recall:     {sum(r.file_recall for r in results) / n:.3f}")
+    print(f"  Search MRR:      {sum(r.mrr for r in results) / n:.3f}")
+    print(f"  Search recall:   {sum(r.search_recall for r in results) / n:.3f}")
+    print(f"  Explore recall:  {sum(r.explore_recall for r in results) / n:.3f}")
     print(f"  Latency (mean):  {mean_lat:.0f}ms  p50={p50:.0f}ms  p95={p95:.0f}ms")
     print(sep)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run CodeGraph db against SWE-bench yaml cases (read-only)"
     )
-    parser.add_argument("--cases", nargs="+", required=True, metavar="YAML",
-                        help="Yaml dataset file(s)")
-    parser.add_argument("--db", required=True, metavar="PATH",
-                        help="Path to CodeGraph db (e.g. <repo>/.codegraph/codegraph.db)")
-    parser.add_argument("--repo", default=None, metavar="ORG/REPO",
-                        help="Filter to one repo slug")
-    parser.add_argument("--limit", type=int, default=None, metavar="N",
-                        help="Max cases to run")
-    parser.add_argument("--out", default=None, metavar="JSON",
-                        help="Write results JSON")
-    parser.add_argument("--search-only", action="store_true",
-                        help="Run FTS search only, skip explore")
-    parser.add_argument("--explore-only", action="store_true",
-                        help="Run explore only, skip FTS search")
+    parser.add_argument(
+        "--cases", nargs="+", required=True, metavar="YAML", help="Yaml dataset file(s)"
+    )
+    parser.add_argument(
+        "--db",
+        required=True,
+        metavar="PATH",
+        help="Path to CodeGraph db (e.g. <repo>/.codegraph/codegraph.db)",
+    )
+    parser.add_argument(
+        "--repo", default=None, metavar="ORG/REPO", help="Filter to one repo slug"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, metavar="N", help="Max cases to run"
+    )
+    parser.add_argument(
+        "--out", default=None, metavar="JSON", help="Write results JSON"
+    )
+    parser.add_argument(
+        "--search-only", action="store_true", help="Run FTS search only, skip explore"
+    )
+    parser.add_argument(
+        "--explore-only", action="store_true", help="Run explore only, skip FTS search"
+    )
     args = parser.parse_args()
 
     if args.search_only and args.explore_only:
@@ -337,7 +393,13 @@ def main() -> None:
     if not cases:
         sys.exit(f"No cases found (repo filter: {args.repo!r})")
 
-    mode = "search-only" if args.search_only else "explore-only" if args.explore_only else "search+explore"
+    mode = (
+        "search-only"
+        if args.search_only
+        else "explore-only"
+        if args.explore_only
+        else "search+explore"
+    )
     print(f"\nCodeGraph Retrieval Eval  [{mode}]")
     print(f"DB:     {db_path}")
     print(f"Cases:  {len(cases)}")
@@ -350,7 +412,9 @@ def main() -> None:
     repos_seen: dict[str, list[Result]] = {}
 
     for case in cases:
-        r = run_case(case, conn, search_only=args.search_only, explore_only=args.explore_only)
+        r = run_case(
+            case, conn, search_only=args.search_only, explore_only=args.explore_only
+        )
         _print_result(r)
         results.append(r)
         repos_seen.setdefault(case.repo, []).append(r)

@@ -1186,16 +1186,18 @@ class JidraEngine:
             if cr.get("file_path") not in seen_files:
                 seen.add(cr["id"])
                 seen_files.add(cr.get("file_path", ""))
-                results.append({
-                    "method_id": cr["id"],
-                    "method_name": cr["method_name"],
-                    "signature": cr.get("signature", ""),
-                    "class_full_name": cr.get("class_full_name", ""),
-                    "file_path": cr["file_path"],
-                    "language": cr.get("language", ""),
-                    "score": round(-float(cr.get("score") or 0.0), 6),
-                    "source": "class_fts",
-                })
+                results.append(
+                    {
+                        "method_id": cr["id"],
+                        "method_name": cr["method_name"],
+                        "signature": cr.get("signature", ""),
+                        "class_full_name": cr.get("class_full_name", ""),
+                        "file_path": cr["file_path"],
+                        "language": cr.get("language", ""),
+                        "score": round(-float(cr.get("score") or 0.0), 6),
+                        "source": "class_fts",
+                    }
+                )
 
         # Neighbors appended after all seeds, sorted by heuristic score
         scored_neighbors = sorted(

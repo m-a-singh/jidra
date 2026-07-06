@@ -40,7 +40,6 @@ import sys
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -57,6 +56,7 @@ FLOW_DEPTH = 3
 
 # ── Data structures ────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Case:
     id: str
@@ -71,8 +71,8 @@ class Result:
     case_id: str
     repo: str
     passed: bool
-    file_recall: float           # fraction of expected files hit
-    mrr: float                   # rank of first expected-file hit in search results
+    file_recall: float  # fraction of expected files hit
+    mrr: float  # rank of first expected-file hit in search results
     search_recall: float
     explore_recall: float
     combined_recall: float
@@ -84,7 +84,10 @@ class Result:
 
 # ── Yaml loading ───────────────────────────────────────────────────────────────
 
-def load_cases(yaml_paths: list[Path], repo_filter: str | None, limit: int | None) -> list[Case]:
+
+def load_cases(
+    yaml_paths: list[Path], repo_filter: str | None, limit: int | None
+) -> list[Case]:
     cases: list[Case] = []
     for p in yaml_paths:
         raw: list[dict] = yaml.safe_load(p.read_text())
@@ -92,19 +95,22 @@ def load_cases(yaml_paths: list[Path], repo_filter: str | None, limit: int | Non
             repo = item.get("repo", "")
             if repo_filter and repo != repo_filter:
                 continue
-            cases.append(Case(
-                id=item["id"],
-                repo=repo,
-                commit=item.get("commit", ""),
-                query=item["query"].strip(),
-                expected_files=[f.strip() for f in (item.get("expected") or [])],
-            ))
+            cases.append(
+                Case(
+                    id=item["id"],
+                    repo=repo,
+                    commit=item.get("commit", ""),
+                    query=item["query"].strip(),
+                    expected_files=[f.strip() for f in (item.get("expected") or [])],
+                )
+            )
     if limit:
         cases = cases[:limit]
     return cases
 
 
 # ── Scoring ────────────────────────────────────────────────────────────────────
+
 
 def _file_from_result(r: dict) -> str | None:
     """Extract file path from a JIDRA result dict."""
@@ -168,6 +174,7 @@ def _score_files(
 
 # ── Engine calls ───────────────────────────────────────────────────────────────
 
+
 def _run_flow_from_explore(engine: JidraEngine, query: str) -> list[dict]:
     seeds = engine.explore(query, top_n=5).get("results", [])
     nodes: list[dict] = []
@@ -186,21 +193,33 @@ def _run_flow_from_explore(engine: JidraEngine, query: str) -> list[dict]:
 def run_case(case: Case, engine: JidraEngine, explore_only: bool = False) -> Result:
     if not case.expected_files:
         return Result(
-            case_id=case.id, repo=case.repo, passed=False,
-            file_recall=0.0, mrr=0.0, search_recall=0.0,
-            explore_recall=0.0, combined_recall=0.0,
-            found_files=[], missed_files=[], latency_ms=0.0, n_results=0,
+            case_id=case.id,
+            repo=case.repo,
+            passed=False,
+            file_recall=0.0,
+            mrr=0.0,
+            search_recall=0.0,
+            explore_recall=0.0,
+            combined_recall=0.0,
+            found_files=[],
+            missed_files=[],
+            latency_ms=0.0,
+            n_results=0,
         )
 
     t0 = time.perf_counter()
 
     if explore_only:
         search_hits = []
-        explore_hits = engine.explore(case.query, top_n=EXPLORE_TOP_N).get("results", [])
+        explore_hits = engine.explore(case.query, top_n=EXPLORE_TOP_N).get(
+            "results", []
+        )
         flow_hits = []
     else:
         search_hits = engine.search(case.query, limit=SEARCH_LIMIT).get("results", [])
-        explore_hits = engine.explore(case.query, top_n=EXPLORE_TOP_N).get("results", [])
+        explore_hits = engine.explore(case.query, top_n=EXPLORE_TOP_N).get(
+            "results", []
+        )
         flow_hits = _run_flow_from_explore(engine, case.query)
 
     latency_ms = (time.perf_counter() - t0) * 1000
@@ -245,6 +264,7 @@ def run_case(case: Case, engine: JidraEngine, explore_only: bool = False) -> Res
 
 # ── Output ─────────────────────────────────────────────────────────────────────
 
+
 def _print_result(r: Result) -> None:
     status = "PASS" if r.passed else "FAIL"
     case_id = r.case_id[:52]
@@ -273,7 +293,7 @@ def _print_summary(results: list[Result], label: str) -> None:
 
     sep = "─" * 70
     print(f"\n{sep}")
-    print(f"  {label} — {passed}/{total} passed ({100*passed//total}%)")
+    print(f"  {label} — {passed}/{total} passed ({100 * passed // total}%)")
     print(f"  File recall:     {mean_recall:.3f}")
     print(f"  Search MRR:      {search_mrr:.3f}")
     print(f"  Search recall:   {mean_search:.3f}")
@@ -283,6 +303,7 @@ def _print_summary(results: list[Result], label: str) -> None:
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
