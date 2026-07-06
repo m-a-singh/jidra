@@ -1,0 +1,11 @@
+# Offline eval repo registry
+# Each entry: name, db, and optional overrides
+repos:
+  shapeshift:
+    db: /Users/akhil/Personal_Project/jidra_analysis_repos/web/.jidra/graph.db
+  mtkruto:
+    db: /Users/akhil/Personal_Project/jidra_analysis_repos/MTKruto/.jidra/graph.db
+  postybirb:
+    db: /Users/akhil/Personal_Project/jidra_analysis_repos/postybirb/.jidra/graph.db
+  trezor:
+    db: /Users/akhil/Personal_Project/jidra_analysis_repos/trezor-suite/.jidra/graph.db

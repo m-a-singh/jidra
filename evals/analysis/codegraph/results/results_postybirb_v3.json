@@ -1,0 +1,230 @@
+{
+  "timestamp": "2026-07-05T22:08:27Z",
+  "repo": "postybirb",
+  "eval_type": "method-level",
+  "summary": {
+    "repo": "postybirb",
+    "total": 12,
+    "passed": 10,
+    "mean_recall": 0.7083,
+    "mean_mrr": 1.0,
+    "explore_only_recall": 0.4167,
+    "flow_only_recall": 0.1667,
+    "combined_explore_recall": 0.4167
+  },
+  "results": [
+    {
+      "case_id": "postybirb-search-validateSubmission",
+      "repo": "postybirb",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "validateSubmission"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 1.3158749788999557,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "postybirb-search-postSubmission",
+      "repo": "postybirb",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "postSubmission"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 5.149667034856975,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "postybirb-search-uploadFile",
+      "repo": "postybirb",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "uploadFile"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 0.9901250014081597,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "postybirb-search-login",
+      "repo": "postybirb",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "login"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 0.9591249981895089,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "postybirb-search-updateSubmission",
+      "repo": "postybirb",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "updateSubmission"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 0.9590839617885649,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "postybirb-search-post",
+      "repo": "postybirb",
+      "api": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "found": [
+        "post"
+      ],
+      "missed": [],
+      "node_count": 0,
+      "latency_ms": 4.0643749525770545,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "postybirb-explore-submit",
+      "repo": "postybirb",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "validateSubmission"
+      ],
+      "missed": [
+        "postSubmission"
+      ],
+      "node_count": 44,
+      "latency_ms": 20.45045798877254,
+      "explore_recall": 0.5,
+      "flow_recall": 0.0,
+      "combined_recall": 0.5
+    },
+    {
+      "case_id": "postybirb-explore-file",
+      "repo": "postybirb",
+      "api": "explore",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.0,
+      "found": [
+        "uploadFile",
+        "post"
+      ],
+      "missed": [],
+      "node_count": 45,
+      "latency_ms": 19.077666045632213,
+      "explore_recall": 1.0,
+      "flow_recall": 0.0,
+      "combined_recall": 1.0
+    },
+    {
+      "case_id": "postybirb-explore-auth",
+      "repo": "postybirb",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "login"
+      ],
+      "missed": [
+        "logout"
+      ],
+      "node_count": 59,
+      "latency_ms": 21.63208299316466,
+      "explore_recall": 0.5,
+      "flow_recall": 0.5,
+      "combined_recall": 0.5
+    },
+    {
+      "case_id": "postybirb-explore-website",
+      "repo": "postybirb",
+      "api": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "found": [],
+      "missed": [
+        "validateSubmission",
+        "login"
+      ],
+      "node_count": 52,
+      "latency_ms": 17.183166986797005,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "postybirb-explore-update",
+      "repo": "postybirb",
+      "api": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "found": [],
+      "missed": [
+        "updateSubmission",
+        "validateSubmission"
+      ],
+      "node_count": 61,
+      "latency_ms": 33.10920798685402,
+      "explore_recall": 0.0,
+      "flow_recall": 0.0,
+      "combined_recall": 0.0
+    },
+    {
+      "case_id": "postybirb-explore-posting",
+      "repo": "postybirb",
+      "api": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.0,
+      "found": [
+        "post"
+      ],
+      "missed": [
+        "postSubmission"
+      ],
+      "node_count": 46,
+      "latency_ms": 27.397333993576467,
+      "explore_recall": 0.5,
+      "flow_recall": 0.5,
+      "combined_recall": 0.5
+    }
+  ]
+}
