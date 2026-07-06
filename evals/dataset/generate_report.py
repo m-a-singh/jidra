@@ -28,8 +28,9 @@ from pathlib import Path
 
 # ── Markdown builder ──────────────────────────────────────────────────────────
 
+
 def _pct(v: float) -> str:
-    return f"{v*100:.1f}%"
+    return f"{v * 100:.1f}%"
 
 
 def _delta(v: float) -> str:
@@ -69,26 +70,26 @@ def build_report(cmp: dict, jidra_file: str, cg_file: str) -> str:
 
     lines += [
         f"# Retrieval Eval Report — {repo_label}",
-        f"",
+        "",
         f"**Date:** {today}  ",
         f"**Cases:** {total}  ",
         f"**Mode:** {la} explore-only vs {lb} FTS  ",
         f"**Files:** `{jidra_file}` vs `{cg_file}`",
-        f"",
-        f"---",
-        f"",
-        f"## Summary",
-        f"",
+        "",
+        "---",
+        "",
+        "## Summary",
+        "",
         f"| Metric | {la} | {lb} | Δ ({la} − {lb}) |",
-        f"|--------|------|----------|---------|",
+        "|--------|------|----------|---------|",
     ]
 
     metrics = [
-        ("Pass rate",      "pass_rate"),
-        ("Mean recall",    "mean_recall"),
-        ("Mean MRR",       "mean_mrr"),
+        ("Pass rate", "pass_rate"),
+        ("Mean recall", "mean_recall"),
+        ("Mean MRR", "mean_mrr"),
         ("Explore recall", "mean_explore_recall"),
-        ("Search recall",  "mean_search_recall"),
+        ("Search recall", "mean_search_recall"),
     ]
     for label, key in metrics:
         av = agg_a.get(key, 0.0)
@@ -96,29 +97,29 @@ def build_report(cmp: dict, jidra_file: str, cg_file: str) -> str:
         d = av - bv
         lines.append(f"| {label} | {av:.4f} | {bv:.4f} | {_delta(d)} |")
 
-    a_pass = f"{agg_a.get('passed',0)}/{agg_a.get('total',0)}"
-    b_pass = f"{agg_b.get('passed',0)}/{agg_b.get('total',0)}"
+    a_pass = f"{agg_a.get('passed', 0)}/{agg_a.get('total', 0)}"
+    b_pass = f"{agg_b.get('passed', 0)}/{agg_b.get('total', 0)}"
     lines += [
         f"| Pass count | {a_pass} | {b_pass} | — |",
-        f"",
-        f"### Visual",
-        f"",
-        f"```",
-        f"Pass rate",
+        "",
+        "### Visual",
+        "",
+        "```",
+        "Pass rate",
         f"  {la:<14} {_bar(agg_a['pass_rate'])}  {_pct(agg_a['pass_rate'])}",
         f"  {lb:<14} {_bar(agg_b['pass_rate'])}  {_pct(agg_b['pass_rate'])}",
-        f"",
-        f"Mean recall",
+        "",
+        "Mean recall",
         f"  {la:<14} {_bar(agg_a['mean_recall'])}  {_pct(agg_a['mean_recall'])}",
         f"  {lb:<14} {_bar(agg_b['mean_recall'])}  {_pct(agg_b['mean_recall'])}",
-        f"```",
-        f"",
-        f"---",
-        f"",
-        f"## Win / Loss",
-        f"",
-        f"| Outcome | Count |",
-        f"|---------|-------|",
+        "```",
+        "",
+        "---",
+        "",
+        "## Win / Loss",
+        "",
+        "| Outcome | Count |",
+        "|---------|-------|",
         f"| {la} wins (exclusive) | {a_excl} |",
         f"| {la} wins (higher recall, both pass) | {a_higher} |",
         f"| {lb} wins (exclusive) | {b_excl} |",
@@ -126,56 +127,56 @@ def build_report(cmp: dict, jidra_file: str, cg_file: str) -> str:
         f"| Tied (both pass, recall ≤0.01 diff) | {tied} |",
         f"| Both fail | {both_fail} |",
         f"| **Total** | **{total}** |",
-        f"",
+        "",
         f"**{la} net advantage: {a_wins - b_wins:+d} cases** ({a_wins} wins vs {b_wins} wins)",
-        f"",
-        f"---",
-        f"",
+        "",
+        "---",
+        "",
     ]
 
     # Per-repo table (only if multi-repo)
     if len(repos) > 1:
         lines += [
-            f"## Per-Repo Breakdown",
-            f"",
+            "## Per-Repo Breakdown",
+            "",
             f"| Repo | {la} pass | {lb} pass | {la} recall | {lb} recall | {la} wins | {lb} wins | Ties |",
-            f"|------|-----------|------------|------------|------------|----------|----------|------|",
+            "|------|-----------|------------|------------|------------|----------|----------|------|",
         ]
         for repo in repos:
             rd = repo_data[repo]
             n = rd["total"]
             lines.append(
                 f"| {repo} "
-                f"| {rd.get(f'{la}_passed',0)}/{n} "
-                f"| {rd.get(f'{lb}_passed',0)}/{n} "
-                f"| {rd.get(f'{la}_mean_recall',0):.3f} "
-                f"| {rd.get(f'{lb}_mean_recall',0):.3f} "
-                f"| {rd.get(f'{la}_wins',0)} "
-                f"| {rd.get(f'{lb}_wins',0)} "
-                f"| {rd.get('ties',0)} |"
+                f"| {rd.get(f'{la}_passed', 0)}/{n} "
+                f"| {rd.get(f'{lb}_passed', 0)}/{n} "
+                f"| {rd.get(f'{la}_mean_recall', 0):.3f} "
+                f"| {rd.get(f'{lb}_mean_recall', 0):.3f} "
+                f"| {rd.get(f'{la}_wins', 0)} "
+                f"| {rd.get(f'{lb}_wins', 0)} "
+                f"| {rd.get('ties', 0)} |"
             )
         lines += ["", "---", ""]
 
     # Cases where only one system passes
     a_only_cases = [c for c in cases if c["status"] == f"{la}_only"]
     b_only_cases = [c for c in cases if c["status"] == f"{lb}_only"]
-    fail_cases   = [c for c in cases if c["status"] == "both_fail"]
+    fail_cases = [c for c in cases if c["status"] == "both_fail"]
 
     if a_only_cases:
         lines += [
             f"## {la} Exclusive Wins ({len(a_only_cases)} cases)",
-            f"",
+            "",
             f"Cases where {la} passes but {lb} fails.",
-            f"",
+            "",
             f"| Case | {la} recall | {lb} recall | File found |",
-            f"|------|------------|------------|------------|",
+            "|------|------------|------------|------------|",
         ]
         for c in sorted(a_only_cases, key=lambda x: x["case_id"]):
             found = ", ".join(c.get(f"{la}_found", []))
             lines.append(
                 f"| {c['case_id']} "
-                f"| {c.get(f'{la}_recall',0):.2f} "
-                f"| {c.get(f'{lb}_recall',0):.2f} "
+                f"| {c.get(f'{la}_recall', 0):.2f} "
+                f"| {c.get(f'{lb}_recall', 0):.2f} "
                 f"| `{found}` |"
             )
         lines += ["", "---", ""]
@@ -183,11 +184,11 @@ def build_report(cmp: dict, jidra_file: str, cg_file: str) -> str:
     if b_only_cases:
         lines += [
             f"## {lb} Exclusive Wins ({len(b_only_cases)} cases)",
-            f"",
+            "",
             f"Cases where {lb} passes but {la} fails. Indicates gaps in {la} indexing.",
-            f"",
+            "",
             f"| Case | {la} recall | {lb} recall | File found | Likely reason |",
-            f"|------|------------|------------|------------|---------------|",
+            "|------|------------|------------|------------|---------------|",
         ]
         for c in sorted(b_only_cases, key=lambda x: x["case_id"]):
             found = ", ".join(c.get(f"{lb}_found", []))
@@ -195,8 +196,8 @@ def build_report(cmp: dict, jidra_file: str, cg_file: str) -> str:
             reason = _infer_miss_reason(missed)
             lines.append(
                 f"| {c['case_id']} "
-                f"| {c.get(f'{la}_recall',0):.2f} "
-                f"| {c.get(f'{lb}_recall',0):.2f} "
+                f"| {c.get(f'{la}_recall', 0):.2f} "
+                f"| {c.get(f'{lb}_recall', 0):.2f} "
                 f"| `{found}` "
                 f"| {reason} |"
             )
@@ -205,11 +206,11 @@ def build_report(cmp: dict, jidra_file: str, cg_file: str) -> str:
     if fail_cases:
         lines += [
             f"## Both Fail ({len(fail_cases)} cases)",
-            f"",
-            f"Neither system surfaces the expected file.",
-            f"",
-            f"| Case | Expected file |",
-            f"|------|---------------|",
+            "",
+            "Neither system surfaces the expected file.",
+            "",
+            "| Case | Expected file |",
+            "|------|---------------|",
         ]
         for c in sorted(fail_cases, key=lambda x: x["case_id"]):
             missed = ", ".join(c.get(f"{la}_missed", []))
@@ -218,10 +219,10 @@ def build_report(cmp: dict, jidra_file: str, cg_file: str) -> str:
 
     # Key insights
     lines += [
-        f"## Key Insights",
-        f"",
+        "## Key Insights",
+        "",
         f"1. **{la} explore-only** achieves {_pct(agg_a['pass_rate'])} pass rate vs {lb}'s {_pct(agg_b['pass_rate'])}.",
-        f"2. **{la} explore recall** ({agg_a.get('mean_explore_recall',0):.3f}) far exceeds {lb} ({agg_b.get('mean_explore_recall',0):.3f}) — graph traversal surfaces related files better.",
+        f"2. **{la} explore recall** ({agg_a.get('mean_explore_recall', 0):.3f}) far exceeds {lb} ({agg_b.get('mean_explore_recall', 0):.3f}) — graph traversal surfaces related files better.",
         f"3. **{lb} wins {b_wins} cases** — mostly class-name exact matches ({lb} indexes classes as first-class nodes; {la} is method-level by default).",
         f"4. **Both fail on {both_fail} cases** — likely files with sparse method definitions (config files, enums, migration files) that neither FTS approach covers well.",
         f"5. **{la} search recall is 0** in explore-only mode — adding search+flow bumps pass rate to ~87% for django.",
@@ -245,6 +246,7 @@ def _infer_miss_reason(missed_path: str) -> str:
 
 # ── Pipeline runner ────────────────────────────────────────────────────────────
 
+
 def run_pipeline(
     jidra_db: str,
     cg_db: str,
@@ -254,47 +256,61 @@ def run_pipeline(
     work_dir: Path,
 ) -> dict:
     jidra_out = work_dir / "results_jidra_explore.json"
-    cg_out    = work_dir / "results_cg.json"
-    cmp_out   = work_dir / "compare.json"
+    cg_out = work_dir / "results_cg.json"
+    cmp_out = work_dir / "compare.json"
 
     base = ["python"]
     script_dir = Path(__file__).parent
 
     # JIDRA explore-only
     cmd = [
-        *base, str(script_dir / "swebench_retrieval_eval.py"),
-        "--cases", *cases,
-        "--db", jidra_db,
+        *base,
+        str(script_dir / "swebench_retrieval_eval.py"),
+        "--cases",
+        *cases,
+        "--db",
+        jidra_db,
         "--explore-only",
-        "--out", str(jidra_out),
+        "--out",
+        str(jidra_out),
     ]
     if repo:
         cmd += ["--repo", repo]
-    print(f"Running JIDRA eval...")
+    print("Running JIDRA eval...")
     subprocess.run(["env", "PYTHONPATH=src", *cmd], check=True)
 
     # CodeGraph
     cmd = [
-        *base, str(script_dir / "codegraph_retrieval_eval.py"),
-        "--cases", *cases,
-        "--db", cg_db,
-        "--out", str(cg_out),
+        *base,
+        str(script_dir / "codegraph_retrieval_eval.py"),
+        "--cases",
+        *cases,
+        "--db",
+        cg_db,
+        "--out",
+        str(cg_out),
     ]
     if repo:
         cmd += ["--repo", repo]
-    print(f"Running CodeGraph eval...")
+    print("Running CodeGraph eval...")
     subprocess.run(cmd, check=True)
 
     # Compare
     cmd = [
-        *base, str(script_dir / "compare_results.py"),
-        "--a", str(jidra_out),
-        "--b", str(cg_out),
-        "--label-a", "JIDRA",
-        "--label-b", "CodeGraph",
-        "--out", str(cmp_out),
+        *base,
+        str(script_dir / "compare_results.py"),
+        "--a",
+        str(jidra_out),
+        "--b",
+        str(cg_out),
+        "--label-a",
+        "JIDRA",
+        "--label-b",
+        "CodeGraph",
+        "--out",
+        str(cmp_out),
     ]
-    print(f"Comparing...")
+    print("Comparing...")
     subprocess.run(cmd, check=True)
 
     return json.loads(cmp_out.read_text())
@@ -302,27 +318,41 @@ def run_pipeline(
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Generate markdown comparison report"
-    )
-    # Mode 1: from existing comparison JSON
-    parser.add_argument("--comparison", default=None, metavar="JSON",
-                        help="Existing compare_results.py output JSON")
-    # Mode 2: full pipeline
-    parser.add_argument("--jidra-db", default=None, metavar="PATH",
-                        help="JIDRA graph.db path (triggers full pipeline)")
-    parser.add_argument("--cg-db", default=None, metavar="PATH",
-                        help="CodeGraph codegraph.db path")
-    parser.add_argument("--cases", nargs="+", default=None, metavar="YAML",
-                        help="Yaml dataset file(s)")
-    parser.add_argument("--repo", default=None, metavar="ORG/REPO",
-                        help="Filter to one repo slug")
-    parser.add_argument("--work-dir", default="evals/dataset/results",
-                        help="Directory for intermediate JSON files")
 
-    parser.add_argument("--out", required=True, metavar="MD",
-                        help="Output markdown path")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate markdown comparison report")
+    # Mode 1: from existing comparison JSON
+    parser.add_argument(
+        "--comparison",
+        default=None,
+        metavar="JSON",
+        help="Existing compare_results.py output JSON",
+    )
+    # Mode 2: full pipeline
+    parser.add_argument(
+        "--jidra-db",
+        default=None,
+        metavar="PATH",
+        help="JIDRA graph.db path (triggers full pipeline)",
+    )
+    parser.add_argument(
+        "--cg-db", default=None, metavar="PATH", help="CodeGraph codegraph.db path"
+    )
+    parser.add_argument(
+        "--cases", nargs="+", default=None, metavar="YAML", help="Yaml dataset file(s)"
+    )
+    parser.add_argument(
+        "--repo", default=None, metavar="ORG/REPO", help="Filter to one repo slug"
+    )
+    parser.add_argument(
+        "--work-dir",
+        default="evals/dataset/results",
+        help="Directory for intermediate JSON files",
+    )
+
+    parser.add_argument(
+        "--out", required=True, metavar="MD", help="Output markdown path"
+    )
     args = parser.parse_args()
 
     out_path = Path(args.out)
