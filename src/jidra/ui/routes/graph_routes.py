@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
@@ -81,11 +80,11 @@ def _enrich(n: dict) -> dict:
 
 
 def _get_engine(repo_path: str, output_path: str | None = None):
-    from ...cli import _repo_output_dir
     from ...engine.engine import get_engine
     from ...graph.graph_store import resolve_graph_db_path
+    from .util_routes import resolve_out_dir
 
-    out_dir = Path(output_path) if output_path else _repo_output_dir(Path(repo_path))
+    out_dir = resolve_out_dir(repo_path, output_path)
     import sqlite3 as _sq
 
     db = resolve_graph_db_path(out_dir)
@@ -165,9 +164,9 @@ async def graph_html(
     output_path: str | None = Query(None),
     variant: str = Query("visualization"),
 ) -> HTMLResponse:
-    from ...cli import _repo_output_dir
+    from .util_routes import resolve_out_dir
 
-    out_dir = Path(output_path) if output_path else _repo_output_dir(Path(repo_path))
+    out_dir = resolve_out_dir(repo_path, output_path)
     name = (
         "graph_visualization_raw.html"
         if variant == "raw"

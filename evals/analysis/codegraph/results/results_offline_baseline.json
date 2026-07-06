@@ -1,0 +1,762 @@
+{
+  "cases": [
+    {
+      "case_id": "shapeshift-search-getTradeQuote",
+      "repo": "shapeshift",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 5.705833027604967,
+      "found": [
+        "getTradeQuote"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "shapeshift-search-getRates",
+      "repo": "shapeshift",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 4.098417004570365,
+      "found": [
+        "getRates"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "shapeshift-search-getAssets",
+      "repo": "shapeshift",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 5.019499978516251,
+      "found": [
+        "getAssets"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "shapeshift-search-broadcastTransaction",
+      "repo": "shapeshift",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.1,
+      "latency_ms": 3.940041991882026,
+      "found": [
+        "broadcastTransaction"
+      ],
+      "missed": [],
+      "rank": 10
+    },
+    {
+      "case_id": "shapeshift-search-estimateFees",
+      "repo": "shapeshift",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.14285714285714285,
+      "latency_ms": 3.148249990772456,
+      "found": [
+        "estimateFees"
+      ],
+      "missed": [],
+      "rank": 7
+    },
+    {
+      "case_id": "shapeshift-search-signTransaction",
+      "repo": "shapeshift",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.25,
+      "latency_ms": 3.9711249992251396,
+      "found": [
+        "signTransaction"
+      ],
+      "missed": [],
+      "rank": 4
+    },
+    {
+      "case_id": "shapeshift-explore-swap",
+      "repo": "shapeshift",
+      "tool": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "latency_ms": 8.903958019800484,
+      "found": [],
+      "missed": [
+        "getTradeQuote",
+        "broadcastTransaction"
+      ],
+      "rank": 0
+    },
+    {
+      "case_id": "shapeshift-explore-signing",
+      "repo": "shapeshift",
+      "tool": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 1.0,
+      "latency_ms": 7.132957980502397,
+      "found": [
+        "broadcastTransaction"
+      ],
+      "missed": [
+        "signTransaction"
+      ],
+      "rank": 1
+    },
+    {
+      "case_id": "shapeshift-explore-rates",
+      "repo": "shapeshift",
+      "tool": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.2,
+      "latency_ms": 12.83562503522262,
+      "found": [
+        "getRates"
+      ],
+      "missed": [
+        "getAssets"
+      ],
+      "rank": 5
+    },
+    {
+      "case_id": "shapeshift-explore-fees",
+      "repo": "shapeshift",
+      "tool": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "latency_ms": 14.210082998033613,
+      "found": [],
+      "missed": [
+        "estimateFees"
+      ],
+      "rank": 0
+    },
+    {
+      "case_id": "shapeshift-explore-broadcast",
+      "repo": "shapeshift",
+      "tool": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 1.0,
+      "latency_ms": 7.6984589686617255,
+      "found": [
+        "broadcastTransaction"
+      ],
+      "missed": [
+        "signTransaction"
+      ],
+      "rank": 1
+    },
+    {
+      "case_id": "shapeshift-explore-assets",
+      "repo": "shapeshift",
+      "tool": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "latency_ms": 9.530708019156009,
+      "found": [],
+      "missed": [
+        "getAssets",
+        "getRates"
+      ],
+      "rank": 0
+    },
+    {
+      "case_id": "mtkruto-search-sendMessage",
+      "repo": "mtkruto",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.1,
+      "latency_ms": 2.024833986070007,
+      "found": [
+        "sendMessage"
+      ],
+      "missed": [],
+      "rank": 10
+    },
+    {
+      "case_id": "mtkruto-search-invoke",
+      "repo": "mtkruto",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 1.6898750327527523,
+      "found": [
+        "invoke"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "mtkruto-search-serialize",
+      "repo": "mtkruto",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 0.6501660100184381,
+      "found": [
+        "serializeObject"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "mtkruto-search-getMe",
+      "repo": "mtkruto",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 1.9115410395897925,
+      "found": [
+        "getMe"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "mtkruto-search-signIn",
+      "repo": "mtkruto",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 1.2992909760214388,
+      "found": [
+        "signIn"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "mtkruto-search-forwardMessages",
+      "repo": "mtkruto",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 0.6559999892488122,
+      "found": [
+        "forwardMessages"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "mtkruto-explore-send-flow",
+      "repo": "mtkruto",
+      "tool": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.047619047619047616,
+      "latency_ms": 4.8679999890737236,
+      "found": [
+        "sendMessage"
+      ],
+      "missed": [
+        "serializeObject"
+      ],
+      "rank": 21
+    },
+    {
+      "case_id": "mtkruto-explore-session",
+      "repo": "mtkruto",
+      "tool": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.04,
+      "latency_ms": 1.4727499801665545,
+      "found": [
+        "send"
+      ],
+      "missed": [
+        "signIn"
+      ],
+      "rank": 25
+    },
+    {
+      "case_id": "mtkruto-explore-invoke",
+      "repo": "mtkruto",
+      "tool": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "latency_ms": 1.152042008470744,
+      "found": [],
+      "missed": [
+        "invoke",
+        "send"
+      ],
+      "rank": 0
+    },
+    {
+      "case_id": "mtkruto-explore-connection",
+      "repo": "mtkruto",
+      "tool": "explore",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.047619047619047616,
+      "latency_ms": 7.533082971349359,
+      "found": [
+        "connect",
+        "send"
+      ],
+      "missed": [],
+      "rank": 21
+    },
+    {
+      "case_id": "mtkruto-explore-auth",
+      "repo": "mtkruto",
+      "tool": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "latency_ms": 0.8993750088848174,
+      "found": [],
+      "missed": [
+        "signIn",
+        "getMe"
+      ],
+      "rank": 0
+    },
+    {
+      "case_id": "mtkruto-explore-messaging",
+      "repo": "mtkruto",
+      "tool": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.047619047619047616,
+      "latency_ms": 4.836250038351864,
+      "found": [
+        "sendMessage"
+      ],
+      "missed": [
+        "forwardMessages"
+      ],
+      "rank": 21
+    },
+    {
+      "case_id": "postybirb-search-validateSubmission",
+      "repo": "postybirb",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 0.975834031123668,
+      "found": [
+        "validateSubmission"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "postybirb-search-postSubmission",
+      "repo": "postybirb",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 3.43445799080655,
+      "found": [
+        "postSubmission"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "postybirb-search-uploadFile",
+      "repo": "postybirb",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.1,
+      "latency_ms": 0.8088330505415797,
+      "found": [
+        "uploadFile"
+      ],
+      "missed": [],
+      "rank": 10
+    },
+    {
+      "case_id": "postybirb-search-login",
+      "repo": "postybirb",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 0.9456250118091702,
+      "found": [
+        "login"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "postybirb-search-updateSubmission",
+      "repo": "postybirb",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.0625,
+      "latency_ms": 0.7412920240312815,
+      "found": [
+        "updateSubmission"
+      ],
+      "missed": [],
+      "rank": 16
+    },
+    {
+      "case_id": "postybirb-search-post",
+      "repo": "postybirb",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 2.351125003769994,
+      "found": [
+        "post"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "postybirb-explore-submit",
+      "repo": "postybirb",
+      "tool": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "latency_ms": 2.0059170201420784,
+      "found": [],
+      "missed": [
+        "validateSubmission",
+        "postSubmission"
+      ],
+      "rank": 0
+    },
+    {
+      "case_id": "postybirb-explore-file",
+      "repo": "postybirb",
+      "tool": "explore",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.043478260869565216,
+      "latency_ms": 1.5948339714668691,
+      "found": [
+        "uploadFile",
+        "post"
+      ],
+      "missed": [],
+      "rank": 23
+    },
+    {
+      "case_id": "postybirb-explore-auth",
+      "repo": "postybirb",
+      "tool": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.1111111111111111,
+      "latency_ms": 0.9945000056177378,
+      "found": [
+        "login"
+      ],
+      "missed": [
+        "logout"
+      ],
+      "rank": 9
+    },
+    {
+      "case_id": "postybirb-explore-website",
+      "repo": "postybirb",
+      "tool": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.2,
+      "latency_ms": 2.4495410034433007,
+      "found": [
+        "post"
+      ],
+      "missed": [
+        "validateSubmission"
+      ],
+      "rank": 5
+    },
+    {
+      "case_id": "postybirb-explore-update",
+      "repo": "postybirb",
+      "tool": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "latency_ms": 1.3881250051781535,
+      "found": [],
+      "missed": [
+        "updateSubmission",
+        "validateSubmission"
+      ],
+      "rank": 0
+    },
+    {
+      "case_id": "postybirb-explore-posting",
+      "repo": "postybirb",
+      "tool": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.2,
+      "latency_ms": 1.339874987024814,
+      "found": [
+        "post"
+      ],
+      "missed": [
+        "postSubmission"
+      ],
+      "rank": 5
+    },
+    {
+      "case_id": "trezor-search-signTransaction",
+      "repo": "trezor",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.5,
+      "latency_ms": 6.132166017778218,
+      "found": [
+        "signTransaction"
+      ],
+      "missed": [],
+      "rank": 2
+    },
+    {
+      "case_id": "trezor-search-getAddress",
+      "repo": "trezor",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 7.316959032323211,
+      "found": [
+        "getAddress"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "trezor-search-getFeatures",
+      "repo": "trezor",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 6.540625006891787,
+      "found": [
+        "getFeatures"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "trezor-search-useSendForm",
+      "repo": "trezor",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.5,
+      "latency_ms": 8.761167002376169,
+      "found": [
+        "useSendForm"
+      ],
+      "missed": [],
+      "rank": 2
+    },
+    {
+      "case_id": "trezor-search-applySettings",
+      "repo": "trezor",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.5,
+      "latency_ms": 4.575791012030095,
+      "found": [
+        "applySettings"
+      ],
+      "missed": [],
+      "rank": 2
+    },
+    {
+      "case_id": "trezor-search-estimateFee",
+      "repo": "trezor",
+      "tool": "search",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.07692307692307693,
+      "latency_ms": 4.743917030282319,
+      "found": [
+        "estimateFee"
+      ],
+      "missed": [],
+      "rank": 13
+    },
+    {
+      "case_id": "trezor-explore-tx-flow",
+      "repo": "trezor",
+      "tool": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "latency_ms": 18.1591659784317,
+      "found": [],
+      "missed": [
+        "signTransaction",
+        "pushTransaction"
+      ],
+      "rank": 0
+    },
+    {
+      "case_id": "trezor-explore-device",
+      "repo": "trezor",
+      "tool": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "latency_ms": 18.27320799930021,
+      "found": [],
+      "missed": [
+        "getFeatures",
+        "getAddress"
+      ],
+      "rank": 0
+    },
+    {
+      "case_id": "trezor-explore-send-form",
+      "repo": "trezor",
+      "tool": "explore",
+      "passed": true,
+      "recall": 0.5,
+      "mrr": 0.2,
+      "latency_ms": 18.23258399963379,
+      "found": [
+        "useSendForm"
+      ],
+      "missed": [
+        "signTransaction"
+      ],
+      "rank": 5
+    },
+    {
+      "case_id": "trezor-explore-fees",
+      "repo": "trezor",
+      "tool": "explore",
+      "passed": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "latency_ms": 16.846958023961633,
+      "found": [],
+      "missed": [
+        "estimateFee",
+        "composeTransaction"
+      ],
+      "rank": 0
+    },
+    {
+      "case_id": "trezor-explore-settings",
+      "repo": "trezor",
+      "tool": "explore",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "latency_ms": 21.01520902942866,
+      "found": [
+        "applySettings",
+        "changePin"
+      ],
+      "missed": [],
+      "rank": 1
+    },
+    {
+      "case_id": "trezor-explore-account",
+      "repo": "trezor",
+      "tool": "explore",
+      "passed": true,
+      "recall": 1.0,
+      "mrr": 0.125,
+      "latency_ms": 23.05266697658226,
+      "found": [
+        "getAddress"
+      ],
+      "missed": [],
+      "rank": 8
+    }
+  ],
+  "summaries": [
+    {
+      "repo": "shapeshift",
+      "total": 12,
+      "passed": 9,
+      "mean_recall": 0.625,
+      "mean_mrr": 0.5821428571428572,
+      "explore_recall": 0.25,
+      "pass_rate": 0.75
+    },
+    {
+      "repo": "mtkruto",
+      "total": 12,
+      "passed": 10,
+      "mean_recall": 0.7083333333333334,
+      "mean_mrr": 0.85,
+      "explore_recall": 0.4166666666666667,
+      "pass_rate": 0.8333333333333334
+    },
+    {
+      "repo": "postybirb",
+      "total": 12,
+      "passed": 10,
+      "mean_recall": 0.7083333333333334,
+      "mean_mrr": 0.69375,
+      "explore_recall": 0.4166666666666667,
+      "pass_rate": 0.8333333333333334
+    },
+    {
+      "repo": "trezor",
+      "total": 12,
+      "passed": 9,
+      "mean_recall": 0.7083333333333334,
+      "mean_mrr": 0.5961538461538461,
+      "explore_recall": 0.4166666666666667,
+      "pass_rate": 0.75
+    }
+  ],
+  "ranking_config": {
+    "name_phase_enabled": true,
+    "name_phase_col_weight": 10.0,
+    "nl_strip_stopwords": true,
+    "nl_use_or": true,
+    "bm25_weight": 1.0,
+    "exact_name_boost": 2.0,
+    "name_substr_boost": 1.0,
+    "sig_boost": 0.5,
+    "path_file_boost": 1.5,
+    "path_dir_boost": 0.5,
+    "stereotype_service_boost": 1.5,
+    "stereotype_repo_boost": 0.5,
+    "test_penalty": -1.0,
+    "generated_penalty": -10.0
+  }
+}
