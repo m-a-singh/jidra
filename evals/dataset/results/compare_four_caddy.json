@@ -1,0 +1,69 @@
+{
+  "jidra_search_file": "evals/dataset/results/results_jidra_search.json",
+  "jidra_explore_file": "evals/dataset/results/results_jidra_explore.json",
+  "cg_search_file": "evals/dataset/results/results_cg_search.json",
+  "cg_explore_file": "evals/dataset/results/results_cg_explore.json",
+  "aggregate_jidra_search": {
+    "total": 14,
+    "passed": 11,
+    "pass_rate": 0.7857,
+    "mean_recall": 0.7857,
+    "mean_mrr": 0.2084,
+    "mean_latency_ms": 98.8,
+    "p50_latency_ms": 102.9,
+    "p95_latency_ms": 173.4
+  },
+  "aggregate_jidra_explore": {
+    "total": 14,
+    "passed": 10,
+    "pass_rate": 0.7143,
+    "mean_recall": 0.6905,
+    "mean_mrr": 0.223,
+    "mean_latency_ms": 33.6,
+    "p50_latency_ms": 30.5,
+    "p95_latency_ms": 62.3
+  },
+  "aggregate_cg_search": {
+    "total": 14,
+    "passed": 1,
+    "pass_rate": 0.0714,
+    "mean_recall": 0.0357,
+    "mean_mrr": 0.0119,
+    "mean_latency_ms": 0.4,
+    "p50_latency_ms": 0.2,
+    "p95_latency_ms": 1.1
+  },
+  "aggregate_cg_explore": {
+    "total": 14,
+    "passed": 3,
+    "pass_rate": 0.2143,
+    "mean_recall": 0.1786,
+    "mean_mrr": 0.0176,
+    "mean_latency_ms": 0.3,
+    "p50_latency_ms": 0.2,
+    "p95_latency_ms": 0.8
+  },
+  "win_loss": {
+    "total": 14,
+    "both_pass": 3,
+    "jidra_only": 8,
+    "cg_only": 0,
+    "both_fail": 3,
+    "jidra_only_ids": [
+      "caddyserver__caddy-5404",
+      "caddyserver__caddy-5626",
+      "caddyserver__caddy-5761",
+      "caddyserver__caddy-5870",
+      "caddyserver__caddy-6051",
+      "caddyserver__caddy-6115",
+      "caddyserver__caddy-6288",
+      "caddyserver__caddy-6411"
+    ],
+    "cg_only_ids": [],
+    "both_fail_ids": [
+      "caddyserver__caddy-4943",
+      "caddyserver__caddy-6345",
+      "caddyserver__caddy-6350"
+    ]
+  }
+}

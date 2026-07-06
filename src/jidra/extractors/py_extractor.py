@@ -715,8 +715,13 @@ def build_py_graph(
     all_inheritance_edges: list[InheritanceEdge] = []
     validator = None
 
-    # Step 1: Run Pyright — store validator so we can call get_type_hints() later
+    # Step 1: Discover files first so we can show total in progress updates
+    python_files = list(iter_python_files(codebase_root, skip_folders=skip_folders))
+
+    # Step 2: Run Pyright — store validator so we can call get_type_hints() later
     if enable_validation:
+        if on_progress:
+            on_progress(0, len(python_files), "Running Pyright...")
         try:
             validator = PyrightValidator(codebase_root, timeout=300)
             metrics = validator.validate()
@@ -729,11 +734,11 @@ def build_py_graph(
             logger.debug(f"Pyright validation unavailable: {e}")
             validator = None
 
-    # Step 2: Discover and parse Python files
-    python_files = list(iter_python_files(codebase_root, skip_folders=skip_folders))
-
+    total_files = len(python_files)
+    files_done = 0
     worker = partial(_extract_py_file, codebase_root=codebase_root)
     for result in parallel_map(worker, python_files):
+        files_done += 1
         if result is None:
             continue
         all_classes.extend(result.classes)
@@ -743,7 +748,7 @@ def build_py_graph(
         all_inheritance_edges.extend(result.inheritance_edges)
 
         if on_progress:
-            on_progress(len(all_classes))
+            on_progress(files_done, total_files, None)
 
     # Step 3: Enrich untyped call sites with Pyright-inferred receiver types
     # This converts Phase-2/3/4 guesses into Phase-1 exact matches

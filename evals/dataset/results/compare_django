@@ -1,0 +1,3004 @@
+{
+  "JIDRA_file": "evals/results_django_explore_only.json",
+  "CodeGraph_file": "evals/dataset/results/results_django_cg.json",
+  "label_JIDRA": "JIDRA",
+  "label_CodeGraph": "CodeGraph",
+  "aggregate_JIDRA": {
+    "label": "JIDRA",
+    "total": 114,
+    "passed": 84,
+    "pass_rate": 0.7368,
+    "mean_recall": 0.7368,
+    "mean_mrr": 0.437,
+    "mean_search_recall": 0.0,
+    "mean_explore_recall": 0.7368
+  },
+  "aggregate_CodeGraph": {
+    "label": "CodeGraph",
+    "total": 114,
+    "passed": 36,
+    "pass_rate": 0.3158,
+    "mean_recall": 0.3158,
+    "mean_mrr": 0.1056,
+    "mean_search_recall": 0.307,
+    "mean_explore_recall": 0.1579
+  },
+  "per_repo": {
+    "django/django": {
+      "total": 114,
+      "JIDRA_passed": 84,
+      "CodeGraph_passed": 36,
+      "JIDRA_mean_recall": 0.7368,
+      "CodeGraph_mean_recall": 0.3158,
+      "JIDRA_wins": 58,
+      "CodeGraph_wins": 10,
+      "ties": 26
+    }
+  },
+  "cases": [
+    {
+      "case_id": "django__django-10914",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/conf/global_settings.py"
+      ],
+      "CodeGraph_missed": [
+        "django/conf/global_settings.py"
+      ]
+    },
+    {
+      "case_id": "django__django-10924",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.1111111111111111,
+      "CodeGraph_mrr": 0.1111111111111111,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "CodeGraph_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-11001",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/sql/compiler.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/sql/compiler.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11019",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.5,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/forms/widgets.py"
+      ],
+      "CodeGraph_found": [
+        "django/forms/widgets.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-11039",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.14285714285714285,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.1429,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/core/management/commands/sqlmigrate.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/core/management/commands/sqlmigrate.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11049",
+      "repo": "django/django",
+      "winner": "CodeGraph",
+      "status": "CodeGraph_only",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": -1.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0625,
+      "mrr_delta_a_minus_b": -0.0625,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "JIDRA_missed": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-11099",
+      "repo": "django/django",
+      "winner": "CodeGraph",
+      "status": "CodeGraph_only",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": -1.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 1.0,
+      "mrr_delta_a_minus_b": -1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [
+        "django/contrib/auth/validators.py"
+      ],
+      "JIDRA_missed": [
+        "django/contrib/auth/validators.py"
+      ],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-11133",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/http/response.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/http/response.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11179",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/deletion.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/deletion.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11283",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/contrib/auth/migrations/0011_update_proxy_permissions.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/contrib/auth/migrations/0011_update_proxy_permissions.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11422",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.05,
+      "mrr_delta_a_minus_b": 0.45,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/utils/autoreload.py"
+      ],
+      "CodeGraph_found": [
+        "django/utils/autoreload.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-11564",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.25,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.25,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/conf/__init__.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/conf/__init__.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11583",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.05,
+      "mrr_delta_a_minus_b": 0.95,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/utils/autoreload.py"
+      ],
+      "CodeGraph_found": [
+        "django/utils/autoreload.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-11620",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/views/debug.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/views/debug.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11630",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/core/checks/model_checks.py"
+      ],
+      "CodeGraph_missed": [
+        "django/core/checks/model_checks.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11742",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0625,
+      "mrr_delta_a_minus_b": 0.4375,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "CodeGraph_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-11797",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/models/lookups.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/models/lookups.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11815",
+      "repo": "django/django",
+      "winner": "CodeGraph",
+      "status": "CodeGraph_only",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": -1.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.058823529411764705,
+      "mrr_delta_a_minus_b": -0.0588,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [
+        "django/db/migrations/serializer.py"
+      ],
+      "JIDRA_missed": [
+        "django/db/migrations/serializer.py"
+      ],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-11848",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/utils/http.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/utils/http.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11905",
+      "repo": "django/django",
+      "winner": "CodeGraph",
+      "status": "CodeGraph_only",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": -1.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.16666666666666666,
+      "mrr_delta_a_minus_b": -0.1667,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [
+        "django/db/models/lookups.py"
+      ],
+      "JIDRA_missed": [
+        "django/db/models/lookups.py"
+      ],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-11910",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.1111111111111111,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.1111,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/migrations/autodetector.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/migrations/autodetector.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11964",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/models/enums.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/models/enums.py"
+      ]
+    },
+    {
+      "case_id": "django__django-11999",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.2,
+      "CodeGraph_mrr": 0.07142857142857142,
+      "mrr_delta_a_minus_b": 0.1286,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "CodeGraph_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-12113",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.14285714285714285,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.1429,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/backends/sqlite3/creation.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/backends/sqlite3/creation.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12125",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/migrations/serializer.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/migrations/serializer.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12184",
+      "repo": "django/django",
+      "winner": "CodeGraph",
+      "status": "CodeGraph_only",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": -1.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.125,
+      "mrr_delta_a_minus_b": -0.125,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [
+        "django/urls/resolvers.py"
+      ],
+      "JIDRA_missed": [
+        "django/urls/resolvers.py"
+      ],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-12284",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.058823529411764705,
+      "CodeGraph_mrr": 0.05263157894736842,
+      "mrr_delta_a_minus_b": 0.0062,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "CodeGraph_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-12286",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/core/checks/translation.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/core/checks/translation.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12308",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.25,
+      "CodeGraph_mrr": 0.5,
+      "mrr_delta_a_minus_b": -0.25,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/contrib/admin/utils.py"
+      ],
+      "CodeGraph_found": [
+        "django/contrib/admin/utils.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-12453",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.07142857142857142,
+      "mrr_delta_a_minus_b": 0.4286,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/backends/base/creation.py"
+      ],
+      "CodeGraph_found": [
+        "django/db/backends/base/creation.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-12470",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.058823529411764705,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0588,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/sql/compiler.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/sql/compiler.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12497",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.25,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.25,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/fields/related.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/fields/related.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12589",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/models/sql/query.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/models/sql/query.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12700",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/views/debug.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/views/debug.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12708",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/backends/base/schema.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/backends/base/schema.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12747",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/deletion.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/deletion.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12856",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.1,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.1,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/base.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/base.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12908",
+      "repo": "django/django",
+      "winner": "CodeGraph",
+      "status": "CodeGraph_only",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": -1.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.2,
+      "mrr_delta_a_minus_b": -0.2,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [
+        "django/db/models/query.py"
+      ],
+      "JIDRA_missed": [
+        "django/db/models/query.py"
+      ],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-12915",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/contrib/staticfiles/handlers.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/contrib/staticfiles/handlers.py"
+      ]
+    },
+    {
+      "case_id": "django__django-12983",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/utils/text.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/utils/text.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13028",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.3333333333333333,
+      "mrr_delta_a_minus_b": 0.6667,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/db/models/sql/query.py"
+      ],
+      "CodeGraph_found": [
+        "django/db/models/sql/query.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-13033",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/models/sql/compiler.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/models/sql/compiler.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13158",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/models/sql/query.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/models/sql/query.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13220",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.14285714285714285,
+      "CodeGraph_mrr": 1.0,
+      "mrr_delta_a_minus_b": -0.8571,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/core/exceptions.py"
+      ],
+      "CodeGraph_found": [
+        "django/core/exceptions.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-13230",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/contrib/syndication/views.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/contrib/syndication/views.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13265",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.0625,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0625,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/migrations/autodetector.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/migrations/autodetector.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13315",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.1111111111111111,
+      "mrr_delta_a_minus_b": 0.8889,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/forms/models.py"
+      ],
+      "CodeGraph_found": [
+        "django/forms/models.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-13321",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 1.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/contrib/sessions/backends/base.py"
+      ],
+      "CodeGraph_found": [
+        "django/contrib/sessions/backends/base.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-13401",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/fields/__init__.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13447",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/contrib/admin/sites.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/contrib/admin/sites.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13448",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/backends/base/creation.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/backends/base/creation.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13551",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/contrib/auth/tokens.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/contrib/auth/tokens.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13590",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.5,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/db/models/sql/query.py"
+      ],
+      "CodeGraph_found": [
+        "django/db/models/sql/query.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-13658",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 1.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/core/management/__init__.py"
+      ],
+      "CodeGraph_found": [
+        "django/core/management/__init__.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-13660",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/core/management/commands/shell.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/core/management/commands/shell.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13710",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.16666666666666666,
+      "CodeGraph_mrr": 0.05555555555555555,
+      "mrr_delta_a_minus_b": 0.1111,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/contrib/admin/options.py"
+      ],
+      "CodeGraph_found": [
+        "django/contrib/admin/options.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-13757",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/models/fields/json.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/models/fields/json.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13768",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/dispatch/dispatcher.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/dispatch/dispatcher.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13925",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.08333333333333333,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0833,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/base.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/base.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13933",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.3333333333333333,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.3333,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/forms/models.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/forms/models.py"
+      ]
+    },
+    {
+      "case_id": "django__django-13964",
+      "repo": "django/django",
+      "winner": "CodeGraph",
+      "status": "CodeGraph_only",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": -1.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.08333333333333333,
+      "mrr_delta_a_minus_b": -0.0833,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [
+        "django/db/models/base.py"
+      ],
+      "JIDRA_missed": [
+        "django/db/models/base.py"
+      ],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-14016",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.03225806451612903,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0323,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/query_utils.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/query_utils.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14017",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/query_utils.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/query_utils.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14155",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/urls/resolvers.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/urls/resolvers.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14238",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/fields/__init__.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14382",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/core/management/templates.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/core/management/templates.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14411",
+      "repo": "django/django",
+      "winner": "CodeGraph",
+      "status": "CodeGraph_only",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": -1.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 1.0,
+      "mrr_delta_a_minus_b": -1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [
+        "django/contrib/auth/forms.py"
+      ],
+      "JIDRA_missed": [
+        "django/contrib/auth/forms.py"
+      ],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-14534",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/forms/boundfield.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/forms/boundfield.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14580",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.04,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.04,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/migrations/serializer.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/migrations/serializer.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14608",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.16666666666666666,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.1667,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/forms/formsets.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/forms/formsets.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14667",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/sql/query.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/sql/query.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14672",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/fields/reverse_related.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/fields/reverse_related.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14730",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.3333333333333333,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.3333,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/fields/related.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/fields/related.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14752",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.3333333333333333,
+      "mrr_delta_a_minus_b": 0.6667,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/contrib/admin/views/autocomplete.py"
+      ],
+      "CodeGraph_found": [
+        "django/contrib/admin/views/autocomplete.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-14787",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.125,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.125,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/utils/decorators.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/utils/decorators.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14855",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.3333333333333333,
+      "mrr_delta_a_minus_b": 0.6667,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/contrib/admin/helpers.py"
+      ],
+      "CodeGraph_found": [
+        "django/contrib/admin/helpers.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-14915",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.034482758620689655,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0345,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/forms/models.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/forms/models.py"
+      ]
+    },
+    {
+      "case_id": "django__django-14997",
+      "repo": "django/django",
+      "winner": "CodeGraph",
+      "status": "CodeGraph_only",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": -1.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.09090909090909091,
+      "mrr_delta_a_minus_b": -0.0909,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [
+        "django/db/backends/ddl_references.py"
+      ],
+      "JIDRA_missed": [
+        "django/db/backends/ddl_references.py"
+      ],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-14999",
+      "repo": "django/django",
+      "winner": "CodeGraph",
+      "status": "CodeGraph_only",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": -1.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.16666666666666666,
+      "mrr_delta_a_minus_b": -0.1667,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [
+        "django/db/migrations/operations/models.py"
+      ],
+      "JIDRA_missed": [
+        "django/db/migrations/operations/models.py"
+      ],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-15061",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/forms/widgets.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/forms/widgets.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15202",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.1,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.1,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/core/validators.py"
+      ],
+      "CodeGraph_found": [
+        "django/core/validators.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-15213",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/models/fields/__init__.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/models/fields/__init__.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15252",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.125,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.125,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/migrations/executor.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/migrations/executor.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15320",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/models/expressions.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/models/expressions.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15347",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.5,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/contrib/messages/storage/cookie.py"
+      ],
+      "CodeGraph_found": [
+        "django/contrib/messages/storage/cookie.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-15388",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.047619047619047616,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0476,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/template/autoreload.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/template/autoreload.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15400",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 1.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/utils/functional.py"
+      ],
+      "CodeGraph_found": [
+        "django/utils/functional.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-15498",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/views/static.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/views/static.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15695",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.02702702702702703,
+      "CodeGraph_mrr": 0.05,
+      "mrr_delta_a_minus_b": -0.023,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/migrations/operations/models.py"
+      ],
+      "CodeGraph_found": [
+        "django/db/migrations/operations/models.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-15738",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.07692307692307693,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0769,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/migrations/autodetector.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/migrations/autodetector.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15781",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.09090909090909091,
+      "mrr_delta_a_minus_b": 0.9091,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/core/management/base.py"
+      ],
+      "CodeGraph_found": [
+        "django/core/management/base.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-15789",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/utils/html.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/utils/html.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15790",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/core/checks/templates.py"
+      ],
+      "CodeGraph_missed": [
+        "django/core/checks/templates.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15814",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/sql/query.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/sql/query.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15819",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/core/management/commands/inspectdb.py"
+      ],
+      "CodeGraph_missed": [
+        "django/core/management/commands/inspectdb.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15851",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.08333333333333333,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0833,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/backends/postgresql/client.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/backends/postgresql/client.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15902",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/forms/formsets.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/forms/formsets.py"
+      ]
+    },
+    {
+      "case_id": "django__django-15996",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/migrations/serializer.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/migrations/serializer.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16041",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.16666666666666666,
+      "mrr_delta_a_minus_b": 0.3333,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/forms/formsets.py"
+      ],
+      "CodeGraph_found": [
+        "django/forms/formsets.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-16046",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/utils/numberformat.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/utils/numberformat.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16139",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/contrib/auth/forms.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/contrib/auth/forms.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16229",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/forms/boundfield.py"
+      ],
+      "CodeGraph_missed": [
+        "django/forms/boundfield.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16255",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 0.5,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.5,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/contrib/sitemaps/__init__.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/contrib/sitemaps/__init__.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16379",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 1.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 1.0,
+      "JIDRA_found": [
+        "django/core/cache/backends/filebased.py"
+      ],
+      "CodeGraph_found": [
+        "django/core/cache/backends/filebased.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-16400",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/contrib/auth/management/__init__.py"
+      ],
+      "CodeGraph_missed": [
+        "django/contrib/auth/management/__init__.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16408",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/models/sql/compiler.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/models/sql/compiler.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16527",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/contrib/admin/templatetags/admin_modify.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/contrib/admin/templatetags/admin_modify.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16595",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/migrations/operations/fields.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/migrations/operations/fields.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16816",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/contrib/admin/checks.py"
+      ],
+      "CodeGraph_missed": [
+        "django/contrib/admin/checks.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16820",
+      "repo": "django/django",
+      "winner": "tie",
+      "status": "both_pass_tied",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": true,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 1.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.16666666666666666,
+      "CodeGraph_mrr": 0.14285714285714285,
+      "mrr_delta_a_minus_b": 0.0238,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 1.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/migrations/operations/models.py"
+      ],
+      "CodeGraph_found": [
+        "django/db/migrations/operations/models.py"
+      ],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": []
+    },
+    {
+      "case_id": "django__django-16873",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/template/defaultfilters.py"
+      ],
+      "CodeGraph_missed": [
+        "django/template/defaultfilters.py"
+      ]
+    },
+    {
+      "case_id": "django__django-16910",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/models/sql/query.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/models/sql/query.py"
+      ]
+    },
+    {
+      "case_id": "django__django-17051",
+      "repo": "django/django",
+      "winner": "JIDRA",
+      "status": "JIDRA_only",
+      "JIDRA_pass": true,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 1.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 1.0,
+      "JIDRA_mrr": 1.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 1.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 1.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [
+        "django/db/models/query.py"
+      ],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [],
+      "CodeGraph_missed": [
+        "django/db/models/query.py"
+      ]
+    },
+    {
+      "case_id": "django__django-17087",
+      "repo": "django/django",
+      "winner": "neither",
+      "status": "both_fail",
+      "JIDRA_pass": false,
+      "CodeGraph_pass": false,
+      "JIDRA_recall": 0.0,
+      "CodeGraph_recall": 0.0,
+      "recall_delta_a_minus_b": 0.0,
+      "JIDRA_mrr": 0.0,
+      "CodeGraph_mrr": 0.0,
+      "mrr_delta_a_minus_b": 0.0,
+      "JIDRA_search": 0.0,
+      "CodeGraph_search": 0.0,
+      "JIDRA_explore": 0.0,
+      "CodeGraph_explore": 0.0,
+      "JIDRA_found": [],
+      "CodeGraph_found": [],
+      "JIDRA_missed": [
+        "django/db/migrations/serializer.py"
+      ],
+      "CodeGraph_missed": [
+        "django/db/migrations/serializer.py"
+      ]
+    }
+  ]
+}

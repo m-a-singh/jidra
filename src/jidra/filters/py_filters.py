@@ -32,7 +32,8 @@ def should_include_dir(path: Path) -> bool:
 
 def iter_python_files(root: Path, skip_folders: set[str] | None = None) -> list[Path]:
     files: list[Path] = []
-    for path in root.rglob("*.py"):
-        if should_include_dir(path.parent):
-            files.append(path)
+    for pattern in ("*.py", "*.pyx"):
+        for path in root.rglob(pattern):
+            if should_include_dir(path.parent):
+                files.append(path)
     return sorted(apply_filters(files, root, skip_folders=skip_folders))

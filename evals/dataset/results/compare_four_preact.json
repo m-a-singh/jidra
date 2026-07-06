@@ -1,0 +1,67 @@
+{
+  "jidra_search_file": "evals/dataset/results/results_jidra_search.json",
+  "jidra_explore_file": "evals/dataset/results/results_jidra_explore.json",
+  "cg_search_file": "evals/dataset/results/results_cg_search.json",
+  "cg_explore_file": "evals/dataset/results/results_cg_explore.json",
+  "aggregate_jidra_search": {
+    "total": 17,
+    "passed": 16,
+    "pass_rate": 0.9412,
+    "mean_recall": 0.8725,
+    "mean_mrr": 0.4371,
+    "mean_latency_ms": 26.1,
+    "p50_latency_ms": 21.9,
+    "p95_latency_ms": 90.5
+  },
+  "aggregate_jidra_explore": {
+    "total": 17,
+    "passed": 16,
+    "pass_rate": 0.9412,
+    "mean_recall": 0.8725,
+    "mean_mrr": 0.4982,
+    "mean_latency_ms": 9.4,
+    "p50_latency_ms": 8.2,
+    "p95_latency_ms": 32.1
+  },
+  "aggregate_cg_search": {
+    "total": 17,
+    "passed": 8,
+    "pass_rate": 0.4706,
+    "mean_recall": 0.4314,
+    "mean_mrr": 0.1415,
+    "mean_latency_ms": 0.4,
+    "p50_latency_ms": 0.4,
+    "p95_latency_ms": 1.1
+  },
+  "aggregate_cg_explore": {
+    "total": 17,
+    "passed": 5,
+    "pass_rate": 0.2941,
+    "mean_recall": 0.2549,
+    "mean_mrr": 0.1245,
+    "mean_latency_ms": 0.3,
+    "p50_latency_ms": 0.3,
+    "p95_latency_ms": 1.0
+  },
+  "win_loss": {
+    "total": 17,
+    "both_pass": 8,
+    "jidra_only": 8,
+    "cg_only": 0,
+    "both_fail": 1,
+    "jidra_only_ids": [
+      "preactjs__preact-2896",
+      "preactjs__preact-2927",
+      "preactjs__preact-3010",
+      "preactjs__preact-3345",
+      "preactjs__preact-3454",
+      "preactjs__preact-3739",
+      "preactjs__preact-4245",
+      "preactjs__preact-4316"
+    ],
+    "cg_only_ids": [],
+    "both_fail_ids": [
+      "preactjs__preact-3689"
+    ]
+  }
+}

@@ -845,7 +845,7 @@ def build_go_graph(
             class_map[(package_scope, short_name)] = cls
 
     if on_progress:
-        on_progress(len(all_classes))
+        on_progress(1, 1)
 
     # Pass 2: extract methods/functions using the cross-file type map. Stays
     # sequential (re-parses each file) because `_PendingBody.block` holds a

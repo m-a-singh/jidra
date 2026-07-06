@@ -13,6 +13,7 @@ import json
 import logging
 import re
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -71,8 +72,9 @@ class PyrightValidator:
 
         try:
             logger.info(f"Running Pyright validation on {self.codebase_root}")
+            pyright_bin = str(Path(sys.executable).parent / "pyright")
             result = subprocess.run(
-                ["pyright", str(self.codebase_root), "--outputjson"],
+                [pyright_bin, str(self.codebase_root), "--outputjson"],
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
