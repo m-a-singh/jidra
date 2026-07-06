@@ -1148,6 +1148,22 @@ def _parse_args() -> argparse.Namespace:
         help="Force full rebuild even if .jidra/graph.db exists",
     )
 
+    uninit_parser = subparsers.add_parser(
+        "uninit",
+        help="Remove all JIDRA artifacts from a project (.jidra/, .mcp.json, .claude/ agent+skills, git hooks)",
+    )
+    uninit_parser.add_argument(
+        "--codebase",
+        default=None,
+        help="Path to project root (default: cwd)",
+    )
+    uninit_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Skip confirmation prompt",
+    )
+
     ui_parser = subparsers.add_parser("ui", help="Launch the JIDRA web UI")
     ui_parser.add_argument(
         "--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)"
@@ -1825,21 +1841,42 @@ def _write_mcp_json(repo: Path, graph_path: Path) -> None:
     ui.success(f".mcp.json written → {mcp_json}")
 
 
+def _read_bundled_text(rel: str) -> str | None:
+    """Read a file from the jidra.claude_install package bundle via importlib.resources."""
+    try:
+        from importlib.resources import files
+        ref = files("jidra.claude_install")
+        for part in rel.split("/"):
+            ref = ref / part  # type: ignore[operator]
+        return ref.read_text(encoding="utf-8")  # type: ignore[union-attr]
+    except Exception:
+        return None
+
+
 def _install_agent(repo: Path) -> None:
-    """Copy jidra-investigator agent and jidra-navigate skill into repo (idempotent)."""
-    jidra_root = Path(__file__).resolve().parents[2]
+    """Copy jidra-investigator agent and skills into repo (idempotent).
+
+    Source priority:
+      1. importlib.resources (works for pip install, wheels, Docker)
+      2. Legacy: repo-root .claude/ relative to __file__ (editable installs only)
+    """
+    def _write(dest: Path, text: str) -> None:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(text, encoding="utf-8")
 
     # Agent
-    agent_src = jidra_root / ".claude" / "agents" / "jidra-investigator.md"
-    if agent_src.exists():
-        dest_dir = repo / ".claude" / "agents"
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        (dest_dir / "jidra-investigator.md").write_text(
-            agent_src.read_text(encoding="utf-8"), encoding="utf-8"
-        )
+    agent_text = _read_bundled_text("agents/jidra-investigator.md")
+    if agent_text is None:
+        # Fallback: editable install — look relative to repo root
+        fallback = Path(__file__).resolve().parents[2] / ".claude" / "agents" / "jidra-investigator.md"
+        if fallback.exists():
+            agent_text = fallback.read_text(encoding="utf-8")
+        else:
+            ui.warn("Agent definition not found in package bundle or repo root — skipping")
+
+    if agent_text:
+        _write(repo / ".claude" / "agents" / "jidra-investigator.md", agent_text)
         ui.success("Agent installed: .claude/agents/jidra-investigator.md")
-    else:
-        ui.warn(f"Agent definition not found at {agent_src}, skipping")
 
     # Skills
     for skill_name in (
@@ -1847,16 +1884,80 @@ def _install_agent(repo: Path) -> None:
         "jidra-blast-radius",
         "jidra-error-investigate",
     ):
-        skill_src = jidra_root / ".claude" / "skills" / skill_name / "SKILL.md"
-        if skill_src.exists():
-            skill_dir = repo / ".claude" / "skills" / skill_name
-            skill_dir.mkdir(parents=True, exist_ok=True)
-            (skill_dir / "SKILL.md").write_text(
-                skill_src.read_text(encoding="utf-8"), encoding="utf-8"
+        skill_text = _read_bundled_text(f"skills/{skill_name}/SKILL.md")
+        if skill_text is None:
+            fallback = (
+                Path(__file__).resolve().parents[2]
+                / ".claude" / "skills" / skill_name / "SKILL.md"
             )
+            if fallback.exists():
+                skill_text = fallback.read_text(encoding="utf-8")
+            else:
+                ui.warn(f"Skill {skill_name} not found in package bundle or repo root — skipping")
+
+        if skill_text:
+            _write(repo / ".claude" / "skills" / skill_name / "SKILL.md", skill_text)
             ui.success(f"Skill installed: .claude/skills/{skill_name}/SKILL.md")
+
+
+def _uninit(codebase_arg: str | None = None, yes: bool = False) -> None:
+    """Remove everything jidra init created: .jidra/, .mcp.json, .claude/ agent+skills, git hooks."""
+    repo = Path(codebase_arg).resolve() if codebase_arg else Path.cwd()
+    if not repo.exists():
+        raise SystemExit(f"Path does not exist: {repo}")
+
+    targets: list[tuple[str, Path]] = [
+        (".jidra/  (graph DB + session log)", repo / ".jidra"),
+        (".mcp.json", repo / ".mcp.json"),
+        (".claude/agents/jidra-investigator.md", repo / ".claude" / "agents" / "jidra-investigator.md"),
+        (".claude/skills/jidra-navigate", repo / ".claude" / "skills" / "jidra-navigate"),
+        (".claude/skills/jidra-blast-radius", repo / ".claude" / "skills" / "jidra-blast-radius"),
+        (".claude/skills/jidra-error-investigate", repo / ".claude" / "skills" / "jidra-error-investigate"),
+    ]
+
+    existing = [(label, path) for label, path in targets if path.exists()]
+    if not existing:
+        ui.success("Nothing to remove — repo already clean.")
+        return
+
+    ui.banner("JIDRA uninit", f"Remove JIDRA artifacts from {repo}")
+    for label, _ in existing:
+        print(f"  • {label}")
+
+    if not yes:
+        confirm = input("\nRemove all of the above? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("Aborted.")
+            return
+
+    # Git hooks
+    try:
+        from .utils.git_hooks import uninstall_hooks
+        removed_hooks = uninstall_hooks(repo)
+        if removed_hooks:
+            ui.success(f"Git hooks removed: {', '.join(removed_hooks)}")
+    except Exception as exc:
+        ui.warn(f"Git hooks removal skipped: {exc}")
+
+    import shutil
+
+    for label, path in existing:
+        if path.is_dir():
+            shutil.rmtree(path)
         else:
-            ui.warn(f"Skill not found at {skill_src}, skipping")
+            path.unlink()
+        ui.success(f"Removed {label}")
+
+    # Remove .claude/agents and .claude/skills if now empty
+    for empty_candidate in (
+        repo / ".claude" / "agents",
+        repo / ".claude" / "skills",
+        repo / ".claude",
+    ):
+        if empty_candidate.is_dir() and not any(empty_candidate.iterdir()):
+            empty_candidate.rmdir()
+
+    ui.success("Done.")
 
 
 def _init(codebase_arg: str | None = None, force: bool = False) -> None:
@@ -3065,6 +3166,13 @@ def main() -> None:
         _init(
             codebase_arg=getattr(args, "codebase", None),
             force=getattr(args, "force", False),
+        )
+        return
+
+    if args.command == "uninit":
+        _uninit(
+            codebase_arg=getattr(args, "codebase", None),
+            yes=getattr(args, "yes", False),
         )
         return
 
