@@ -1845,6 +1845,7 @@ def _read_bundled_text(rel: str) -> str | None:
     """Read a file from the jidra.claude_install package bundle via importlib.resources."""
     try:
         from importlib.resources import files
+
         ref = files("jidra.claude_install")
         for part in rel.split("/"):
             ref = ref / part  # type: ignore[operator]
@@ -1860,23 +1861,36 @@ def _install_agent(repo: Path) -> None:
       1. importlib.resources (works for pip install, wheels, Docker)
       2. Legacy: repo-root .claude/ relative to __file__ (editable installs only)
     """
-    def _write(dest: Path, text: str) -> None:
+
+    def _write(dest: Path, text: str, label: str) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists() and dest.read_text(encoding="utf-8") == text:
+            return  # already up-to-date, skip silently
         dest.write_text(text, encoding="utf-8")
 
     # Agent
     agent_text = _read_bundled_text("agents/jidra-investigator.md")
     if agent_text is None:
         # Fallback: editable install — look relative to repo root
-        fallback = Path(__file__).resolve().parents[2] / ".claude" / "agents" / "jidra-investigator.md"
+        fallback = (
+            Path(__file__).resolve().parents[2]
+            / ".claude"
+            / "agents"
+            / "jidra-investigator.md"
+        )
         if fallback.exists():
             agent_text = fallback.read_text(encoding="utf-8")
         else:
-            ui.warn("Agent definition not found in package bundle or repo root — skipping")
+            ui.warn(
+                "Agent definition not found in package bundle or repo root — skipping"
+            )
 
     if agent_text:
-        _write(repo / ".claude" / "agents" / "jidra-investigator.md", agent_text)
-        ui.success("Agent installed: .claude/agents/jidra-investigator.md")
+        dest = repo / ".claude" / "agents" / "jidra-investigator.md"
+        already = dest.exists() and dest.read_text(encoding="utf-8") == agent_text
+        _write(dest, agent_text, "agent")
+        if not already:
+            ui.success("Agent installed: .claude/agents/jidra-investigator.md")
 
     # Skills
     for skill_name in (
@@ -1888,16 +1902,24 @@ def _install_agent(repo: Path) -> None:
         if skill_text is None:
             fallback = (
                 Path(__file__).resolve().parents[2]
-                / ".claude" / "skills" / skill_name / "SKILL.md"
+                / ".claude"
+                / "skills"
+                / skill_name
+                / "SKILL.md"
             )
             if fallback.exists():
                 skill_text = fallback.read_text(encoding="utf-8")
             else:
-                ui.warn(f"Skill {skill_name} not found in package bundle or repo root — skipping")
+                ui.warn(
+                    f"Skill {skill_name} not found in package bundle or repo root — skipping"
+                )
 
         if skill_text:
-            _write(repo / ".claude" / "skills" / skill_name / "SKILL.md", skill_text)
-            ui.success(f"Skill installed: .claude/skills/{skill_name}/SKILL.md")
+            dest = repo / ".claude" / "skills" / skill_name / "SKILL.md"
+            already = dest.exists() and dest.read_text(encoding="utf-8") == skill_text
+            _write(dest, skill_text, skill_name)
+            if not already:
+                ui.success(f"Skill installed: .claude/skills/{skill_name}/SKILL.md")
 
 
 def _uninit(codebase_arg: str | None = None, yes: bool = False) -> None:
@@ -1909,10 +1931,22 @@ def _uninit(codebase_arg: str | None = None, yes: bool = False) -> None:
     targets: list[tuple[str, Path]] = [
         (".jidra/  (graph DB + session log)", repo / ".jidra"),
         (".mcp.json", repo / ".mcp.json"),
-        (".claude/agents/jidra-investigator.md", repo / ".claude" / "agents" / "jidra-investigator.md"),
-        (".claude/skills/jidra-navigate", repo / ".claude" / "skills" / "jidra-navigate"),
-        (".claude/skills/jidra-blast-radius", repo / ".claude" / "skills" / "jidra-blast-radius"),
-        (".claude/skills/jidra-error-investigate", repo / ".claude" / "skills" / "jidra-error-investigate"),
+        (
+            ".claude/agents/jidra-investigator.md",
+            repo / ".claude" / "agents" / "jidra-investigator.md",
+        ),
+        (
+            ".claude/skills/jidra-navigate",
+            repo / ".claude" / "skills" / "jidra-navigate",
+        ),
+        (
+            ".claude/skills/jidra-blast-radius",
+            repo / ".claude" / "skills" / "jidra-blast-radius",
+        ),
+        (
+            ".claude/skills/jidra-error-investigate",
+            repo / ".claude" / "skills" / "jidra-error-investigate",
+        ),
     ]
 
     existing = [(label, path) for label, path in targets if path.exists()]
@@ -1933,6 +1967,7 @@ def _uninit(codebase_arg: str | None = None, yes: bool = False) -> None:
     # Git hooks
     try:
         from .utils.git_hooks import uninstall_hooks
+
         removed_hooks = uninstall_hooks(repo)
         if removed_hooks:
             ui.success(f"Git hooks removed: {', '.join(removed_hooks)}")
