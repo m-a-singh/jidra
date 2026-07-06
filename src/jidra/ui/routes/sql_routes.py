@@ -18,13 +18,13 @@ class QueryRequest(BaseModel):
 
 
 def _db_path(repo_path: str, db: str) -> Path:
-    from ...cli import _repo_output_dir
+    from .util_routes import resolve_out_dir
 
-    out_dir = _repo_output_dir(Path(repo_path))
     if db == "telemetry":
         from ...llm.telemetry import _TELEMETRY_DB
 
         return _TELEMETRY_DB
+    out_dir = resolve_out_dir(repo_path)
     return out_dir / "graph.db"
 
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
@@ -8,10 +7,10 @@ router = APIRouter()
 
 
 def _connect(repo_path: str, output_path: str | None):
-    from ...cli import _repo_output_dir
     from ...graph import graph_store
+    from .util_routes import resolve_out_dir
 
-    out_dir = Path(output_path) if output_path else _repo_output_dir(Path(repo_path))
+    out_dir = resolve_out_dir(repo_path, output_path)
     db_path = graph_store.resolve_graph_db_path(out_dir)
     if not db_path.exists():
         raise HTTPException(
