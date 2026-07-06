@@ -1551,7 +1551,9 @@ def _process(
                     handle.update(f"Parsing source... {label}")
                 else:
                     pct = int(files_done / files_total * 100) if files_total else 0
-                    handle.update(f"Parsing source... {pct}% ({files_done}/{files_total} files)")
+                    handle.update(
+                        f"Parsing source... {pct}% ({files_done}/{files_total} files)"
+                    )
 
             _index(
                 str(codebase_path),
@@ -2082,7 +2084,9 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
                         handle.update(f"Parsing source... {label}")
                     else:
                         pct = int(files_done / files_total * 100) if files_total else 0
-                        handle.update(f"Parsing source... {pct}% ({files_done}/{files_total} files)")
+                        handle.update(
+                            f"Parsing source... {pct}% ({files_done}/{files_total} files)"
+                        )
 
                 _index(
                     str(repo),

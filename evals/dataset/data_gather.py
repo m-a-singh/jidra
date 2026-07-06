@@ -2,10 +2,13 @@ import re
 import yaml
 from datasets import load_dataset
 
+
 def extract_files_from_patch(patch_text):
-    if not patch_text: return []
-    files = re.findall(r'^\+\+\+ b/(.*)', patch_text, re.MULTILINE)
+    if not patch_text:
+        return []
+    files = re.findall(r"^\+\+\+ b/(.*)", patch_text, re.MULTILINE)
     return list(set(files))
+
 
 print("Loading SWE-bench Multilingual...")
 # Pull the official dataset
@@ -22,7 +25,7 @@ for item in dataset:
     expected_files = extract_files_from_patch(item.get("patch", ""))
 
     # Simple check to see if it's a Java/TS/JS instance based on file extensions
-    is_target_lang = any(f.endswith(('.scala')) for f in expected_files)
+    is_target_lang = any(f.endswith((".scala")) for f in expected_files)
 
     if is_target_lang:
         case = {
@@ -30,7 +33,7 @@ for item in dataset:
             "repo": item["repo"],
             "commit": item["base_commit"],
             "query": item["problem_statement"],
-            "expected": expected_files
+            "expected": expected_files,
         }
         ts_java_cases.append(case)
 

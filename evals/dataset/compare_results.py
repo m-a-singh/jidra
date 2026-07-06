@@ -38,22 +38,42 @@ def load(path: Path) -> dict[str, dict]:
     return {r["case_id"]: r for r in raw}
 
 
-def compare(a: dict[str, dict], b: dict[str, dict], label_a: str, label_b: str) -> list[dict]:
+def compare(
+    a: dict[str, dict], b: dict[str, dict], label_a: str, label_b: str
+) -> list[dict]:
     all_ids = sorted(set(a) | set(b))
     rows = []
     for cid in all_ids:
         ra = a.get(cid)
         rb = b.get(cid)
         if ra is None:
-            rows.append({"case_id": cid, "winner": label_b, "status": f"only_in_{label_b}", "a": None, "b": rb})
+            rows.append(
+                {
+                    "case_id": cid,
+                    "winner": label_b,
+                    "status": f"only_in_{label_b}",
+                    "a": None,
+                    "b": rb,
+                }
+            )
             continue
         if rb is None:
-            rows.append({"case_id": cid, "winner": label_a, "status": f"only_in_{label_a}", "a": ra, "b": None})
+            rows.append(
+                {
+                    "case_id": cid,
+                    "winner": label_a,
+                    "status": f"only_in_{label_a}",
+                    "a": ra,
+                    "b": None,
+                }
+            )
             continue
 
         a_pass = ra["passed"]
         b_pass = rb["passed"]
-        recall_delta = round(ra["file_recall"] - rb["file_recall"], 4)  # positive = A wins
+        recall_delta = round(
+            ra["file_recall"] - rb["file_recall"], 4
+        )  # positive = A wins
         mrr_delta = round(ra["mrr"] - rb["mrr"], 4)
 
         # Winner per case
@@ -77,28 +97,30 @@ def compare(a: dict[str, dict], b: dict[str, dict], label_a: str, label_b: str) 
             winner = "neither"
             status = "both_fail"
 
-        rows.append({
-            "case_id": cid,
-            "repo": ra.get("repo", ""),
-            "winner": winner,
-            "status": status,
-            f"{label_a}_pass": a_pass,
-            f"{label_b}_pass": b_pass,
-            f"{label_a}_recall": ra["file_recall"],
-            f"{label_b}_recall": rb["file_recall"],
-            "recall_delta_a_minus_b": recall_delta,
-            f"{label_a}_mrr": ra["mrr"],
-            f"{label_b}_mrr": rb["mrr"],
-            "mrr_delta_a_minus_b": mrr_delta,
-            f"{label_a}_search": ra.get("search_recall", 0),
-            f"{label_b}_search": rb.get("search_recall", 0),
-            f"{label_a}_explore": ra.get("explore_recall", 0),
-            f"{label_b}_explore": rb.get("explore_recall", 0),
-            f"{label_a}_found": ra.get("found_files", []),
-            f"{label_b}_found": rb.get("found_files", []),
-            f"{label_a}_missed": ra.get("missed_files", []),
-            f"{label_b}_missed": rb.get("missed_files", []),
-        })
+        rows.append(
+            {
+                "case_id": cid,
+                "repo": ra.get("repo", ""),
+                "winner": winner,
+                "status": status,
+                f"{label_a}_pass": a_pass,
+                f"{label_b}_pass": b_pass,
+                f"{label_a}_recall": ra["file_recall"],
+                f"{label_b}_recall": rb["file_recall"],
+                "recall_delta_a_minus_b": recall_delta,
+                f"{label_a}_mrr": ra["mrr"],
+                f"{label_b}_mrr": rb["mrr"],
+                "mrr_delta_a_minus_b": mrr_delta,
+                f"{label_a}_search": ra.get("search_recall", 0),
+                f"{label_b}_search": rb.get("search_recall", 0),
+                f"{label_a}_explore": ra.get("explore_recall", 0),
+                f"{label_b}_explore": rb.get("explore_recall", 0),
+                f"{label_a}_found": ra.get("found_files", []),
+                f"{label_b}_found": rb.get("found_files", []),
+                f"{label_a}_missed": ra.get("missed_files", []),
+                f"{label_b}_missed": rb.get("missed_files", []),
+            }
+        )
     return rows
 
 
@@ -115,7 +137,9 @@ def aggregate(results: dict[str, dict], label: str) -> dict:
         "mean_recall": round(sum(r["file_recall"] for r in rs) / n, 4),
         "mean_mrr": round(sum(r["mrr"] for r in rs) / n, 4),
         "mean_search_recall": round(sum(r.get("search_recall", 0) for r in rs) / n, 4),
-        "mean_explore_recall": round(sum(r.get("explore_recall", 0) for r in rs) / n, 4),
+        "mean_explore_recall": round(
+            sum(r.get("explore_recall", 0) for r in rs) / n, 4
+        ),
     }
 
 
@@ -133,8 +157,12 @@ def per_repo(rows: list[dict], label_a: str, label_b: str) -> dict[str, dict]:
             "total": n,
             f"{label_a}_passed": sum(1 for c in cases if c.get(f"{label_a}_pass")),
             f"{label_b}_passed": sum(1 for c in cases if c.get(f"{label_b}_pass")),
-            f"{label_a}_mean_recall": round(sum(c.get(f"{label_a}_recall", 0) for c in cases) / n, 4),
-            f"{label_b}_mean_recall": round(sum(c.get(f"{label_b}_recall", 0) for c in cases) / n, 4),
+            f"{label_a}_mean_recall": round(
+                sum(c.get(f"{label_a}_recall", 0) for c in cases) / n, 4
+            ),
+            f"{label_b}_mean_recall": round(
+                sum(c.get(f"{label_b}_recall", 0) for c in cases) / n, 4
+            ),
             f"{label_a}_wins": sum(1 for c in cases if c["winner"] == label_a),
             f"{label_b}_wins": sum(1 for c in cases if c["winner"] == label_b),
             "ties": sum(1 for c in cases if c["winner"] == "tie"),
@@ -142,8 +170,9 @@ def per_repo(rows: list[dict], label_a: str, label_b: str) -> dict[str, dict]:
     return out
 
 
-def print_report(rows: list[dict], agg_a: dict, agg_b: dict,
-                 label_a: str, label_b: str) -> None:
+def print_report(
+    rows: list[dict], agg_a: dict, agg_b: dict, label_a: str, label_b: str
+) -> None:
     sep = "─" * 72
 
     # Aggregate table
@@ -163,8 +192,8 @@ def print_report(rows: list[dict], agg_a: dict, agg_b: dict,
         delta = av - bv
         sign = "+" if delta >= 0 else ""
         print(f"  {label:<25}  {av:<22.4f}  {bv:<22.4f}  {sign}{delta:.4f}")
-    a_pass = f"{agg_a.get('passed',0)}/{agg_a.get('total',0)}"
-    b_pass = f"{agg_b.get('passed',0)}/{agg_b.get('total',0)}"
+    a_pass = f"{agg_a.get('passed', 0)}/{agg_a.get('total', 0)}"
+    b_pass = f"{agg_b.get('passed', 0)}/{agg_b.get('total', 0)}"
     print(f"  {'Pass count':<25}  {a_pass:<22}  {b_pass:<22}")
     print(sep)
 
@@ -180,25 +209,39 @@ def print_report(rows: list[dict], agg_a: dict, agg_b: dict,
     tied = by_status.get("both_pass_tied", [])
     both_fail = by_status.get("both_fail", [])
 
-    total_valid = len([r for r in rows if r["winner"] not in (f"only_in_{label_a}", f"only_in_{label_b}")])
+    total_valid = len(
+        [
+            r
+            for r in rows
+            if r["winner"] not in (f"only_in_{label_a}", f"only_in_{label_b}")
+        ]
+    )
     a_wins = len(a_only) + len(both_a)
     b_wins = len(b_only) + len(both_b)
 
     print(f"\n  Win/loss ({total_valid} shared cases):")
-    print(f"    {label_a} wins:  {a_wins}  ({len(a_only)} exclusive + {len(both_a)} higher recall when both pass)")
-    print(f"    {label_b} wins:  {b_wins}  ({len(b_only)} exclusive + {len(both_b)} higher recall when both pass)")
+    print(
+        f"    {label_a} wins:  {a_wins}  ({len(a_only)} exclusive + {len(both_a)} higher recall when both pass)"
+    )
+    print(
+        f"    {label_b} wins:  {b_wins}  ({len(b_only)} exclusive + {len(both_b)} higher recall when both pass)"
+    )
     print(f"    Tied:        {len(tied)}")
     print(f"    Both fail:   {len(both_fail)}")
 
     if a_only:
         print(f"\n  {label_a} passes, {label_b} fails ({len(a_only)} cases):")
         for r in a_only:
-            print(f"    {r['case_id']:<58}  {label_a}={r.get(f'{label_a}_recall',0):.2f}  {label_b}={r.get(f'{label_b}_recall',0):.2f}")
+            print(
+                f"    {r['case_id']:<58}  {label_a}={r.get(f'{label_a}_recall', 0):.2f}  {label_b}={r.get(f'{label_b}_recall', 0):.2f}"
+            )
 
     if b_only:
         print(f"\n  {label_b} passes, {label_a} fails ({len(b_only)} cases):")
         for r in b_only:
-            print(f"    {r['case_id']:<58}  {label_a}={r.get(f'{label_a}_recall',0):.2f}  {label_b}={r.get(f'{label_b}_recall',0):.2f}")
+            print(
+                f"    {r['case_id']:<58}  {label_a}={r.get(f'{label_a}_recall', 0):.2f}  {label_b}={r.get(f'{label_b}_recall', 0):.2f}"
+            )
 
     if both_a:
         print(f"\n  Both pass, {label_a} higher recall ({len(both_a)} cases):")
@@ -224,16 +267,27 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Compare two retrieval eval JSON outputs (e.g. JIDRA vs CodeGraph)"
     )
-    parser.add_argument("--a", required=True, metavar="JSON",
-                        help="First results JSON (e.g. JIDRA output)")
-    parser.add_argument("--b", required=True, metavar="JSON",
-                        help="Second results JSON (e.g. CodeGraph output)")
-    parser.add_argument("--label-a", default="JIDRA",
-                        help="Label for --a (default: JIDRA)")
-    parser.add_argument("--label-b", default="CodeGraph",
-                        help="Label for --b (default: CodeGraph)")
-    parser.add_argument("--out", default=None, metavar="JSON",
-                        help="Write combined comparison JSON")
+    parser.add_argument(
+        "--a",
+        required=True,
+        metavar="JSON",
+        help="First results JSON (e.g. JIDRA output)",
+    )
+    parser.add_argument(
+        "--b",
+        required=True,
+        metavar="JSON",
+        help="Second results JSON (e.g. CodeGraph output)",
+    )
+    parser.add_argument(
+        "--label-a", default="JIDRA", help="Label for --a (default: JIDRA)"
+    )
+    parser.add_argument(
+        "--label-b", default="CodeGraph", help="Label for --b (default: CodeGraph)"
+    )
+    parser.add_argument(
+        "--out", default=None, metavar="JSON", help="Write combined comparison JSON"
+    )
     args = parser.parse_args()
 
     a_path = Path(args.a)
@@ -253,7 +307,7 @@ def main() -> None:
     agg_b = aggregate(b, label_b)
     repo_data = per_repo(rows, label_a, label_b)
 
-    print(f"\nComparing:")
+    print("\nComparing:")
     print(f"  {label_a:<12} {a_path}  ({len(a)} cases)")
     print(f"  {label_b:<12} {b_path}  ({len(b)} cases)")
 
@@ -261,18 +315,22 @@ def main() -> None:
 
     # Per-repo table
     if len(repo_data) > 1:
-        print(f"  Per-repo:")
-        print(f"  {'repo':<35}  {label_a+' pass':<14}  {label_b+' pass':<14}  {label_a} recall  {label_b} recall  {label_a} wins  {label_b} wins")
+        print("  Per-repo:")
+        print(
+            f"  {'repo':<35}  {label_a + ' pass':<14}  {label_b + ' pass':<14}  {label_a} recall  {label_b} recall  {label_a} wins  {label_b} wins"
+        )
         print("  " + "─" * 100)
         for repo, rd in sorted(repo_data.items()):
             n = rd["total"]
-            a_p = f"{rd.get(f'{label_a}_passed',0)}/{n}"
-            b_p = f"{rd.get(f'{label_b}_passed',0)}/{n}"
+            a_p = f"{rd.get(f'{label_a}_passed', 0)}/{n}"
+            b_p = f"{rd.get(f'{label_b}_passed', 0)}/{n}"
             a_r = rd.get(f"{label_a}_mean_recall", 0)
             b_r = rd.get(f"{label_b}_mean_recall", 0)
             a_w = rd.get(f"{label_a}_wins", 0)
             b_w = rd.get(f"{label_b}_wins", 0)
-            print(f"  {repo:<35}  {a_p:<14}  {b_p:<14}  {a_r:.3f}       {b_r:.3f}       {a_w}       {b_w}")
+            print(
+                f"  {repo:<35}  {a_p:<14}  {b_p:<14}  {a_r:.3f}       {b_r:.3f}       {a_w}       {b_w}"
+            )
         print()
 
     if args.out:
