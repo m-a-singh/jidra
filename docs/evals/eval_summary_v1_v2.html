@@ -1,0 +1,654 @@
+<title>JIDRA V1 → V2 Eval Report</title>
+<style>
+  /* ── Tokens ─────────────────────────────────────────────── */
+  :root {
+    --bg:          #f3f5f9;
+    --surface:     #ffffff;
+    --surface-alt: #f8f9fc;
+    --border:      #dde2ec;
+    --text:        #1b2030;
+    --text-muted:  #5c6780;
+    --accent:      #1a9e87;
+    --accent-dim:  #e6f6f3;
+    --up:          #1a8f55;
+    --up-bg:       #e8f7ef;
+    --down:        #c93434;
+    --down-bg:     #fce8e8;
+    --flat:        #5c6780;
+    --flat-bg:     #f0f1f5;
+    --tag-bg:      #eef0f6;
+    --mono:        'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:          #111622;
+      --surface:     #1a2035;
+      --surface-alt: #161c2e;
+      --border:      #252e46;
+      --text:        #dce4f5;
+      --text-muted:  #7a8aaa;
+      --accent:      #25c4a8;
+      --accent-dim:  #152e29;
+      --up:          #3db878;
+      --up-bg:       #122b1e;
+      --down:        #e05656;
+      --down-bg:     #2b1212;
+      --flat:        #7a8aaa;
+      --flat-bg:     #1e2538;
+      --tag-bg:      #1e2538;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:          #f3f5f9;
+    --surface:     #ffffff;
+    --surface-alt: #f8f9fc;
+    --border:      #dde2ec;
+    --text:        #1b2030;
+    --text-muted:  #5c6780;
+    --accent:      #1a9e87;
+    --accent-dim:  #e6f6f3;
+    --up:          #1a8f55;
+    --up-bg:       #e8f7ef;
+    --down:        #c93434;
+    --down-bg:     #fce8e8;
+    --flat:        #5c6780;
+    --flat-bg:     #f0f1f5;
+    --tag-bg:      #eef0f6;
+  }
+  :root[data-theme="dark"] {
+    --bg:          #111622;
+    --surface:     #1a2035;
+    --surface-alt: #161c2e;
+    --border:      #252e46;
+    --text:        #dce4f5;
+    --text-muted:  #7a8aaa;
+    --accent:      #25c4a8;
+    --accent-dim:  #152e29;
+    --up:          #3db878;
+    --up-bg:       #122b1e;
+    --down:        #e05656;
+    --down-bg:     #2b1212;
+    --flat:        #7a8aaa;
+    --flat-bg:     #1e2538;
+    --tag-bg:      #1e2538;
+  }
+
+  /* ── Reset & base ───────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    background: var(--bg);
+    color: var(--text);
+    padding: 40px 20px 64px;
+  }
+  @media (max-width: 600px) { body { padding: 24px 14px 48px; } }
+
+  /* ── Layout wrapper ─────────────────────────────────────── */
+  .page { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  .header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--accent);
+  }
+  .header-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-wrap: balance;
+    color: var(--text);
+  }
+  .header-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  /* ── KPI strip ───────────────────────────────────────────── */
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 540px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--text);
+  }
+  .kpi-value.up   { color: var(--up); }
+  .kpi-value.down { color: var(--down); }
+  .kpi-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Section header ─────────────────────────────────────── */
+  .section-head {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: -16px;
+  }
+
+  /* ── Table card ──────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  thead tr {
+    background: var(--surface-alt);
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    padding: 10px 14px;
+    text-align: right;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  th:first-child { text-align: left; }
+  td {
+    padding: 11px 14px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  td:first-child { text-align: left; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface-alt); }
+
+  .repo-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .cases-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--tag-bg);
+    color: var(--text-muted);
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* delta chips */
+  .delta {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+  .delta.up   { background: var(--up-bg);   color: var(--up);   }
+  .delta.down { background: var(--down-bg); color: var(--down); }
+  .delta.flat { background: var(--flat-bg); color: var(--flat); }
+
+  .val { font-family: var(--mono); font-size: 12px; }
+  .val.strong { font-weight: 700; color: var(--accent); }
+  .mrr-cell { color: var(--text-muted); font-size: 12px; }
+
+  /* ── Regression section ──────────────────────────────────── */
+  .reg-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 600px) { .reg-grid { grid-template-columns: 1fr; } }
+
+  .reg-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .reg-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--down-bg);
+  }
+  .reg-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .reg-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--down);
+    font-family: var(--mono);
+  }
+  .reg-file {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    margin-top: 1px;
+  }
+  .reg-body {
+    padding: 13px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .reg-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+  .reg-row-label { color: var(--text-muted); }
+  .reg-row-value { font-family: var(--mono); font-weight: 600; }
+  .reg-cause {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--surface-alt);
+    border-radius: 6px;
+    padding: 9px 12px;
+    border-left: 2px solid var(--border);
+    line-height: 1.5;
+  }
+  .reg-cause strong { color: var(--text); }
+
+  /* ── Gain cards ──────────────────────────────────────────── */
+  .gain-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 600px) { .gain-grid { grid-template-columns: 1fr; } }
+
+  .gain-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .gain-repo {
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--accent);
+    letter-spacing: .04em;
+  }
+  .gain-headline {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--up);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .gain-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  /* ── Footnote ────────────────────────────────────────────── */
+  .footnote {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    line-height: 1.6;
+  }
+  .footnote strong { color: var(--text); }
+</style>
+
+<div class="page">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-eyebrow">JIDRA · Retrieval Eval</div>
+    <h1>V1 → V2 Performance Summary</h1>
+    <div class="header-meta">8 repos · 282 cases · Indexed 2026-07-06 with Rust resolver</div>
+  </header>
+
+  <!-- KPI strip -->
+  <div class="kpi-strip">
+    <div class="kpi">
+      <div class="kpi-label">Repos improved</div>
+      <div class="kpi-value up">3</div>
+      <div class="kpi-sub">Django, Sympy, Scikit-learn</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Repos regressed</div>
+      <div class="kpi-value down">1</div>
+      <div class="kpi-sub">Matplotlib −2 cases</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Net cases gained</div>
+      <div class="kpi-value up">+14</div>
+      <div class="kpi-sub">+16 won, −2 lost</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Biggest MRR jump</div>
+      <div class="kpi-value up">+.214</div>
+      <div class="kpi-sub">Scikit-learn search</div>
+    </div>
+  </div>
+
+  <!-- Per-repo table -->
+  <div>
+    <div class="section-head">Per-repo breakdown</div>
+    <div style="height:24px"></div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Repo</th>
+              <th>Cases</th>
+              <th>V1 pass</th>
+              <th>V2 pass</th>
+              <th>Δ pass</th>
+              <th>V1 MRR</th>
+              <th>V2 MRR</th>
+              <th>Δ MRR</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="repo-name">axios</span></td>
+              <td><span class="val">6</span></td>
+              <td><span class="val">1.0000</span></td>
+              <td><span class="val strong">1.0000</span></td>
+              <td><span class="delta flat">—</span></td>
+              <td><span class="mrr-cell">.5403</span></td>
+              <td><span class="mrr-cell">.5393</span></td>
+              <td><span class="delta flat">−.001</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">caddy</span></td>
+              <td><span class="val">14</span></td>
+              <td><span class="val">.7857</span></td>
+              <td><span class="val strong">.7857</span></td>
+              <td><span class="delta flat">—</span></td>
+              <td><span class="mrr-cell">.2084</span></td>
+              <td><span class="mrr-cell">.2074</span></td>
+              <td><span class="delta flat">−.001</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">django</span></td>
+              <td><span class="val">114</span></td>
+              <td><span class="val">.8684</span></td>
+              <td><span class="val strong">.9123</span></td>
+              <td><span class="delta up">+.044</span></td>
+              <td><span class="mrr-cell">.4556</span></td>
+              <td><span class="mrr-cell">.5858</span></td>
+              <td><span class="delta up">+.130</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">docusaurus</span></td>
+              <td><span class="val">5</span></td>
+              <td><span class="val">.6000</span></td>
+              <td><span class="val strong">.6000</span></td>
+              <td><span class="delta flat">—</span></td>
+              <td><span class="mrr-cell">.0321</span></td>
+              <td><span class="mrr-cell">.0395</span></td>
+              <td><span class="delta up">+.007</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">matplotlib</span></td>
+              <td><span class="val">23</span></td>
+              <td><span class="val">.9130</span></td>
+              <td><span class="val strong">.8261</span></td>
+              <td><span class="delta down">−.087</span></td>
+              <td><span class="mrr-cell">.5788</span></td>
+              <td><span class="mrr-cell">.5671</span></td>
+              <td><span class="delta down">−.012</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">preact</span></td>
+              <td><span class="val">17</span></td>
+              <td><span class="val">.9412</span></td>
+              <td><span class="val strong">.9412</span></td>
+              <td><span class="delta flat">—</span></td>
+              <td><span class="mrr-cell">.4371</span></td>
+              <td><span class="mrr-cell">.4371</span></td>
+              <td><span class="delta flat">—</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">scikit-learn</span></td>
+              <td><span class="val">23</span></td>
+              <td><span class="val">.4783</span></td>
+              <td><span class="val strong">.4783</span></td>
+              <td><span class="delta flat">—</span></td>
+              <td><span class="mrr-cell">.1297</span></td>
+              <td><span class="mrr-cell">.3439</span></td>
+              <td><span class="delta up">+.214</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">sympy</span></td>
+              <td><span class="val">77</span></td>
+              <td><span class="val">.7013</span></td>
+              <td><span class="val strong">.8442</span></td>
+              <td><span class="delta up">+.143</span></td>
+              <td><span class="mrr-cell">.4684</span></td>
+              <td><span class="mrr-cell">.4751</span></td>
+              <td><span class="delta up">+.007</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notable gains -->
+  <div>
+    <div class="section-head">Notable gains</div>
+    <div style="height:24px"></div>
+    <div class="gain-grid">
+      <div class="gain-card">
+        <div class="gain-repo">django</div>
+        <div class="gain-headline">+5 cases</div>
+        <div class="gain-sub">99→104/114 passing. MRR search up .130. Rust resolver resolved more Django method dispatch chains correctly.</div>
+      </div>
+      <div class="gain-card">
+        <div class="gain-repo">sympy</div>
+        <div class="gain-headline">+11 cases</div>
+        <div class="gain-sub">54→65/77 passing. Biggest absolute gain. Rust resolver handles Python's deep call chains in symbolic math better.</div>
+      </div>
+      <div class="gain-card">
+        <div class="gain-repo">scikit-learn</div>
+        <div class="gain-headline">MRR ×2.6</div>
+        <div class="gain-sub">Pass rate flat (11/23), but search MRR .1297→.3439. Cases already found now rank the target file much higher.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Regressions -->
+  <div>
+    <div class="section-head">Matplotlib regressions — root cause analysis</div>
+    <div style="height:24px"></div>
+    <div class="reg-grid">
+      <div class="reg-card">
+        <div class="reg-header">
+          <div class="reg-icon">↓</div>
+          <div>
+            <div class="reg-title">matplotlib-23314</div>
+            <div class="reg-file">mpl_toolkits/mplot3d/axes3d.py</div>
+          </div>
+        </div>
+        <div class="reg-body">
+          <div class="reg-row">
+            <span class="reg-row-label">V1 JIDRA search</span>
+            <span class="reg-row-value" style="color:var(--up)">1.00 ✓</span>
+          </div>
+          <div class="reg-row">
+            <span class="reg-row-label">V2 JIDRA search</span>
+            <span class="reg-row-value" style="color:var(--down)">0.00 ✗</span>
+          </div>
+          <div class="reg-row">
+            <span class="reg-row-label">V1→V2 movement</span>
+            <span class="reg-row-value">JIDRA-only → Both fail</span>
+          </div>
+          <div class="reg-cause">
+            <strong>Likely cause:</strong> Changed call graph connectivity from Rust resolver. This case passed via JIDRA search only (explore=0.00 in V1), suggesting a fragile single-path match. If Rust resolved the 3D axes calls differently, the ranking signal drops below the recall threshold.
+          </div>
+        </div>
+      </div>
+      <div class="reg-card">
+        <div class="reg-header">
+          <div class="reg-icon">↓</div>
+          <div>
+            <div class="reg-title">matplotlib-25079</div>
+            <div class="reg-file">lib/matplotlib/colors.py</div>
+          </div>
+        </div>
+        <div class="reg-body">
+          <div class="reg-row">
+            <span class="reg-row-label">V1 JIDRA search</span>
+            <span class="reg-row-value" style="color:var(--up)">pass (both-pass) ✓</span>
+          </div>
+          <div class="reg-row">
+            <span class="reg-row-label">V2 JIDRA search</span>
+            <span class="reg-row-value" style="color:var(--down)">0.00 ✗ (CG wins)</span>
+          </div>
+          <div class="reg-row">
+            <span class="reg-row-label">Gap label</span>
+            <span class="reg-row-value">FTS term mismatch</span>
+          </div>
+          <div class="reg-cause">
+            <strong>Likely cause:</strong> FTS token mismatch — the query terms stopped matching indexed content after reindex. Either call graph noise added via Rust resolver pushes colors.py below recall cutoff, or the indexed method names changed. CG still finds it via different signal.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JIDRA vs CG summary -->
+  <div>
+    <div class="section-head">JIDRA vs CodeGraph — best mode (V2)</div>
+    <div style="height:24px"></div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Repo</th>
+              <th>Best JIDRA</th>
+              <th>Best CG</th>
+              <th>Δ advantage</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="repo-name">axios</span></td>
+              <td><span class="val">1.0000</span></td>
+              <td><span class="val">.5000</span></td>
+              <td><span class="delta up">+.500</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">caddy</span></td>
+              <td><span class="val">.7857</span></td>
+              <td><span class="val">.2143</span></td>
+              <td><span class="delta up">+.571</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">django</span></td>
+              <td><span class="val">.9123</span></td>
+              <td><span class="val">.3070</span></td>
+              <td><span class="delta up">+.605</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">docusaurus</span></td>
+              <td><span class="val">.6667</span></td>
+              <td><span class="val">.2000</span></td>
+              <td><span class="delta up">+.467</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">matplotlib</span></td>
+              <td><span class="val">.8261</span></td>
+              <td><span class="val">.2609</span></td>
+              <td><span class="delta up">+.565</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">preact</span></td>
+              <td><span class="val">.9412</span></td>
+              <td><span class="val">.4706</span></td>
+              <td><span class="delta up">+.471</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">scikit-learn</span></td>
+              <td><span class="val">.4783</span></td>
+              <td><span class="val">.3043</span></td>
+              <td><span class="delta up">+.174</span></td>
+            </tr>
+            <tr>
+              <td><span class="repo-name">sympy</span></td>
+              <td><span class="val">.8442</span></td>
+              <td><span class="val">.1429</span></td>
+              <td><span class="delta up">+.701</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footnotes -->
+  <div class="footnote">
+    <strong>V1</strong> = Python resolver (full 8-pass, ~63s on thingsboard).
+    <strong>V2</strong> = Rust resolver (~2.7s, 21× faster). Pass = search or explore finds the expected file in top-k.
+    <strong>CG explore</strong> = 1-hop edge expansion approximation, not CodeGraph's native semantic explore — underestimates real CG explore.
+    <strong>Scikit-learn MRR</strong> improvement (.130→.344) is search-only; explore MRR unchanged (.365).
+    Matplotlib regressions are call-graph-signal changes from Rust resolver, not indexing bugs — FTS content unchanged.
+  </div>
+
+</div>

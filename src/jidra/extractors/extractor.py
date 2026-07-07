@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,13 @@ from ..models import (
 )
 from ..engine.parallel import parallel_map
 from ..utils.parser import make_parser
+
+try:
+    import jidra_resolver as _jidra_resolver
+    _RUST_RESOLVER_AVAILABLE = True
+except ImportError:
+    _jidra_resolver = None
+    _RUST_RESOLVER_AVAILABLE = False
 
 
 @dataclass
@@ -2272,6 +2280,7 @@ def _build_java_graph(
         )
     )
 
+    t0 = time.perf_counter()
     for result in parallel_map(_extract_file, file_paths):
         all_classes.extend(result.classes)
         all_methods.extend(result.methods)
@@ -2280,6 +2289,7 @@ def _build_java_graph(
         all_inheritance_edges.extend(result.inheritance_edges)
         if on_progress:
             on_progress(1, 1)
+    t1 = time.perf_counter()
 
     graph = Graph(
         classes=all_classes,
@@ -2290,7 +2300,10 @@ def _build_java_graph(
         resolved_call_edges=[],
     )
 
-    _resolve_calls(graph)
+    if not _RUST_RESOLVER_AVAILABLE:
+        _resolve_calls(graph)
+    t2 = time.perf_counter()
+    print(f"[jidra-timing] extract={t1-t0:.2f}s resolve={'rust' if _RUST_RESOLVER_AVAILABLE else f'{t2-t1:.2f}s'}", flush=True)
 
     return graph
 
@@ -2516,6 +2529,69 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
     )
 
 
+def _marshal_for_rust(graph: "Graph") -> tuple:
+    """Convert Graph dataclasses to the flat tuples jidra_resolver expects."""
+    methods = [
+        (
+            m.id, m.class_id, m.class_full_name, m.method_name,
+            m.return_type, m.parameter_types, m.parameter_names,
+            m.file_path, m.language, m.local_variable_types, m.field_reads,
+        )
+        for m in graph.methods
+    ]
+    classes = [
+        (
+            c.id, c.full_name, c.package_name, c.file_path,
+            c.stereotypes, c.implements, c.extends or "", c.imports,
+        )
+        for c in graph.classes
+    ]
+    callsites = [
+        (
+            cs.id, cs.caller_method_id, cs.callee_name,
+            cs.receiver,  # Option<String> — None or str
+            cs.receiver_type_raw or "",
+            cs.argument_count, cs.argument_types, cs.text, cs.file_path,
+        )
+        for cs in graph.callsites
+    ]
+    edges = [
+        (e.source_class, e.target_class, e.relation)
+        for e in graph.inheritance_edges
+    ]
+    fields = [
+        (f.class_id, f.name, f.type_name)
+        for f in graph.fields
+    ]
+    return methods, classes, callsites, edges, fields
+
+
+def _rust_resolve_and_store(
+    db_path: str,
+    graph: "Graph",
+    module_id: str | None = None,
+) -> None:
+    """Call jidra_resolver.resolve_and_store once for all callsites.
+
+    Rust derives main/test variant per callsite from its file_path — avoids
+    building the LookupTable twice (once per variant).
+    """
+    methods, classes, callsites, edges, fields = _marshal_for_rust(graph)
+    if not callsites:
+        return
+
+    stats = _jidra_resolver.resolve_and_store(
+        methods, classes, callsites, edges, fields,
+        db_path, "main", module_id,  # variant arg is ignored by Rust; kept for API compat
+    )
+    print(
+        f"[jidra-rust] module={module_id} "
+        f"resolved={stats.resolved}/{stats.total_callsites} "
+        f"duration={stats.duration_ms}ms",
+        flush=True,
+    )
+
+
 def build_graph_partitioned(
     codebase_root: Path,
     output_dir: Path,
@@ -2542,16 +2618,46 @@ def build_graph_partitioned(
     modules = _detect_build_directories(str(codebase_root))
 
     if len(modules) <= 1:
+        _t0 = time.perf_counter()
         graph = build_graph(codebase_root, on_progress=on_progress)
+        _t1 = time.perf_counter()
         graph_store.save_full_graph(conn, graph)
+        _t2 = time.perf_counter()
+        if _RUST_RESOLVER_AVAILABLE:
+            _rust_resolve_and_store(str(db_path), graph)
+        _t3 = time.perf_counter()
+        print(
+            f"[jidra-timing] extract={_t1-_t0:.2f}s "
+            f"store={_t2-_t1:.2f}s "
+            f"rust_resolve={_t3-_t2:.2f}s",
+            flush=True,
+        )
         return {"multi_module": False, "db_path": str(db_path), "modules": {}}
 
     index: dict[str, str] = {}
+    _extract_total = 0.0
+    _store_total = 0.0
+    _rust_total = 0.0
     for tool, module_dir in modules:
         module_name = module_dir.name
+        _t0 = time.perf_counter()
         module_graph = build_graph(module_dir, on_progress=on_progress)
+        _t1 = time.perf_counter()
         graph_store.save_full_graph(conn, module_graph, module_id=module_name)
+        _t2 = time.perf_counter()
+        if _RUST_RESOLVER_AVAILABLE:
+            _rust_resolve_and_store(str(db_path), module_graph, module_id=module_name)
+        _t3 = time.perf_counter()
+        _extract_total += _t1 - _t0
+        _store_total += _t2 - _t1
+        _rust_total += _t3 - _t2
         graph_store.save_module_metadata(conn, module_name, str(module_dir), tool)
         index[module_name] = str(module_dir)
+    print(
+        f"[jidra-timing] extract={_extract_total:.2f}s "
+        f"store={_store_total:.2f}s "
+        f"rust_resolve={_rust_total:.2f}s",
+        flush=True,
+    )
 
     return {"multi_module": True, "db_path": str(db_path), "modules": index}
