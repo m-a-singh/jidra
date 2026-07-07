@@ -2359,6 +2359,7 @@ def _up() -> None:
     # Always install git hooks silently
     try:
         from .utils.git_hooks import install_hooks as _install_hooks
+
         _install_hooks(repo, graph_validated_path)
         ui.success("Git hooks installed (post-commit / post-merge / post-checkout)")
     except Exception:
