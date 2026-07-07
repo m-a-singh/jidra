@@ -236,7 +236,7 @@ def validate_methods(methods: list) -> None:
         "language": sparse_language,
     }
     for fname, sparse_list in field_sparse_map.items():
-        pct = _pct(len(sparse_list), total)
+        # pct = _pct(len(sparse_list), total)
         if (total - len(sparse_list)) / total < 0.5:
             _sample(sparse_list, f"method ids missing {fname}")
 
@@ -320,7 +320,7 @@ def validate_classes(classes: list) -> None:
         "extends",
         "imports",
     ]:
-        pct = _pct(counts[field_name], total)
+        # pct = _pct(counts[field_name], total)
         extra = ""
         if field_name == "imports":
             extra = f"  [{total - counts['imports']} empty]"
