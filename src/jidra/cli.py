@@ -1400,6 +1400,7 @@ def _index(
         _RUST_RESOLVER_AVAILABLE,
         _rust_resolve_and_store,
     )
+
     if _RUST_RESOLVER_AVAILABLE:
         conn.close()
         _rust_resolve_and_store(str(db_path), graph)
