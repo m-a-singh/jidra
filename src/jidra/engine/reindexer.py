@@ -373,9 +373,7 @@ def incremental_reindex(
 
     if not changed_files_paths:
         # All changed files were deleted — strip their records, no parse needed.
-        graph_store.delete_for_files(
-            conn, deleted_files_set, variant=_REINDEX_VARIANT
-        )
+        graph_store.delete_for_files(conn, deleted_files_set, variant=_REINDEX_VARIANT)
         last_indexed_at_ns = int(time.time_ns())
         save_manifest(graph_dir, current_fps, last_indexed_at_ns)
         elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
@@ -391,9 +389,7 @@ def incremental_reindex(
     # Eagerly purge deleted files before diff so removed methods don't appear as
     # "existing" and confuse diff_graph_records into a metadata_only/callsite path.
     if deleted_files_set:
-        graph_store.delete_for_files(
-            conn, deleted_files_set, variant=_REINDEX_VARIANT
-        )
+        graph_store.delete_for_files(conn, deleted_files_set, variant=_REINDEX_VARIANT)
         existing_graph.classes = [
             c for c in existing_graph.classes if c.file_path not in deleted_files_set
         ]
