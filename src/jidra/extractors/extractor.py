@@ -30,6 +30,7 @@ from ..utils.parser import make_parser
 
 try:
     import jidra_resolver as _jidra_resolver
+
     _RUST_RESOLVER_AVAILABLE = True
 except ImportError:
     _jidra_resolver = None
@@ -2303,7 +2304,10 @@ def _build_java_graph(
     if not _RUST_RESOLVER_AVAILABLE:
         _resolve_calls(graph)
     t2 = time.perf_counter()
-    print(f"[jidra-timing] extract={t1-t0:.2f}s resolve={'rust' if _RUST_RESOLVER_AVAILABLE else f'{t2-t1:.2f}s'}", flush=True)
+    print(
+        f"[jidra-timing] extract={t1 - t0:.2f}s resolve={'rust' if _RUST_RESOLVER_AVAILABLE else f'{t2 - t1:.2f}s'}",
+        flush=True,
+    )
 
     return graph
 
@@ -2533,36 +2537,51 @@ def _marshal_for_rust(graph: "Graph") -> tuple:
     """Convert Graph dataclasses to the flat tuples jidra_resolver expects."""
     methods = [
         (
-            m.id, m.class_id, m.class_full_name, m.method_name,
-            m.return_type, m.parameter_types, m.parameter_names,
-            m.file_path, m.language, m.local_variable_types, m.field_reads,
+            m.id,
+            m.class_id,
+            m.class_full_name,
+            m.method_name,
+            m.return_type,
+            m.parameter_types,
+            m.parameter_names,
+            m.file_path,
+            m.language,
+            m.local_variable_types,
+            m.field_reads,
         )
         for m in graph.methods
     ]
     classes = [
         (
-            c.id, c.full_name, c.package_name, c.file_path,
-            c.stereotypes, c.implements, c.extends or "", c.imports,
+            c.id,
+            c.full_name,
+            c.package_name,
+            c.file_path,
+            c.stereotypes,
+            c.implements,
+            c.extends or "",
+            c.imports,
         )
         for c in graph.classes
     ]
     callsites = [
         (
-            cs.id, cs.caller_method_id, cs.callee_name,
+            cs.id,
+            cs.caller_method_id,
+            cs.callee_name,
             cs.receiver,  # Option<String> — None or str
             cs.receiver_type_raw or "",
-            cs.argument_count, cs.argument_types, cs.text, cs.file_path,
+            cs.argument_count,
+            cs.argument_types,
+            cs.text,
+            cs.file_path,
         )
         for cs in graph.callsites
     ]
     edges = [
-        (e.source_class, e.target_class, e.relation)
-        for e in graph.inheritance_edges
+        (e.source_class, e.target_class, e.relation) for e in graph.inheritance_edges
     ]
-    fields = [
-        (f.class_id, f.name, f.type_name)
-        for f in graph.fields
-    ]
+    fields = [(f.class_id, f.name, f.type_name) for f in graph.fields]
     return methods, classes, callsites, edges, fields
 
 
@@ -2581,8 +2600,14 @@ def _rust_resolve_and_store(
         return
 
     stats = _jidra_resolver.resolve_and_store(
-        methods, classes, callsites, edges, fields,
-        db_path, "main", module_id,  # variant arg is ignored by Rust; kept for API compat
+        methods,
+        classes,
+        callsites,
+        edges,
+        fields,
+        db_path,
+        "main",
+        module_id,  # variant arg is ignored by Rust; kept for API compat
     )
     print(
         f"[jidra-rust] module={module_id} "
@@ -2627,9 +2652,9 @@ def build_graph_partitioned(
             _rust_resolve_and_store(str(db_path), graph)
         _t3 = time.perf_counter()
         print(
-            f"[jidra-timing] extract={_t1-_t0:.2f}s "
-            f"store={_t2-_t1:.2f}s "
-            f"rust_resolve={_t3-_t2:.2f}s",
+            f"[jidra-timing] extract={_t1 - _t0:.2f}s "
+            f"store={_t2 - _t1:.2f}s "
+            f"rust_resolve={_t3 - _t2:.2f}s",
             flush=True,
         )
         return {"multi_module": False, "db_path": str(db_path), "modules": {}}
