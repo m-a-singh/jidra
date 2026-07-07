@@ -82,7 +82,9 @@ def _ok(msg: str) -> None:
 def _sample(items: list[Any], label: str, n: int = 3) -> None:
     if not items:
         return
-    print(f"    {BOLD}Sample {label} (first {min(n, len(items))} of {len(items)}):{RESET}")
+    print(
+        f"    {BOLD}Sample {label} (first {min(n, len(items))} of {len(items)}):{RESET}"
+    )
     for item in items[:n]:
         print(f"      {item!r}")
 
@@ -90,6 +92,7 @@ def _sample(items: list[Any], label: str, n: int = 3) -> None:
 # ---------------------------------------------------------------------------
 # MethodData validation
 # ---------------------------------------------------------------------------
+
 
 def validate_methods(methods: list) -> None:
     _section("MethodData")
@@ -100,16 +103,28 @@ def validate_methods(methods: list) -> None:
         return
 
     # Field population counters
-    counts: dict[str, int] = {f: 0 for f in [
-        "id", "class_id", "class_full_name", "method_name",
-        "return_type", "parameter_types", "parameter_names",
-        "file_path", "language",
-        "local_variable_types", "field_reads",
-    ]}
+    counts: dict[str, int] = {
+        f: 0
+        for f in [
+            "id",
+            "class_id",
+            "class_full_name",
+            "method_name",
+            "return_type",
+            "parameter_types",
+            "parameter_names",
+            "file_path",
+            "language",
+            "local_variable_types",
+            "field_reads",
+        ]
+    }
 
     # Specific issue tracking
     return_type_none: list[str] = []
-    param_len_mismatch: list[tuple[str, int, int]] = []  # (method id, len(types), len(names))
+    param_len_mismatch: list[
+        tuple[str, int, int]
+    ] = []  # (method id, len(types), len(names))
     lvt_bad_values: list[str] = []  # method ids where lvt has non-str values
     sparse_return: list[str] = []
     sparse_param_types: list[str] = []
@@ -174,9 +189,17 @@ def validate_methods(methods: list) -> None:
     # Print field-level table
     print()
     for field_name in [
-        "id", "class_id", "class_full_name", "method_name",
-        "return_type", "parameter_types", "parameter_names",
-        "file_path", "language", "local_variable_types", "field_reads",
+        "id",
+        "class_id",
+        "class_full_name",
+        "method_name",
+        "return_type",
+        "parameter_types",
+        "parameter_names",
+        "file_path",
+        "language",
+        "local_variable_types",
+        "field_reads",
     ]:
         pct = _pct(counts[field_name], total)
         extra = ""
@@ -187,7 +210,9 @@ def validate_methods(methods: list) -> None:
     # Warnings
     print()
     if return_type_none:
-        _error(f"return_type is None on {len(return_type_none)} method(s) — contract requires non-None")
+        _error(
+            f"return_type is None on {len(return_type_none)} method(s) — contract requires non-None"
+        )
         _sample(return_type_none, "method ids with None return_type")
 
     if param_len_mismatch:
@@ -223,6 +248,7 @@ def validate_methods(methods: list) -> None:
 # ClassData validation
 # ---------------------------------------------------------------------------
 
+
 def validate_classes(classes: list) -> None:
     _section("ClassData")
     total = len(classes)
@@ -231,10 +257,19 @@ def validate_classes(classes: list) -> None:
         _warn("No classes found.")
         return
 
-    counts: dict[str, int] = {f: 0 for f in [
-        "id", "full_name", "package_name", "file_path",
-        "stereotypes", "implements", "extends", "imports",
-    ]}
+    counts: dict[str, int] = {
+        f: 0
+        for f in [
+            "id",
+            "full_name",
+            "package_name",
+            "file_path",
+            "stereotypes",
+            "implements",
+            "extends",
+            "imports",
+        ]
+    }
 
     java_total = 0
     java_imports_empty: list[str] = []
@@ -275,8 +310,16 @@ def validate_classes(classes: list) -> None:
                 java_imports_empty.append(cid)
 
     print()
-    for field_name in ["id", "full_name", "package_name", "file_path",
-                       "stereotypes", "implements", "extends", "imports"]:
+    for field_name in [
+        "id",
+        "full_name",
+        "package_name",
+        "file_path",
+        "stereotypes",
+        "implements",
+        "extends",
+        "imports",
+    ]:
         pct = _pct(counts[field_name], total)
         extra = ""
         if field_name == "imports":
@@ -307,6 +350,7 @@ def validate_classes(classes: list) -> None:
 # CallSiteData validation
 # ---------------------------------------------------------------------------
 
+
 def validate_callsites(callsites: list) -> None:
     _section("CallSiteData")
     total = len(callsites)
@@ -315,12 +359,20 @@ def validate_callsites(callsites: list) -> None:
         _warn("No call sites found.")
         return
 
-    counts: dict[str, int] = {f: 0 for f in [
-        "id", "caller_method_id", "callee_name",
-        "receiver", "receiver_type_raw",
-        "argument_count", "argument_types",
-        "text", "file_path",
-    ]}
+    counts: dict[str, int] = {
+        f: 0
+        for f in [
+            "id",
+            "caller_method_id",
+            "callee_name",
+            "receiver",
+            "receiver_type_raw",
+            "argument_count",
+            "argument_types",
+            "text",
+            "file_path",
+        ]
+    }
 
     receiver_none: int = 0
     arg_count_mismatch: list[str] = []
@@ -374,10 +426,15 @@ def validate_callsites(callsites: list) -> None:
 
     print()
     for field_name in [
-        "id", "caller_method_id", "callee_name",
-        "receiver", "receiver_type_raw",
-        "argument_count", "argument_types",
-        "text", "file_path",
+        "id",
+        "caller_method_id",
+        "callee_name",
+        "receiver",
+        "receiver_type_raw",
+        "argument_count",
+        "argument_types",
+        "text",
+        "file_path",
     ]:
         pct = _pct(counts[field_name], total)
         extra = ""
@@ -402,7 +459,7 @@ def validate_callsites(callsites: list) -> None:
     pct_receiver = _pct(counts["receiver"], total)
     if pct_receiver < 50:
         _warn(
-            f"receiver is None on {receiver_none}/{total} call sites ({100-pct_receiver:.1f}%) — "
+            f"receiver is None on {receiver_none}/{total} call sites ({100 - pct_receiver:.1f}%) — "
             "expected for static/constructors; verify it's not a parse gap"
         )
 
@@ -421,6 +478,7 @@ def validate_callsites(callsites: list) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     if len(sys.argv) != 2:
@@ -454,7 +512,9 @@ def main() -> None:
     validate_callsites(graph.callsites)
 
     _section("Done")
-    print(f"  Validation complete. Review {RED}[ERROR]{RESET} and {YELLOW}[WARN]{RESET} lines above.")
+    print(
+        f"  Validation complete. Review {RED}[ERROR]{RESET} and {YELLOW}[WARN]{RESET} lines above."
+    )
     print()
 
 
