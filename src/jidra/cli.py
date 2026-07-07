@@ -1395,6 +1395,15 @@ def _index(
 
     save_cache(output_path, {"fingerprint": fp, "manifest": manifest})
 
+    # Rust resolution runs after all Python writes are committed.
+    from .extractors.extractor import (
+        _RUST_RESOLVER_AVAILABLE,
+        _rust_resolve_and_store,
+    )
+    if _RUST_RESOLVER_AVAILABLE:
+        conn.close()
+        _rust_resolve_and_store(str(db_path), graph)
+
     health = compute_graph_health(graph)
 
     if not _quiet:

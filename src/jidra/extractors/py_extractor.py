@@ -682,7 +682,7 @@ def _extract_py_file(file_path: Path, codebase_root: Path) -> Graph | None:
             resolved_call_edges=[],
         )
     except SyntaxError as e:
-        logger.warning(f"Syntax error in {file_path}: {e}")
+        logger.debug(f"Syntax error in {file_path}: {e}")
         return None
     except Exception as e:
         logger.warning(f"Error parsing {file_path}: {e}")
