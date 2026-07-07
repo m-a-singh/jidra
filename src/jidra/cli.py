@@ -2356,6 +2356,14 @@ def _up() -> None:
     # Agent + skills — same as init
     _install_agent(repo)
 
+    # Always install git hooks silently
+    try:
+        from .utils.git_hooks import install_hooks as _install_hooks
+        _install_hooks(repo, graph_validated_path)
+        ui.success("Git hooks installed (post-commit / post-merge / post-checkout)")
+    except Exception:
+        pass
+
     ready_rows = [
         ("Graph", str(graph_validated_path)),
         ("Config", str(repo / ".mcp.json")),
