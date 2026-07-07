@@ -1711,8 +1711,13 @@ def delete_for_files(
 
     if method_ids:
         mph = ",".join("?" for _ in method_ids)
+        # Edges where deleted methods are caller OR callee — both directions.
         conn.execute(
             f"DELETE FROM resolved_call_edges WHERE variant = ? AND module_id IS ? AND caller_method_id IN ({mph})",
+            (variant, module_id, *method_ids),
+        )
+        conn.execute(
+            f"DELETE FROM resolved_call_edges WHERE variant = ? AND module_id IS ? AND callee_method_id IN ({mph})",
             (variant, module_id, *method_ids),
         )
 
