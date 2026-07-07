@@ -21,4 +21,9 @@ ui/dist/
 .idea
 .idea/
 jidra.iml
-jidra.iml
+
+# Rust build artifacts
+target/
+
+# Eval results (generated, not source)
+evals/dataset/results/
