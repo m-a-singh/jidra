@@ -395,8 +395,8 @@ async def index_status(repo_path: str, output_path: str | None = None) -> dict:
         except sqlite3.OperationalError:
             pass
         conn.close()
-        variant = "validated" if validated > 0 else "main"
-        count = validated if validated > 0 else main
+        count = main if main > 0 else validated
+        variant = "main" if main > 0 else "validated"
         return {
             "indexed": count > 0,
             "variant": variant,
