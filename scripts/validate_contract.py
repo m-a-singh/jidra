@@ -201,7 +201,7 @@ def validate_methods(methods: list) -> None:
         "local_variable_types",
         "field_reads",
     ]:
-        pct = _pct(counts[field_name], total)
+        # pct = _pct(counts[field_name], total)
         extra = ""
         if field_name == "return_type" and return_type_none:
             extra = f"  [{len(return_type_none)} None]"
