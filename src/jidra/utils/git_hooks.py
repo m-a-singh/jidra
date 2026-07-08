@@ -48,7 +48,9 @@ def _hook_body(name: str, graph_path: Path) -> str:
         f"{guard}"
         f"changed=$({diff} 2>/dev/null | grep -E '{_EXT_RE}')\n"
         f'[ -z "$changed" ] && exit 0\n'
-        f'{reindex} --changed-files $changed >> "${{GIT_DIR:-.git}}/../.jidra/reindex.log" 2>&1 &\n'
+        f'_jidra_log="${{GIT_DIR:-.git}}/../.jidra/reindex.log"\n'
+        f'_jidra_pid="${{GIT_DIR:-.git}}/../.jidra/reindex.pid"\n'
+        f'( {reindex} --changed-files $changed >> "$_jidra_log" 2>&1 & echo $! > "$_jidra_pid"; wait; rm -f "$_jidra_pid" ) &\n'
         f"{END}\n"
     )
 

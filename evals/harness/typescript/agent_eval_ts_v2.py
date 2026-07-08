@@ -261,8 +261,14 @@ async def run_async(args) -> None:
             print(
                 f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
             )
+            _skill_system = ae.SYSTEM if be.name == "jidra" else ae._SYSTEM_BASE
             rr = await ae.run_agent(
-                client, args.model, be, task.prompt, label=f"{task.id}/{be.name}"
+                client,
+                args.model,
+                be,
+                task.prompt,
+                label=f"{task.id}/{be.name}",
+                system=_skill_system,
             )
             rr.task = task.id
             note = "run_error"
@@ -346,7 +352,14 @@ def main() -> None:
     ap.add_argument("--out", default="results/eval_agent_results_ts_v2.json")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--selfcheck", action="store_true")
+    ap.add_argument(
+        "--skill",
+        default="",
+        help="path to a skill/agent .md file — body appended to SYSTEM prompt (YAML frontmatter stripped)",
+    )
     args = ap.parse_args()
+    if args.skill:
+        ae.SYSTEM = ae._SYSTEM_BASE + "\n\n" + ae._load_skill(args.skill)
     if args.selfcheck:
         raise SystemExit(0 if selfcheck(args.graph, args.config) else 1)
     if not args.codebase:

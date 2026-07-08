@@ -22,12 +22,25 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
   const [skipFolders, setSkipFolders] = useState<string[]>([]);
   const [log, setLog] = useState<LogLine[]>([]);
   const [running, setRunning] = useState(false);
-  const [reindexing, setReindexing] = useState(false);
-  const [hooking, setHooking] = useState(false);
+  const [bgReindex, setBgReindex] = useState<{ running: boolean; pid: number | null }>({ running: false, pid: null });
+  const [stopping, setStopping] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   useEffect(() => {
     if (!repoPath) { setStatus(null); return; }
     api.index.status(repoPath, outputPath || undefined).then(setStatus).catch(() => setStatus({ indexed: false }));
+  }, [repoPath, outputPath]);
+
+  useEffect(() => {
+    if (!repoPath) return;
+    function poll() {
+      api.index.reindexStatus(repoPath, outputPath || undefined)
+        .then((s) => setBgReindex({ running: s.running, pid: s.pid }))
+        .catch(() => {});
+    }
+    poll();
+    const id = setInterval(poll, 3000);
+    return () => clearInterval(id);
   }, [repoPath, outputPath]);
 
   const push = (text: string, kind: LogLine["kind"] = "plain") =>
@@ -64,38 +77,17 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
             d.phase === "complete" ? "ok" :
             d.phase === "start"    ? "run" : "plain";
           push(d.msg ?? "", kind);
-          if (d.phase === "complete") { setRunning(false); refreshStatus(); }
+          if (d.phase === "complete") {
+            setRunning(false);
+            refreshStatus();
+            setLogOpen(true);
+            api.index.hooks({ repo_path: repoPath, output_path: outputPath || undefined, action: "install" })
+              .then((res) => push(`Git hooks installed: ${res.hooks.join(", ") || "(none)"}`, "ok"))
+              .catch(() => {});
+          }
         }
       }
     );
-  }
-
-  async function reindex() {
-    if (!repoPath) { push("set a repo path first", "err"); return; }
-    setReindexing(true);
-    push("Incremental reindex started…", "run");
-    try {
-      const res = await api.index.reindex({ repo_path: repoPath, output_path: outputPath || undefined });
-      push(`Reindex done: ${JSON.stringify(res.summary)}`, "ok");
-      refreshStatus();
-    } catch (e) {
-      push(String(e).replace("Error: ", ""), "err");
-    } finally {
-      setReindexing(false);
-    }
-  }
-
-  async function installHooks() {
-    if (!repoPath) { push("set a repo path first", "err"); return; }
-    setHooking(true);
-    try {
-      const res = await api.index.hooks({ repo_path: repoPath, output_path: outputPath || undefined, action: "install" });
-      push(`Git hooks installed: ${res.hooks.join(", ") || "(none)"}`, "ok");
-    } catch (e) {
-      push(String(e).replace("Error: ", ""), "err");
-    } finally {
-      setHooking(false);
-    }
   }
 
   return (
@@ -196,23 +188,36 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
         )}
       </div>
 
-      <div className="flex gap-4 items-center mt-4 mb-12">
-        <Button variant="default" disabled={reindexing || !repoPath} onClick={reindex} className="px-5 py-2.5 text-sm">
-          {reindexing ? "reindexing…" : "↻ incremental reindex"}
-        </Button>
-        <Button variant="default" disabled={hooking || !repoPath} onClick={installHooks} className="px-5 py-2.5 text-sm">
-          {hooking ? "installing…" : "⚓ install git hooks"}
-        </Button>
-        <span className="text-xs text-text-faint">
-          reindex updates graph for changed files only · hooks auto-reindex on commit
-        </span>
-      </div>
+      {bgReindex.running && (
+        <div className="flex items-center gap-3 mt-3 mb-2 px-3 py-2 rounded-md bg-accent-subtle border border-accent-dim text-sm">
+          <span className="inline-block w-2 h-2 rounded-full bg-accent animate-pulse" />
+          <span className="text-accent font-medium">background reindex running</span>
+          {bgReindex.pid && <span className="text-text-faint text-xs">pid {bgReindex.pid}</span>}
+          <Button
+            variant="running"
+            disabled={stopping}
+            className="ml-auto px-3 py-1 text-xs h-auto"
+            onClick={async () => {
+              setStopping(true);
+              await api.index.reindexStop({ repo_path: repoPath, output_path: outputPath || undefined }).catch(() => {});
+              setBgReindex({ running: false, pid: null });
+              setStopping(false);
+            }}
+          >
+            {stopping ? "stopping…" : "■ stop"}
+          </Button>
+        </div>
+      )}
 
-      <div className="text-xs text-text-dim tracking-widest uppercase mb-5 flex items-center gap-2 after:flex-1 after:h-px after:bg-gradient-to-r after:from-border-mid after:to-transparent">
-        output log
-      </div>
+      <button
+        className="w-full text-left text-xs text-text-dim tracking-widest uppercase mt-6 mb-2 flex items-center gap-2 after:flex-1 after:h-px after:bg-gradient-to-r after:from-border-mid after:to-transparent"
+        onClick={() => setLogOpen((o) => !o)}
+      >
+        <span>{logOpen ? "▾" : "▸"} output log</span>
+        {log.length > 0 && <span className="text-text-faint normal-case tracking-normal">{log.length} lines</span>}
+      </button>
 
-      <OutputLog logs={log} />
+      {logOpen && <OutputLog logs={log} />}
     </div>
   );
 }
