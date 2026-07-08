@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -2375,58 +2377,77 @@ def build_graph(
     if not langs:
         langs = ["java"]  # backward-compat fallback
 
-    graphs: list[Graph] = []
-
-    if "typescript" in langs:
+    def _extract_typescript() -> Graph:
         from .ts_extractor import build_ts_graph
 
         # "tsmorph" selects the Docker sidecar; auto/treesitter stay in-process.
         backend = "tsmorph" if ts_backend == "tsmorph" else ts_backend
-        graphs.append(
-            build_ts_graph(
-                codebase_root,
-                on_progress=on_progress,
-                backend=backend,
-                skip_folders=skip_folders,
-            )
+        return build_ts_graph(
+            codebase_root,
+            on_progress=on_progress,
+            backend=backend,
+            skip_folders=skip_folders,
         )
 
-    if "python" in langs:
+    def _extract_python() -> Graph:
         from .py_extractor import build_py_graph
 
-        graphs.append(
-            build_py_graph(
-                codebase_root, on_progress=on_progress, skip_folders=skip_folders
-            )
+        return build_py_graph(
+            codebase_root, on_progress=on_progress, skip_folders=skip_folders
         )
 
-    if "scala" in langs:
+    def _extract_scala() -> Graph:
         from .scala_extractor import build_scala_graph
 
-        scala_graph = build_scala_graph(codebase_root, on_progress=on_progress)
-        graphs.append(scala_graph)
+        return build_scala_graph(codebase_root, on_progress=on_progress)
 
-    if "go" in langs:
+    def _extract_go() -> Graph:
         from .go_extractor import build_go_graph
 
-        graphs.append(
-            build_go_graph(
-                codebase_root, on_progress=on_progress, skip_folders=skip_folders
-            )
+        return build_go_graph(
+            codebase_root, on_progress=on_progress, skip_folders=skip_folders
         )
 
-    if "java" in langs:
-        java_graph = _build_java_graph(
+    def _extract_java() -> Graph:
+        g = _build_java_graph(
             codebase_root,
             on_progress=on_progress,
             extra_java_roots=extra_java_roots,
             skip_folders=skip_folders,
         )
-        for cls in java_graph.classes:
+        for cls in g.classes:
             cls.language = "java"
-        for m in java_graph.methods:
+        for m in g.methods:
             m.language = "java"
-        graphs.append(java_graph)
+        return g
+
+    lang_tasks: dict[str, Any] = {
+        "typescript": _extract_typescript,
+        "python": _extract_python,
+        "scala": _extract_scala,
+        "go": _extract_go,
+        "java": _extract_java,
+    }
+    active = [(lang, fn) for lang, fn in lang_tasks.items() if lang in langs]
+
+    def _timed(lang: str, fn: Any) -> Graph:
+        print(f"  [{lang}] parsing ...", flush=True)
+        t0 = time.perf_counter()
+        result = fn()
+        elapsed = time.perf_counter() - t0
+        print(f"  [{lang}] done ({elapsed:.1f}s)", flush=True)
+        return result
+
+    if len(active) == 1:
+        graphs = [_timed(*active[0])]
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        graphs = []
+        with ThreadPoolExecutor(max_workers=len(active)) as pool:
+            futures = {pool.submit(_timed, lang, fn): lang for lang, fn in active}
+            for fut in as_completed(futures):
+                graphs.append(fut.result())
 
     if len(graphs) == 1:
         return graphs[0]

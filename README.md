@@ -121,14 +121,12 @@ JIDRA was evaluated against the [CodeGraph](https://github.com/colbymchenry/code
 
 ### Java (Spring Boot monorepo, ~1,200 methods, 8 tasks)
 
-| Config | Backend | correct | avg tool calls | avg tokens | halluc. |
+| Backend | correct | avg tool calls | avg tokens | total cost | halluc. |
 |---|---|---|---|---|---|
-| **A (runtime Actuator)** | **JIDRA** | **8/8** | **3.0** | **~18.9k** | 0/8 |
-| A (runtime Actuator) | CodeGraph | 7/8 | 4.9 | ~65.2k | 0/8 |
-| **B (static only)** | **JIDRA** | **8/8** | **3.9** | **~26.0k** | 0/8 |
-| B (static only) | CodeGraph | 7/8 | 5.0 | ~68.3k | 0/8 |
+| **JIDRA** (+ tool selection skill) | **8/8** | **1.6** | **18.4k** | **$0.131** | 0/8 |
+| CodeGraph | 7/8 | 2.4 | 36.6k | $0.248 | 0/8 |
 
-JIDRA 8/8 all runs. CodeGraph permanently fails T1 (can't produce exact implementation counts — blast-radius design gap). Runtime Actuator grounding cut JIDRA ~27% tokens and ~1 tool call vs static-only.
+**2.0× token ratio.** JIDRA 8/8; CodeGraph permanently fails T1 (can't produce exact implementation counts — blast-radius design gap). T4 standout: JIDRA 2c/8k vs CG 5c/108k (13×). T1/T3 avg pulled up by stochastic `limit=100`/`depth=10` parameter over-reach; stripping those two outliers: ~12.8k avg, ~4–5× ratio. Tool selection skill (decision table + few-shot ✓/✗ examples) routes existence checks → `get_implementations`, method existence → `get_method_source`, behavioral search → `jidra_explore`. Full per-task data: [docs/archive/FINDINGS_jidra_vs_codegraph_v18.md](docs/archive/FINDINGS_jidra_vs_codegraph_v18.md).
 
 ### Python (~891–1,100 methods, 5 tasks)
 
@@ -138,23 +136,24 @@ JIDRA 8/8 all runs. CodeGraph permanently fails T1 (can't produce exact implemen
 
 CG fails PY1 (caller enumeration — same reverse-edge design gap as Java T3). PY4 (definition lookup in a 1,200-line file): CG used 13 calls / 533k tokens; JIDRA: 2 calls / 12k.
 
-### TypeScript (~630 methods, 5 tasks)
+### TypeScript (~630 methods, 6 tasks)
 
-| version | JIDRA correct | CG correct | JIDRA avg tok | CG avg tok | tok ratio | JIDRA cost | CG cost |
-|---|---|---|---|---|---|---|---|
-| v2 | **5/5** | 3/5 | 16,108 | 352,633 | **21.9×** | **$0.076** | $1.433 |
+| Backend | correct | avg tool calls | avg tokens | total cost | tok ratio |
+|---|---|---|---|---|---|
+| **JIDRA** (+ tool selection skill + examples) | **6/6** | **1.5** | **11.6k** | **$0.065** | — |
+| CodeGraph | 6/6 | 4.7 | 87.9k | $0.444 | **7.6×** |
 
-CG fails TS1 (caller enumeration) and TS5 (source retrieval — hit 14 iterations / 592k tokens trying to scroll past truncation boundary; JIDRA: 1 call / 5k).
+**7.6× token ratio.** Both 6/6 correct. CG TS2 stochastic spiral drove avg to 87.9k (12c/310k for a call-graph traversal); JIDRA TS2: 3c/16.9k. JIDRA TS3 (absence check): 1c/7.6k via `jidra_search(exact=True)` → 0 results → done. Full delta across 8 TypeScript runs.
 
 ### Cross-language summary
 
 | language | JIDRA | CG | token ratio | JIDRA cost | CG cost |
 |---|---|---|---|---|---|
-| Java | 8/8 | 7/8 | 1.35× | $0.156 | $0.205 |
+| Java | 8/8 | 7/8 | **2.0×** | $0.131 | $0.248 |
 | Python | 5/5 | 4/5 | **12.2×** | $0.054 | $0.573 |
-| TypeScript | 5/5 | 3/5 | **21.9×** | $0.076 | $1.433 |
+| TypeScript | **6/6** | 6/6 | **7.6×** | $0.065 | $0.444 |
 
-Java ratio is lower because Java tasks include behavioral queries (T6/T7) where CG's inline-source dumping is competitive. Python/TypeScript tasks are traversal-heavy where CG's lack of scalpel tools is fatal. Root cause in all three languages: `codegraph_explore` cannot walk reverse call edges, extract a single method from a large file by name, or count implementations with precision. JIDRA's tools answer each in 1 call.
+Java ratio is lower because Java tasks include T1/T3 stochastic bloat; ex-outliers ~4–5×. Python/TypeScript tasks are traversal-heavy where CG's lack of scalpel tools is fatal. Root cause in all three languages: `codegraph_explore` cannot walk reverse call edges, extract a single method from a large file by name, or count implementations with precision. JIDRA's tools answer each in 1 call. Tool selection skill (decision table + few-shot examples) is required for full JIDRA efficiency — without it, behavioral queries waste calls.
 
 Full methodology and per-task data: [FINDINGS_jidra_vs_codegraph.md](FINDINGS_jidra_vs_codegraph.md).
 
@@ -322,7 +321,19 @@ Output layout:
 
 Read-only code locator running on **Haiku** (`mcpServers: [jidra]`). Never edits. Never proposes fixes. Returns a `file:line` table.
 
-Tool priority: `jidra_explore` → `jidra_get_method_source` → `jidra_find_callers` → `jidra_get_agent_flow` → `jidra_get_implementations` → Read/Grep only if JIDRA returns nothing.
+Tool selection (decision table — shipped in `jidra_tool_selection.md`):
+
+| Question type | Tool |
+|---|---|
+| Does class/interface X exist? | `jidra_get_implementations("X")` → typed `interface_class_not_found` |
+| Does method X exist on class Y? | `jidra_get_method_source("Class#method")` → typed `method_not_found_on_class` |
+| Known identifier, want location | `jidra_search("Name", exact=True)` — top-5 BM25, no fan-out |
+| Behavioral / "which of N impls matches X?" | `jidra_explore("description")` — semantic ranking over full graph |
+| Who calls method X? | `jidra_find_callers("X")` |
+| What does method X call? | `jidra_get_agent_flow("X")` |
+| Stack trace → locations | `jidra_analyze_stack_trace` |
+
+Read/Grep only if JIDRA returns nothing.
 
 ### `/jidra-navigate` (skill)
 
@@ -503,9 +514,9 @@ jidra serve --graph /path/to/graph.db
 
 ### Tool surface
 
-By default only the **primary tier** (5 high-confidence tools) is visible: `jidra_explore`, `jidra_get_method_source`, `jidra_find_callers`, `jidra_get_implementations`, `jidra_analyze_stack_trace`.
+By default only the **primary tier** (7 high-confidence tools) is visible: `jidra_explore`, `jidra_get_method_source`, `jidra_find_callers`, `jidra_get_implementations`, `jidra_analyze_stack_trace`, `jidra_search`, `jidra_get_agent_flow`.
 
-Set `JIDRA_FULL_TOOLS=1` to expose all 25+ tools, including lower-precision variants (`jidra_get_flow`, `jidra_search`, etc.) and grounding tools (`jidra_query_by_annotation`, `jidra_field_access`).
+Set `JIDRA_FULL_TOOLS=1` to expose all 25+ tools, including lower-precision variants (`jidra_get_flow`, etc.) and grounding tools (`jidra_query_by_annotation`, `jidra_field_access`).
 
 Full tool reference: [docs/MCP.md](docs/MCP.md).
 

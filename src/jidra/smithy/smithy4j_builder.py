@@ -11,6 +11,8 @@ incremental reindex skips it entirely.
 from __future__ import annotations
 
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 
@@ -46,21 +48,33 @@ def build_smithy4j_sources(codebase_root: Path, timeout: int = 300) -> list[Path
     gradle_wrapper = codebase_root / "gradlew"
     gradle_cmd = str(gradle_wrapper) if gradle_wrapper.exists() else "gradle"
 
-    print(
-        f"  smithy4j detected in {len(modules)} module(s) — running gradle build to generate sources...",
-        flush=True,
-    )
-    result = subprocess.run(
-        [gradle_cmd, "clean", "build", "-x", "test"],
-        cwd=str(codebase_root),
-        capture_output=False,
-        timeout=timeout,
-    )
-    if result.returncode != 0:
-        print(
-            "  Warning: gradle build exited non-zero — smithy4j sources may be incomplete.",
-            flush=True,
+    label = f"smithy4j gradle build ({len(modules)} module(s))"
+    print(f"  {label} ...", flush=True)
+
+    start = time.monotonic()
+    try:
+        result = subprocess.run(
+            [gradle_cmd, "clean", "build", "-x", "test"],
+            cwd=str(codebase_root),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
+    except subprocess.TimeoutExpired:
+        elapsed = time.monotonic() - start
+        print(f"  {label} TIMEOUT ({elapsed:.1f}s)", flush=True)
+        return []
+
+    elapsed = time.monotonic() - start
+    if result.returncode != 0:
+        print(f"  {label} FAILED ({elapsed:.1f}s)", flush=True)
+        print("--- gradle stdout ---", flush=True)
+        sys.stdout.write(result.stdout)
+        print("--- gradle stderr ---", flush=True)
+        sys.stderr.write(result.stderr)
+        return []
+
+    print(f"  {label} done ({elapsed:.1f}s)", flush=True)
 
     generated_dirs = []
     for module_dir in modules:
@@ -68,12 +82,7 @@ def build_smithy4j_sources(codebase_root: Path, timeout: int = 300) -> list[Path
         if generated.exists():
             generated_dirs.append(generated)
 
-    if generated_dirs:
-        print(
-            f"  Found smithy4j generated sources in {len(generated_dirs)} location(s).",
-            flush=True,
-        )
-    else:
+    if not generated_dirs:
         print(
             "  Warning: gradle build completed but no smithy4j generated sources found.",
             flush=True,
