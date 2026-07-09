@@ -2069,7 +2069,6 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
         optional=True,
     )
     skip_folders = {s.strip() for s in skip_input.split(",") if s.strip()} or None
-    install_hooks = _prompt_yn("Install git hooks for auto-reindex?", True)
 
     has_java = "java" in langs or "kotlin" in langs or "scala" in langs
     actuator_url: str | None = None
@@ -2156,17 +2155,6 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
     # MCP config — write .mcp.json into repo with explicit paths
     ui.section(3, 3, "MCP configuration")
     _write_mcp_json(repo, graph_path)
-
-    # Git hooks
-    if install_hooks:
-        from .utils.git_hooks import install_hooks as _install_hooks
-
-        try:
-            installed = _install_hooks(repo, graph_path)
-            if installed:
-                ui.success(f"Git hooks installed: {', '.join(installed)}")
-        except Exception as exc:
-            ui.warn(f"Git hooks skipped: {exc}")
 
     # Copy jidra-investigator agent into target repo
     _install_agent(repo)
@@ -2396,15 +2384,6 @@ def _up() -> None:
 
     # Agent + skills — same as init
     _install_agent(repo)
-
-    # Always install git hooks silently
-    try:
-        from .utils.git_hooks import install_hooks as _install_hooks
-
-        _install_hooks(repo, graph_validated_path)
-        ui.success("Git hooks installed (post-commit / post-merge / post-checkout)")
-    except Exception:
-        pass
 
     ready_rows = [
         ("Graph", str(graph_validated_path)),
@@ -3269,6 +3248,15 @@ def main() -> None:
             from .ui.app import app as _ui_app
         except ImportError:
             raise SystemExit("UI dependencies missing. Run: pip install 'jidra[ui]'")
+
+        # Auto-start daemon for cwd repo if already initialized, so the
+        # watcher is live for the duration of the UI session.
+        _ui_jidra_dir = Path.cwd() / ".jidra"
+        _ui_graph = _ui_jidra_dir / "graph.db"
+        if _ui_graph.exists():
+            from .engine.daemon import JidraDaemon
+
+            JidraDaemon(str(_ui_graph), str(Path.cwd())).start(daemonize=True)
 
         uvicorn.run(
             _ui_app,

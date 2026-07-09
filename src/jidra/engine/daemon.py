@@ -305,9 +305,30 @@ class JidraDaemon:
                 graph = self.graph_path or ""
                 codebase = self.codebase_path or str(Path(graph).parent.parent)
                 summary = incremental_reindex(Path(codebase), Path(graph))
-                return {"reloaded": True, "summary": summary}
+                result = {"reloaded": True, "summary": summary}
             except Exception as exc:
-                return {"reloaded": False, "error": str(exc)}
+                result = {"reloaded": False, "error": str(exc)}
+
+            self._append_reindex_log(result)
+            return result
+
+    def _append_reindex_log(self, result: dict) -> None:
+        if not self.graph_path:
+            return
+        try:
+            graph_dir = Path(self.graph_path)
+            graph_dir = graph_dir if graph_dir.is_dir() else graph_dir.parent
+            log_path = graph_dir / "reindex.log"
+            entry = {
+                "ts": time.time(),
+                "reloaded": result.get("reloaded"),
+                "summary": result.get("summary"),
+                "error": result.get("error"),
+            }
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+        except OSError:
+            pass
 
 
 def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI entry
