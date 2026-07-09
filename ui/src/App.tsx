@@ -10,11 +10,13 @@ import { McpInspector } from "./components/McpInspector";
 import { ExplorePanel } from "./components/ExplorePanel";
 import { DocGraphViewer } from "./components/DocGraphViewer";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { GraphStatusPanel } from "./components/GraphStatusPanel";
 
-type Tab = "index" | "graph" | "sql" | "mcp" | "explore" | "docs" | "history" | null;
+type Tab = "index" | "graph" | "sql" | "mcp" | "explore" | "docs" | "history" | "status" | null;
 
 const NAV: { id: Tab; label: string; title: string }[] = [
   { id: "index",   label: "IDX", title: "Index" },
+  { id: "status",  label: "STS", title: "Graph Status" },
   { id: "graph",   label: "GRF", title: "Graph" },
   { id: "sql",     label: "SQL", title: "SQL" },
   { id: "mcp",     label: "MCP", title: "MCP Tools" },
@@ -67,6 +69,7 @@ export default function App() {
         <RepoSelector {...repo} />
         <div className="flex-1 overflow-hidden flex flex-col">
           {tab === "index"   && <IndexPanel {...repo} onNavigate={(t) => setTab(t as Tab)} />}
+          {tab === "status"  && <GraphStatusPanel repoPath={repo.repoPath} outputPath={repo.outputPath} />}
           {tab === "graph"   && <GraphViewer {...repo} />}
           {tab === "sql"     && <SqlEditor {...repo} />}
           {tab === "mcp"     && <McpInspector {...repo} />}
