@@ -280,7 +280,7 @@ def build_ts_graph(
     # "auto" falls back to tree-sitter-only on that same failure.
     try:
         if on_progress:
-            on_progress(0)
+            on_progress(0, 1)
 
         records = _run_sidecar(codebase_root, timeout=timeout)
     except TsExtractorError:
@@ -303,7 +303,7 @@ def build_ts_graph(
         )
 
     if on_progress:
-        on_progress(len([r for r in records if r.get("_type") == "class"]))
+        on_progress(1, 1)
 
     sidecar_graph = _build_graph_from_records(records)
     if skip_folders:

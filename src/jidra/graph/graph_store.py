@@ -442,7 +442,14 @@ def _check_schema_version(conn: sqlite3.Connection) -> None:
 def infer_variant_split(file_path: str) -> str:
     """Classify a file as 'main' or 'test' production-vs-test code."""
     normalized = (file_path or "").replace("\\", "/")
-    if "/src/test/" in normalized:
+    filename = normalized.rsplit("/", 1)[-1]
+    if (
+        "/src/test/" in normalized
+        or "/tests/" in normalized
+        or "/test/" in normalized
+        or re.match(r"test_.+\.py$", filename)
+        or re.match(r".+_test\.py$", filename)
+    ):
         return "test"
     return "main"
 
@@ -1704,8 +1711,13 @@ def delete_for_files(
 
     if method_ids:
         mph = ",".join("?" for _ in method_ids)
+        # Edges where deleted methods are caller OR callee — both directions.
         conn.execute(
             f"DELETE FROM resolved_call_edges WHERE variant = ? AND module_id IS ? AND caller_method_id IN ({mph})",
+            (variant, module_id, *method_ids),
+        )
+        conn.execute(
+            f"DELETE FROM resolved_call_edges WHERE variant = ? AND module_id IS ? AND callee_method_id IN ({mph})",
             (variant, module_id, *method_ids),
         )
 

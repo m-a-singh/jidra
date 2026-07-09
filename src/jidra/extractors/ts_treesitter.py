@@ -629,7 +629,7 @@ def build_ts_graph_treesitter(
         inheritance.extend(fx.inheritance)
         count += 1
         if on_progress:
-            on_progress(count)
+            on_progress(count, count)
 
     graph = Graph(
         classes=classes,
