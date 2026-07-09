@@ -1,8 +1,10 @@
 # JIDRA: Enterprise Codebase Context Backend for LLM Workflows
 
-**JIDRA = Java/Scala/TypeScript/Python/Go Integrated Graph Reduction & Analysis**
+**JIDRA = Just Indexing Dependencies, Repositories, & Agents**
 
 JIDRA is a structured context backend that reduces LLM input tokens by **68-95%** for code-native queries by giving Claude a pre-analyzed call graph instead of raw source files. Multi-language support: **Scala** (~90% resolution), **Java** (~85% resolution), **TypeScript** (~80% resolution), **Python** (~68.5% resolution), **Go** (tree-sitter-based, best-effort resolution).
+
+#### Language Supported Currently: Java/Scala/TypeScript/Python/Go
 
 ### What This Means
 
@@ -214,44 +216,116 @@ Consolidated analysis: [docs/FINDINGS_PYTHON.md](docs/FINDINGS_PYTHON.md) · [do
 jidra/
 ├── pyproject.toml
 ├── requirements.txt
+├── Cargo.toml                     # workspace root for jidra-resolver
 ├── README.md
-├── ENTERPRISE_TYPESCRIPT_PROOF.md
-├── ENTERPRISE_PYTHON_PROOF.md
-├── ENTERPRISE_SCALA_PROOF.md
-├── scala_sidecar/
-│   ├── Dockerfile             # JDK base + sbt launcher from Artifactory
-│   └── entrypoint.sh          # Configures Artifactory repos, runs sbt compile, exports .semanticdb
-└── jidra/
-    ├── __init__.py
-    ├── cli.py
-    ├── config.yaml
-    ├── llm_client.py
-    ├── models.py
-    ├── graph_io.py
-    ├── selector.py
-    ├── trace_engine.py
-    ├── context_builder.py
-    ├── extractor.py
-    ├── exporter.py
-    ├── ts_filters.py          # Language detection (all languages) + TypeScript file iteration
-    ├── ts_extractor.py        # TypeScript extraction (dispatches to tree-sitter or Docker sidecar)
-    ├── ts_treesitter.py       # In-process tree-sitter TypeScript backend (no Docker, default)
-    ├── daemon.py              # Shared-graph daemon (Unix socket RPC, watchdog, hot-reload)
-    ├── proxy.py               # Thin stdio<->socket MCP proxy that spawns the daemon
-    ├── watcher.py             # Debounced filesystem watcher -> incremental reindex
-    ├── git_hooks.py           # post-commit/merge/checkout hook installer
-    ├── scala_filters.py       # Scala file iteration + excluded dirs
-    ├── scala_extractor.py     # Scala extraction (SemanticDB two-pass)
-    ├── scala_proto/           # Generated protobuf bindings for SemanticDB
-    │   ├── semanticdb.proto
-    │   └── semanticdb_pb2.py
-    ├── py_filters.py          # Python language detection
-    ├── py_extractor.py        # Python extraction (AST + symbol table)
-    ├── py_type_provider.py    # Python type validation (Pyright)
-    ├── go_filters.py          # Go file iteration + excluded dirs
-    ├── go_extractor.py        # Go extraction (tree-sitter, in-process)
-    ├── filters.py             # Java file iteration
-    └── cache.py
+├── src/jidra/                     # Python package (src layout)
+│   ├── cli.py
+│   ├── models.py
+│   ├── config.yaml
+│   ├── extractors/
+│   │   ├── extractor.py           # dispatcher — routes to language-specific extractor
+│   │   ├── ts_extractor.py        # TypeScript (tree-sitter or Docker sidecar)
+│   │   ├── ts_treesitter.py       # in-process tree-sitter TS backend (default, no Docker)
+│   │   ├── go_extractor.py        # Go (tree-sitter, in-process)
+│   │   ├── py_extractor.py        # Python (AST + symbol table)
+│   │   ├── scala_extractor.py     # Scala (SemanticDB two-pass)
+│   │   └── smithy_extractor.py    # Smithy IDL extraction
+│   ├── filters/
+│   │   ├── filters.py             # Java file iteration
+│   │   ├── file_filters.py        # shared file-level filtering helpers
+│   │   ├── ts_filters.py          # TS language detection + file iteration
+│   │   ├── go_filters.py          # Go file iteration + excluded dirs
+│   │   ├── py_filters.py          # Python language detection
+│   │   ├── py_type_provider.py    # Python type validation (Pyright)
+│   │   └── scala_filters.py       # Scala file iteration + excluded dirs
+│   ├── graph/
+│   │   ├── graph_store.py         # SQLite graph DB (read/write, FTS5, migrations)
+│   │   ├── graph_rag.py           # retrieval-augmented graph search
+│   │   ├── graph_validator.py     # Spring Actuator validation + edge filtering
+│   │   └── graph_visualizer.py    # interactive HTML export
+│   ├── engine/
+│   │   ├── engine.py              # full index pipeline orchestrator
+│   │   ├── reindexer.py           # incremental reindex (fingerprint-based)
+│   │   ├── parallel.py            # parallel extraction workers
+│   │   ├── ranking.py             # result ranking / budget tiers
+│   │   ├── daemon.py              # shared-graph daemon (Unix socket RPC, hot-reload)
+│   │   └── watcher.py             # debounced filesystem watcher → incremental reindex
+│   ├── server/
+│   │   ├── mcp_server.py          # MCP tool surface (primary + full tiers)
+│   │   ├── proxy.py               # stdio↔socket MCP proxy (spawns daemon)
+│   │   └── actuator_client.py     # Spring Actuator HTTP client
+│   ├── flow/
+│   │   ├── flow_stitcher.py       # deterministic flow-doc generator
+│   │   └── flow_doc_agent.py      # LLM-assisted flow documentation
+│   ├── indexing/
+│   │   ├── doc_indexer.py         # doc/README indexer
+│   │   ├── doc_store.py           # doc chunk storage
+│   │   ├── doc_graph_visualizer.py
+│   │   ├── resources_chunker.py
+│   │   ├── resources_indexer.py
+│   │   └── resources_linker.py    # links doc chunks to graph nodes
+│   ├── llm/
+│   │   ├── llm_client.py          # LiteLLM provider wrapper
+│   │   ├── trace_engine.py        # method execution trace + uncertainty markers
+│   │   ├── cost_calculator.py     # token/cost measurement
+│   │   └── telemetry.py           # run history + telemetry dashboard
+│   ├── utils/
+│   │   ├── context_builder.py     # prompt-ready context assembly
+│   │   ├── selector.py            # method selector resolution
+│   │   ├── git_hooks.py           # post-commit/merge/checkout hook installer
+│   │   ├── cache.py
+│   │   ├── parser.py
+│   │   └── ui.py                  # CLI rich output helpers
+│   ├── smithy/
+│   │   ├── smithy_bridge.py       # Smithy → graph bridge
+│   │   └── smithy4j_builder.py
+│   ├── ui/                        # Flask API server (serves the React UI)
+│   │   ├── app.py
+│   │   └── routes/
+│   │       ├── graph_routes.py
+│   │       ├── index_routes.py
+│   │       ├── explore_routes.py
+│   │       ├── docs_routes.py
+│   │       ├── history_routes.py
+│   │       ├── mcp_routes.py
+│   │       ├── sql_routes.py
+│   │       └── util_routes.py
+│   └── claude_install/            # files shipped into .claude/ by `jidra init`
+│       ├── agents/                # jidra-investigator agent definition
+│       └── skills/                # jidra-navigate + jidra-blast-radius skills
+├── jidra-resolver/                # Rust extension (PyO3/maturin) — fast call resolution
+│   ├── Cargo.toml
+│   ├── pyproject.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── resolver.rs
+│       ├── lookup.rs
+│       ├── store.rs
+│       ├── models.rs
+│       └── normalize.rs
+├── ui/                            # React frontend (Vite + Tailwind)
+│   ├── index.html
+│   ├── vite.config.ts
+│   └── src/
+│       ├── App.tsx
+│       ├── components/            # GraphViewer, IndexPanel, ExplorePanel, GraphStatusPanel, …
+│       ├── hooks/useRepo.ts
+│       ├── lib/api.ts             # typed fetch client
+│       └── styles/
+├── sidecar/
+│   ├── scala/                     # JDK + sbt Docker sidecar (SemanticDB export)
+│   │   ├── src/Dockerfile
+│   │   ├── src/entrypoint.sh
+│   │   └── proto/semanticdb.proto + semanticdb_pb2.py
+│   └── typescript/                # ts-morph Docker sidecar (optional high-res TS backend)
+│       ├── Dockerfile
+│       └── index.js
+├── tests/                         # pytest suite
+├── validations/                   # token-saving + hallucination benchmarks
+├── evals/                         # agent-in-loop eval harness + datasets
+├── experiments/                   # one-off research scripts (not shipped)
+├── scripts/                       # contract validation helpers
+└── docs/                          # MCP reference, findings, architecture notes
 ```
 
 ## Installation
