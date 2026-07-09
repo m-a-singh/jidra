@@ -2279,7 +2279,7 @@ def _build_java_graph(
         all_calls.extend(result.callsites)
         all_inheritance_edges.extend(result.inheritance_edges)
         if on_progress:
-            on_progress(len(all_classes))
+            on_progress(1, 1)
 
     graph = Graph(
         classes=all_classes,
@@ -2348,7 +2348,7 @@ def build_graph(
             resolved_call_edges=[],
         )
         if on_progress:
-            on_progress(len(merged.classes))
+            on_progress(1, 1)
         _resolve_calls(merged)
         return merged
 

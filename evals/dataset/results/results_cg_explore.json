@@ -1,0 +1,370 @@
+[
+  {
+    "case_id": "scikit-learn__scikit-learn-10297",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/linear_model/ridge.py"
+    ],
+    "latency_ms": 4.225166980177164,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-10508",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/preprocessing/label.py"
+    ],
+    "latency_ms": 1.1000839876942337,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-10949",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/utils/validation.py"
+    ],
+    "latency_ms": 2.9231669614091516,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-11040",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/neighbors/base.py"
+    ],
+    "latency_ms": 0.41787500958889723,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-11281",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/mixture/base.py"
+    ],
+    "latency_ms": 2.0703329937532544,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-12471",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/preprocessing/_encoders.py"
+    ],
+    "latency_ms": 4.670499998610467,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-13142",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.125,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sklearn/mixture/base.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.5908329621888697,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-13241",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/decomposition/kernel_pca.py"
+    ],
+    "latency_ms": 1.087042037397623,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-13439",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.25,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sklearn/pipeline.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 1.0842499905265868,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-13496",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/ensemble/iforest.py"
+    ],
+    "latency_ms": 0.32412499422207475,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-13497",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/feature_selection/mutual_info_.py"
+    ],
+    "latency_ms": 0.36079203709959984,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-13584",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/utils/_pprint.py"
+    ],
+    "latency_ms": 0.5219170125201344,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-13779",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/ensemble/voting.py"
+    ],
+    "latency_ms": 0.34554098965600133,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-14087",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/linear_model/logistic.py"
+    ],
+    "latency_ms": 0.24562497856095433,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-14092",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/neighbors/nca.py"
+    ],
+    "latency_ms": 0.5533330258913338,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-14894",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.2,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sklearn/svm/base.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.14595797983929515,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-14983",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/model_selection/_split.py"
+    ],
+    "latency_ms": 0.9804999572224915,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-15512",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sklearn/cluster/_affinity_propagation.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.6225000252015889,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-15535",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/metrics/cluster/_supervised.py"
+    ],
+    "latency_ms": 0.24562503676861525,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-25500",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/isotonic.py"
+    ],
+    "latency_ms": 0.4172499757260084,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-25570",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.5,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sklearn/compose/_column_transformer.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.6277500069700181,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-25638",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/utils/multiclass.py"
+    ],
+    "latency_ms": 1.149540999904275,
+    "n_results": 20
+  },
+  {
+    "case_id": "scikit-learn__scikit-learn-25747",
+    "repo": "scikit-learn/scikit-learn",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sklearn/utils/_set_output.py"
+    ],
+    "latency_ms": 5.819207988679409,
+    "n_results": 20
+  }
+]

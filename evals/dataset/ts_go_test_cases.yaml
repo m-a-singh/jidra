@@ -1,0 +1,1211 @@
+- id: caddyserver__caddy-4774
+  repo: caddyserver/caddy
+  commit: f7be0ee10131f25620a2f64af7e3ded43eae2049
+  query: "default_bind global option cannot accept multiple IP addresses\nI'm running\
+    \ Caddy 2.5.1 in a dual-stack server.\r\nI'd like to make Caddy bind by default\
+    \ to the IPv4 address and one main IPv6 address, and then customize certain sites\
+    \ to bind on other IPv6 addresses.\r\n\r\n```text\r\n{\r\n  default_bind [2001:db8:11:ad::80]\
+    \ 198.51.100.184\r\n}\r\n:33441 {\r\n  respond \"site 33441\"\r\n}\r\n:33442 {\r\
+    \n  bind [2001:db8:11:ad::2]\r\n  respond \"site 33442\"\r\n}\r\n```\r\n\r\nThe\
+    \ **bind** directive accepts multiple IP addresses.\r\nHowever, the **default\\\
+    _bind** global option does not seem to accept multiple IP addresses.\r\n\r\nIf\
+    \ I put two IP addresses in **default\\_bind** global option like the example\
+    \ above, Caddy fails to start with error:\r\n\r\n```shell\r\n$ caddy run -config\
+    \ Caddyfile\r\n2022/05/08 18:47:58.911\tINFO\tusing provided configuration\t{\"\
+    config_file\": \"Caddyfile\", \"config_adapter\": \"\"}\r\nrun: adapting config\
+    \ using caddyfile: parsing caddyfile tokens for 'default_bind': Caddyfile:2 -\
+    \ Error during parsing: Wrong argument count or unexpected line ending after '198.51.100.184'\r\
+    \n```\r\n\r\nIf I write two **default\\_bind** global options each with one IP\
+    \ address, Caddy starts but it only binds to the IP address specified in the last\
+    \ **default\\_bind** global option, as confirmed by the output of `ss -an | grep\
+    \ LISTEN` command.\r\n\r\n```\r\n{\r\n  default_bind [2001:db8:11:ad::80]\r\n\
+    \  default_bind 198.51.100.184\r\n}\r\n```\r\n\r\nWhile I could write **bind**\
+    \ directive into each site, it is less convenient.\r\nThus, I hope **default\\\
+    _bind** global option could support multiple IP addresses.\n"
+  expected:
+  - caddyconfig/httpcaddyfile/addresses.go
+  - caddyconfig/httpcaddyfile/options.go
+- id: caddyserver__caddy-4943
+  repo: caddyserver/caddy
+  commit: 7f6a328b4744bbdd5ee07c5eccb3f897390ff982
+  query: "Unable to edit `Cookie` in logs\nI have a fairly simple config:\r\n```\r\
+    \n{\r\n\tservers {\r\n\t\tlog_credentials\r\n\t}\r\n}\r\n\r\nhttp://:8000 {\r\n\
+    \tencode gzip\r\n\r\n\tlog {\r\n\t\tformat filter {\r\n\t\t\twrap json\r\n\t\t\
+    \tfields {\r\n\t\t\t\trequest>headers>Cookie cookie {\r\n\t\t\t\t\treplace sessionid\
+    \ REDACTED\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t}\r\n\t}\r\n\r\n\troute {\r\n\t\treverse_proxy\
+    \ /api/* web:8000\r\n\t\treverse_proxy /admin* web:8000\r\n\t}\r\n}\r\n```\r\n\
+    \r\nIt is setup this way because I want to log some of the cookies, but hide some\
+    \ others (like `sessionid`).\r\n\r\nHowever, the filter does not seems to be working.\
+    \ An example output is:\r\n```json\r\n{\r\n\t\"level\": \"info\",\r\n\t\"ts\"\
+    : 1659995558.4613962,\r\n\t\"logger\": \"http.log.access.log0\",\r\n\t\"msg\"\
+    : \"handled request\",\r\n\t\"request\": {\r\n\t\t\"remote_ip\": \"172.18.0.1\"\
+    ,\r\n\t\t\"remote_port\": \"34628\",\r\n\t\t\"proto\": \"HTTP/1.1\",\r\n\t\t\"\
+    method\": \"GET\",\r\n\t\t\"host\": \"localhost\",\r\n\t\t\"uri\": \"/admin/auth/user/\"\
+    ,\r\n\t\t\"headers\": {\r\n\t\t\t\"Sec-Ch-Ua-Mobile\": [\r\n\t\t\t\t\"?0\"\r\n\
+    \t\t\t],\r\n\t\t\t\"Upgrade-Insecure-Requests\": [\r\n\t\t\t\t\"1\"\r\n\t\t\t\
+    ],\r\n\t\t\t\"User-Agent\": [\r\n\t\t\t\t\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36\
+    \ (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36\"\r\n\t\t\t],\r\n\t\t\t\"\
+    Sec-Fetch-Dest\": [\r\n\t\t\t\t\"document\"\r\n\t\t\t],\r\n\t\t\t\"Accept-Language\"\
+    : [\r\n\t\t\t\t\"en-US,en;q=0.9\"\r\n\t\t\t],\r\n\t\t\t\"Cache-Control\": [\r\n\
+    \t\t\t\t\"max-age=0\"\r\n\t\t\t],\r\n\t\t\t\"Sec-Ch-Ua\": [\r\n\t\t\t\t\"\\\"\
+    Chromium\\\";v=\\\"104\\\", \\\" Not A;Brand\\\";v=\\\"99\\\", \\\"Google Chrome\\\
+    \";v=\\\"104\\\"\"\r\n\t\t\t],\r\n\t\t\t\"Sec-Ch-Ua-Platform\": [\r\n\t\t\t\t\"\
+    \\\"Linux\\\"\"\r\n\t\t\t],\r\n\t\t\t\"Sec-Fetch-Site\": [\r\n\t\t\t\t\"same-origin\"\
+    \r\n\t\t\t],\r\n\t\t\t\"Connection\": [\r\n\t\t\t\t\"keep-alive\"\r\n\t\t\t],\r\
+    \n\t\t\t\"Accept\": [\r\n\t\t\t\t\"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9\"\
+    \r\n\t\t\t],\r\n\t\t\t\"Sec-Fetch-User\": [\r\n\t\t\t\t\"?1\"\r\n\t\t\t],\r\n\t\
+    \t\t\"Referer\": [\r\n\t\t\t\t\"http://localhost/admin/auth/group/\"\r\n\t\t\t\
+    ],\r\n\t\t\t\"Sec-Fetch-Mode\": [\r\n\t\t\t\t\"navigate\"\r\n\t\t\t],\r\n\t\t\t\
+    \"Accept-Encoding\": [\r\n\t\t\t\t\"gzip, deflate, br\"\r\n\t\t\t],\r\n\t\t\t\"\
+    Cookie\": [\r\n\t\t\t\t\"myvalue=1; sessionid=ST1LLh3r3\"\r\n\t\t\t]\r\n\t\t}\r\
+    \n\t},\r\n\t\"user_id\": \"\",\r\n\t\"duration\": 0.167427036,\r\n\t\"size\":\
+    \ 3584,\r\n\t\"status\": 200,\r\n\t\"resp_headers\": {\r\n\t\t\"Server\": [\r\n\
+    \t\t\t\"Caddy\"\r\n\t\t],\r\n\t\t\"Referrer-Policy\": [\r\n\t\t\t\"same-origin\"\
+    \r\n\t\t],\r\n\t\t\"X-Content-Type-Options\": [\r\n\t\t\t\"nosniff\"\r\n\t\t],\r\
+    \n\t\t\"X-Frame-Options\": [\r\n\t\t\t\"DENY\"\r\n\t\t],\r\n\t\t\"Content-Encoding\"\
+    : [\r\n\t\t\t\"gzip\"\r\n\t\t],\r\n\t\t\"Content-Type\": [\r\n\t\t\t\"text/html;\
+    \ charset=utf-8\"\r\n\t\t],\r\n\t\t\"Set-Cookie\": [\r\n\t\t\t\"myvalue=1; expires=Mon,\
+    \ 07 Aug 2023 21:52:38 GMT; Max-Age=31449600; Path=/; SameSite=Lax\"\r\n\t\t],\r\
+    \n\t\t\"Cache-Control\": [\r\n\t\t\t\"max-age=0, no-cache, no-store, must-revalidate,\
+    \ private\"\r\n\t\t],\r\n\t\t\"Vary\": [\r\n\t\t\t\"Cookie\",\r\n\t\t\t\"Accept-Encoding\"\
+    \r\n\t\t],\r\n\t\t\"Expires\": [\r\n\t\t\t\"Mon, 08 Aug 2022 21:52:38 GMT\"\r\n\
+    \t\t]\r\n\t}\r\n}\r\n```\r\n\r\nAs you may notice, `request>headers>Cookie` still\
+    \ contains my `sessionid`, unmodified. I would expect that the `sessionid=ST1LLh3r3`\
+    \ should be replaced with `sessionid=REDACTED`. Please advise.\r\n\r\nRunning\
+    \ version: `v2.5.2 h1:eCJdLyEyAGzuQTa5Mh3gETnYWDClo1LjtQm2q9RNZrs=`, from docker\
+    \ image: `caddy:2`.\n"
+  expected:
+  - modules/logging/filters.go
+- id: caddyserver__caddy-5404
+  repo: caddyserver/caddy
+  commit: 960150bb034dc9a549ee7289b1a4eb4abafeb30a
+  query: "fuzz-tokenizer: Slice bounds out of range \xB7 caddyfile.(*lexer).next \n\
+    Detailed Report: https://oss-fuzz.com/testcase?key=5119873601896448\r\n\r\nProject:\
+    \ caddy\r\nFuzzing Engine: libFuzzer\r\nFuzz Target: fuzz-tokenize\r\nJob Type:\
+    \ libfuzzer_asan_caddy\r\nPlatform Id: linux\r\n\r\nCrash Type: Slice bounds out\
+    \ of range\r\nCrash Address: \r\nCrash State:\r\n  caddyfile.(*lexer).next\r\n\
+    \  caddyfile.Tokenize\r\n  caddyfile.FuzzTokenize\r\n  \r\nSanitizer: address\
+    \ (ASAN)\r\n\r\nRegressed: https://oss-fuzz.com/revisions?job=libfuzzer_asan_caddy&range=202302250620:202302260618\r\
+    \n\r\nReproducer Testcase: https://oss-fuzz.com/download?testcase_id=5119873601896448\r\
+    \n\r\nIssue on oss-fuzz tracker: [Issue 56388](https://oss-fuzz.com/testcase-detail/5119873601896448)\r\
+    \n\r\nStakctrace 1:\r\n\r\n```\r\nRunning: /mnt/scratch0/clusterfuzz/bot/inputs/fuzzer-testcases/crash-161863eb2738e236dd8f51adf12c7ab183e14471\r\
+    \n--\r\n\_ | panic: runtime error: slice bounds out of range [4:2]\r\n\_ | \_\r\
+    \n\_ | goroutine 17 [running, locked to thread]:\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile.(*lexer).finalizeHeredoc(0x10c000068d40,\
+    \ {0x10c000235240?, 0x3, 0x4}, {0x10c000235208, 0x1})\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile/lexer.go:295\
+    \ +0x55f\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile.(*lexer).next(0x10c000068d40)\r\
+    \n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile/lexer.go:177 +0x1985\r\
+    \n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile.Tokenize({0x6020000000b0,\
+    \ 0x7, 0x7}, {0x10b7c91, 0x9})\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile/lexer.go:63\
+    \ +0x225\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile.FuzzTokenize({0x6020000000b0,\
+    \ 0x7, 0x7})\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile/lexer_fuzz.go:20\
+    \ +0x7c\r\n\_ | main.LLVMFuzzerTestOneInput(...)\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile/main.2005114164.go:21\r\
+    \n```\r\n\r\nStacktrace 2:\r\n\r\n```\r\nRunning: /mnt/scratch0/clusterfuzz/bot/inputs/fuzzer-testcases/f8d47d1328683f3bef8fbb346055854e2738e236dd8f51adf12c7ab183e14471\r\
+    \n--\r\n\_ | panic: runtime error: slice bounds out of range [4:2]\r\n\_ | \_\r\
+    \n\_ | goroutine 17 [running, locked to thread]:\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile.(*lexer).finalizeHeredoc(0x10c000066d40,\
+    \ {0x10c000356bc0?, 0x3, 0x4}, {0x10c000356b88, 0x1})\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile/lexer.go:295\
+    \ +0x55f\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile.(*lexer).next(0x10c000066d40)\r\
+    \n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile/lexer.go:177 +0x1985\r\
+    \n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile.Tokenize({0x6020000000b0,\
+    \ 0x7, 0x7}, {0x10b7c91, 0x9})\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile/lexer.go:63\
+    \ +0x225\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile.FuzzTokenize({0x6020000000b0,\
+    \ 0x7, 0x7})\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile/lexer_fuzz.go:20\
+    \ +0x7c\r\n\_ | main.LLVMFuzzerTestOneInput(...)\r\n\_ | github.com/caddyserver/caddy/v2/caddyconfig/caddyfile/main.2005114164.go:21\r\
+    \n```\r\n\r\n\r\n[clusterfuzz-testcase-fuzz-tokenize-5119873601896448.txt](https://github.com/caddyserver/caddy/files/10834231/clusterfuzz-testcase-fuzz-tokenize-5119873601896448.txt)\r\
+    \n\r\n[clusterfuzz-testcase-minimized-fuzz-tokenize-5119873601896448.txt](https://github.com/caddyserver/caddy/files/10834232/clusterfuzz-testcase-minimized-fuzz-tokenize-5119873601896448.txt)\r\
+    \n\r\n\n"
+  expected:
+  - caddyconfig/caddyfile/lexer.go
+- id: caddyserver__caddy-5626
+  repo: caddyserver/caddy
+  commit: 0e2c7e1d35b287fc0e56d6db2951f791e09b5a37
+  query: "Caddy 2.7.0-beta.2: nested imports in handler broken (again)\nI think the\
+    \ same problem problem existed before (#4914) but was supposed to be fixed. It\
+    \ actually worked in beta.1 but is now broken again. The following example fails:\r\
+    \n\r\n```caddyfile\r\n(responderWithStatus) {\r\n\trespond {args[0]} {args[1]}\r\
+    \n}\r\n\r\n(responder) {\r\n\timport responderWithStatus {args[0]} 202\r\n}\r\n\
+    \r\nhttp://127.0.0.1:8080 {\r\n\thandle {\r\n\t\timport responder \"foobar\"\r\
+    \n\t}\r\n}\r\n```\r\n\r\n```\r\n2023/07/10 12:25:30.379\tINFO\tusing adjacent\
+    \ Caddyfile\r\nError: adapting config using caddyfile: parsing caddyfile tokens\
+    \ for 'handle': Caddyfile:12 - Error during parsing: unrecognized directive: import\
+    \ - are you sure your Caddyfile structure (nesting and braces) is correct?, import\
+    \ chain: ['']\r\n```\n"
+  expected:
+  - caddyconfig/caddyfile/parse.go
+  - caddyconfig/caddyfile/lexer.go
+  - caddyconfig/caddyfile/dispenser.go
+- id: caddyserver__caddy-5761
+  repo: caddyserver/caddy
+  commit: 0a6d3333b2c92553e66c93c14d3258a790aac639
+  query: "caddy template cannot use << >>?\nCaddyfile\r\n```\r\nlocalhost {\r\n  templates\
+    \ {\r\n    between <<  >>\r\n  }\r\n}\r\n```\r\n\r\nerror:\r\n\r\n```\r\nError:\
+    \ adapting config using caddyfile: heredoc marker on line #3 must contain only\
+    \ alpha-numeric characters, dashes and underscores; got '  >>'\r\n```\n"
+  expected:
+  - caddyconfig/caddyfile/lexer.go
+- id: caddyserver__caddy-5870
+  repo: caddyserver/caddy
+  commit: fae195ac7eb9f4b0e9436384cd0529a11355e367
+  query: "API, UX: return 4xx on invalid input for delete method\nCaddy : v2.7.4 +\
+    \ (master)\r\nOS: Ubuntu 22.04\r\nModule: API\r\n\r\n**Issue**:\r\nWhen I delete\
+    \ a non-existing listener, Caddy returns `200` instead of `4xx`.\r\n\r\n**Reproduce**:\r\
+    \n\r\n1. caddy run (no config)\r\n2. Add a route:\r\n\r\n`hello.json`\r\n\r\n\
+    ```json\r\n{\r\n  \"apps\": {\r\n    \"http\": {\r\n      \"servers\": {\r\n \
+    \       \"example\": {\r\n          \"listen\": [\":2015\"],\r\n          \"routes\"\
+    : [\r\n            {\r\n              \"handle\": [\r\n                {\r\n \
+    \                 \"handler\": \"static_response\",\r\n                  \"body\"\
+    : \"Hello, world!\"\r\n                }\r\n              ]\r\n            }\r\
+    \n          ]\r\n        }\r\n      }\r\n    }\r\n  }\r\n}\r\n```\r\n`curl localhost:2019/load\
+    \ -H \"Content-Type: application/json\" -d @hello.json`\r\n\r\n3. Validate the\
+    \ route:\r\n`curl localhost:2019/config/`\r\n```sh\r\n{\"apps\":{\"http\":{\"\
+    servers\":{\"example\":{\"listen\":[\":2015\"],\"routes\":[{\"handle\":[{\"body\"\
+    :\"Hello, world!\",\"handler\":\"static_response\"}]}]}}}}}\r\n```\r\n4. Delete\
+    \ the route, providing an **invalid parameter - foo**: \r\n`curl -I -X DELETE\
+    \ \"http://localhost:2019/config/apps/http/servers/foo\"`\r\n```sh\r\nHTTP/1.1\
+    \ **200 OK** <---------------------- This is BAD\r\nDate: Sat, 23 Sep 2023 16:03:58\
+    \ GMT\r\nContent-Length: 0\r\n```\r\n\r\n5. Check deleted route again:\r\n`curl\
+    \ localhost:2019/config/`\r\n```sh\r\n{\"apps\":{\"http\":{\"servers\":{\"example\"\
+    :{\"listen\":[\":2015\"],\"routes\":[{\"handle\":[{\"body\":\"Hello, world!\"\
+    ,\"handler\":\"static_response\"}]}]}}}}}\r\n```\r\n\r\n**Actual Result**:\r\n\
+    As we see from **Step 4**, `Caddy` returns `200` on delete. However, my input\
+    \ was invalid and the route was NOT deleted.\r\nThis behavior results in issues\
+    \ for API integrators, because you never know whether the requested route was\
+    \ actually deleted or a misinput occured\r\n\r\n**Expected Result**:\r\n`Caddy`\
+    \ returns `4xx` on invalid request\n"
+  expected:
+  - admin.go
+- id: caddyserver__caddy-5995
+  repo: caddyserver/caddy
+  commit: c839a98ff527932fd14460829142c486f4531a7b
+  query: "Caddy 2.7: uri replace does not work with closing brackets ( '}' )\nHi,\r\
+    \n\r\nI'm using caddy to sanitize URIs. \r\n\r\nI created a rule in Caddyfile\
+    \ to replace bad encoded brackets with the correct encoding, but it's not working\
+    \ with closing brackets.\r\n\r\nI think this is a bug because I tried to escape\
+    \ the brackets in Caddyfile following the rules in https://caddyserver.com/docs/caddyfile/concepts#tokens-and-quotes\
+    \ but only works with opening brackets.\r\n\r\nSteps to reproduce:\r\n\r\n1. Create\
+    \ a Caddyfile with this content:\r\n\r\n```\r\n:80\r\nuri replace \"\\}\" %7D\r\
+    \nuri replace \"\\{\" %7B\r\n\r\nrespond \"{query}\"\r\n```\r\n\r\n2. In the same\
+    \ folder create the docker-compose.yml file with this content:\r\n```\r\nversion:\
+    \ '3.7'\r\nservices:\r\n  caddy:\r\n    image: caddy:2.7-alpine\r\n    restart:\
+    \ always\r\n    ports:\r\n      - \"8080:80\"\r\n    volumes:\r\n      - ./Caddyfile:/etc/caddy/Caddyfile\r\
+    \n```\r\n\r\n3. Run caddy with the command `docker compose up`\r\n4. Make an HTTP\
+    \ call with this command: `curl --location --globoff --request POST 'http://127.0.0.1:8080/endpoint?test={%20content%20}'`\r\
+    \n\r\nYou'll notice that opening bracket is replaced by %7B, as expected, but\
+    \ closing bracket is not replaced.\n"
+  expected:
+  - replacer.go
+- id: caddyserver__caddy-6051
+  repo: caddyserver/caddy
+  commit: 4181c79a8130a59c40c76437e15265452422ccb1
+  query: "Allow blank lines in Heredoc\nI want to send some blank lines in the respond.\r\
+    \n\r\n```caddyfile\r\nexample.com {\r\n\thandle {\r\n\t\trespond <<EOF\r\n\t\t\
+    \tThe next line is a blank line\r\n\r\n\t\t\tThe previous line is a blank line\r\
+    \n\t\t\tEOF 200\r\n\t}\r\n}\r\n```\r\n\r\nBut I got Error: adapting config using\
+    \ caddyfile: mismatched leading whitespace in heredoc <<EOF on line #5 [], expected\
+    \ whitespace [\t\t\t] to match the closing marker.\r\nI can add a whitespace before\
+    \ a blank line but `caddy fmt` will removes it.\r\nMaybe we should skip the whitespace\
+    \ stripping on a blank line.\n"
+  expected:
+  - caddyconfig/caddyfile/lexer.go
+- id: caddyserver__caddy-6115
+  repo: caddyserver/caddy
+  commit: 4512be49a9fa55270e9afa632be9ff6c9560c455
+  query: "Sticky cookie should be Secure and SameSite=None by default\nA common legacy-app\
+    \ routing setup looks like this:\r\n\r\n```\r\nreverse_proxy tomcat_serverA:8080\
+    \ tomcat_serverB:8080 {\r\n    lb_policy cookie\r\n}\r\n```\r\n\r\nThe result\
+    \ might be:\r\n\r\n```\r\n$ curl -I https://demo.example/portal/\r\nHTTP/2 200\r\
+    \ncache-control: no-store, no-cache, must-revalidate, max-age=0, post-check=0,\
+    \ pre-check=0\r\ncontent-type: text/html;charset=UTF-8\r\ndate: Fri, 16 Feb 2024\
+    \ 21:54:13 GMT\r\npragma: no-cache\r\nserver: Caddy\r\nset-cookie: lb=b4b924ab173004e449881468ab25c0aa4197efd974ae8c007a7164869c261a69;\
+    \ Path=/\r\n```\r\n\r\nThe problem for a Chrome user is that if they arrive from\
+    \ a third-party link, the lb cookie will not be sent to Caddy as the cookie was\
+    \ not set with SameSite=None property.\r\n\r\nWhile setting SameSite=None is a\
+    \ fun debate for applications and their CSRF protections, Caddy doesn't have a\
+    \ potential CSRF vulnerability so SameSite=None as the default makes sense. We\
+    \ want the \"sticky\" user to always end up on the same upstream if they come\
+    \ from a third-party website, from a bookmark, or from a same-site link.\n"
+  expected:
+  - modules/caddyhttp/reverseproxy/selectionpolicies.go
+- id: caddyserver__caddy-6288
+  repo: caddyserver/caddy
+  commit: d129ae6aec6af2182217ee8a235f4df8cd2bbfde
+  query: "(2.8.0-beta.1) CEL expressions in Caddyfile not processed properly\nExpressions\
+    \ written in [heredoc](https://caddyserver.com/docs/caddyfile/concepts#heredocs)\
+    \ such as:\r\n```console\r\n@cel_tld_net <<CEL\r\n    {http.request.host.labels.0}\
+    \ == \"net\"\r\n    CEL\r\n```\r\n...or with [backticks](https://caddyserver.com/docs/caddyfile/concepts#tokens-and-quotes):\r\
+    \n```console\r\n@cel_tld_net `{http.request.host.labels.0} == \"net\"`\r\n```\r\
+    \n\r\n...are not processed correctly in Caddyfiles as of `2.8.0-beta.1`, leading\
+    \ to this error:\r\n```\r\nError: adapting config using caddyfile: wrong argument\
+    \ count or unexpected line ending after 'expression', at /path/to/config\r\n```\r\
+    \n\r\n**But** it does work correctly if you explicitly specify the `expression`\
+    \ parameter, like so:\r\n```console\r\n@cel_tld_net expression {http.request.host.labels.0}\
+    \ == \"net\"\r\n```\r\n\r\nAnyway, thanks for your amazing work!\n"
+  expected:
+  - caddyconfig/httpcaddyfile/httptype.go
+  - caddyconfig/caddyfile/lexer.go
+- id: caddyserver__caddy-6345
+  repo: caddyserver/caddy
+  commit: f6d2c293e752254769efe21c8d06a16ebad4845e
+  query: "Set `sign_with_root` via Caddyfile\nPlease make the `sign_with_root` option\
+    \ [from the JSON config](https://caddyserver.com/docs/json/apps/tls/automation/policies/issuers/internal/#sign_with_root)\
+    \ available in the Caddyfile  \r\nMaybe related: https://github.com/caddyserver/caddy/issues/6290#issuecomment-2090785745\n"
+  expected:
+  - modules/caddypki/acmeserver/caddyfile.go
+- id: caddyserver__caddy-6350
+  repo: caddyserver/caddy
+  commit: a52917a37dcc40eda1ff5034103d4a89883de2aa
+  query: "Client_ip not merged as remote_ip used to in \"not\" expression\nHi,\r\n\
+    \r\nThe following host config fragment only works with the IP addresses listed\
+    \ in the first `client_ip`. Subsequent `client_ip` are denied access on Caddy\
+    \ 2.8.0:\r\n\r\n```\r\n@webhook {\r\n    path \"/webhook\"\r\n    not {\r\n  \
+    \      # prod servers\r\n        client_ip 51.138.37.238 20.54.89.16 13.80.70.181\
+    \ 13.80.71.223 13.79.28.70 40.127.253.112/28 51.105.129.192/28\r\n        # demo\
+    \ servers\r\n        client_ip 20.50.240.57 40.74.20.78 94.70.170.65 94.70.174.36\
+    \ 94.70.255.73 94.70.248.18 83.235.24.226 20.13.195.185\r\n        # our own connection\
+    \ for debug purposes\r\n        client_ip 1.2.3.4\r\n    }\r\n}\r\nhandle @webhook\
+    \ {\r\n    abort\r\n}\r\n```\r\n\r\nIt used to work with `remote_ip`:\r\n\r\n\
+    ```\r\n@webhook {\r\n    path \"/webhook\"\r\n    not {\r\n        # prod servers\r\
+    \n        remote_ip forwarded 51.138.37.238 20.54.89.16 13.80.70.181 13.80.71.223\
+    \ 13.79.28.70 40.127.253.112/28 51.105.129.192/28\r\n        # demo servers\r\n\
+    \        remote_ip 20.50.240.57 40.74.20.78 94.70.170.65 94.70.174.36 94.70.255.73\
+    \ 94.70.248.18 83.235.24.226 20.13.195.185\r\n        # our own connection for\
+    \ debug purposes\r\n        remote_ip 1.2.3.4\r\n    }\r\n}\r\nhandle @webhook\
+    \ {\r\n    abort\r\n}\r\n```\r\n\r\nMoving `client_ip 1.2.3.4` to the first line\
+    \ of the `not` expression allows that IP address but not the others.\r\n\r\nTrusted\
+    \ proxies are set:\r\n\r\n```\r\n{\r\n    servers {\r\n        trusted_proxies\
+    \ static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18\r\
+    \n    }\r\n}\r\n```\r\n\r\nIs there some way around this?\n"
+  expected:
+  - modules/caddyhttp/ip_matchers.go
+- id: caddyserver__caddy-6370
+  repo: caddyserver/caddy
+  commit: 198f4385d2f72ccdd853825270f601bea7a7a190
+  query: "Error: ambiguous config file format, config inside hidden folder\nSimilar\
+    \ to https://github.com/caddyserver/caddy/issues/6363 after update caddy doesn't\
+    \ start with error\r\n\r\n```\r\n2024/06/04 10:49:48.000\tINFO\tusing config from\
+    \ file\t{\"file\": \".serve/Caddyfile.preview\"}\r\nError: ambiguous config file\
+    \ format; please specify adapter (use --adapter)\r\n```\r\n\r\n```sh\r\n$ caddy\
+    \ version\r\nv2.8.4 h1:q3pe0wpBj1OcHFZ3n/1nl4V4bxBrYoSoab7rL9BMYNk=\r\n```\r\n\
+    \r\nNote that I use config from subfolder `.serve`\r\n\r\nIs it possible that\
+    \ `filepath.Base` function does not handle that case correctly?\r\nhttps://github.com/omalk98/caddy/blob/3f55efcfde09bc3d0a56597b1280dd2289805f69/cmd/main.go#L150\n"
+  expected:
+  - cmd/main.go
+- id: caddyserver__caddy-6411
+  repo: caddyserver/caddy
+  commit: 59cbb2c83a03b6fe352ae0b5d05581d9148a4d24
+  query: "file.* global replacements trailing newline interaction with secrets\nSo\
+    \ basically when you do something like `acme_dns cloudflare {file./path/cool-secret}`\
+    \ it will error out if the secret contains a trailing newline, so you will need\
+    \ to remove the trailing newline from the file for it to work, which is against\
+    \ the unix convention.\r\nI think this is a bug, but not sure if it needs to be\
+    \ handled on the dns adapter side or here.\r\nIs it reasonable to just always\
+    \ strip newline for file.* replacements?\n"
+  expected:
+  - replacer.go
+- id: gin-gonic__gin-1805
+  repo: gin-gonic/gin
+  commit: 70a0aba3e423246be37462cfdaedd510c26c566e
+  query: "Default engine producing two log lines with StaticFS for 404\n- go version:\
+    \ 1.11.4\r\n- gin version (or commit ref): master\r\n- operating system: OSX,\
+    \ 10.13.6\r\n\r\n## Description\r\nI am receiving two log lines from a 404, even\
+    \ when using the default engine.\r\n\r\nIf I remove the router.StaticFS I no longer\
+    \ see the issue.\r\n\r\nCode example:\r\n```\r\nfunc main() {\r\n\trouter := gin.Default()\r\
+    \n\trouter.StaticFS(\"/\", http.Dir(\"/public\"))\r\n\trouter.Run(\":1756\")\r\
+    \n}\r\n```\r\n## Screenshots\r\n![Screen Shot 2019-03-09 at 12 07 48 PM](https://user-images.githubusercontent.com/1168391/54074746-2798d100-4264-11e9-857c-290a5d9aec44.png)\r\
+    \n\r\n\n"
+  expected:
+  - routergroup.go
+- id: gin-gonic__gin-1957
+  repo: gin-gonic/gin
+  commit: 09a3650c97ca7ef3a542d428a9fb2c8da8c18002
+  query: "support bind http header param\nWhen I refactored some services, I found\
+    \ that gin does not have a function that binds the http header. I think it would\
+    \ be very good if I had this function.\r\n```go\r\npackage main\r\n\r\nimport\
+    \ (\r\n\t\"fmt\"\r\n\t\"github.com/gin-gonic/gin\"\r\n)\r\n\r\ntype testHeader\
+    \ struct {\r\n\tRate   int    `header:\"Rate\"`\r\n\tDomain string `header:\"\
+    Domain\"`\r\n}\r\n\r\nfunc main() {\r\n\tr := gin.Default()\r\n\tr.GET(\"/\",\
+    \ func(c *gin.Context) {\r\n\t\th := testHeader{}\r\n\r\n\t\tif err := c.ShouldBindHeader(&h);\
+    \ err != nil {\r\n\t\t\tc.JSON(200, err)\r\n\t\t}\r\n\r\n\t\tfmt.Printf(\"%#v\\\
+    n\", h)\r\n\t\tc.JSON(200, gin.H{\"Rate\": h.Rate, \"Domain\": h.Domain})\r\n\t\
+    })\r\n\r\n\tr.Run()\r\n}\r\n\r\n```\n"
+  expected:
+  - binding/binding.go
+  - context.go
+  - binding/header.go
+  - README.md
+- id: gin-gonic__gin-2121
+  repo: gin-gonic/gin
+  commit: 2ee0e963942d91be7944dfcc07dc8c02a4a78566
+  query: "DataFromReader with nil extraHeaders crashes\n## Description\r\n\r\n`gin.Context.DataFromReader`\
+    \ crashes if I don't set extra headers.\r\n\r\nI think this little fix would be\
+    \ the best solution to keep API and not to compel me to write `map[string]string{}`\
+    \ each time.\r\n\r\n```diff\r\ndiff --git a/render/reader.go b/render/reader.go\r\
+    \nindex 502d939..fd308a7 100644\r\n--- a/render/reader.go\r\n+++ b/render/reader.go\r\
+    \n@@ -22,6 +22,9 @@ type Reader struct {\r\n func (r Reader) Render(w http.ResponseWriter)\
+    \ (err error) {\r\n        r.WriteContentType(w)\r\n        if r.ContentLength\
+    \ >= 0 {\r\n+               if r.Headers == nil {\r\n+                       r.Headers\
+    \ = make(map[string]string)\r\n+               }\r\n                r.Headers[\"\
+    Content-Length\"] = strconv.FormatInt(r.ContentLength, 10)\r\n        }\r\n  \
+    \      r.writeHeaders(w, r.Headers)\r\n```\r\n\r\nI also have question why extra\
+    \ headers does not replace global headers here?\r\nhttps://github.com/gin-gonic/gin/blob/master/render/reader.go#L41\r\
+    \n```golang\r\n// render/reader.go\r\n\r\n// writeHeaders writes custom Header.\r\
+    \nfunc (r Reader) writeHeaders(w http.ResponseWriter, headers map[string]string)\
+    \ {\r\n    header := w.Header()\r\n    for k, v := range headers {\r\n       \
+    \ if header.Get(k) == \"\" {\r\n            header.Set(k, v)\r\n        }\r\n\
+    \    }\r\n}\r\n```\r\n\r\n## How to reproduce\r\n\r\n```golang\r\npackage main\r\
+    \n\r\nimport (\r\n    \"net/http\"\r\n    \"strings\"\r\n\r\n    \"github.com/gin-gonic/gin\"\
+    \r\n)\r\n\r\nfunc main() {\r\n    r := gin.Default()\r\n\r\n    r.GET(\"/\", func(c\
+    \ *gin.Context) {\r\n        // Why not set extra headers as usual (as c.JSON\
+    \ or c.Data)?\r\n        c.Writer.Header().Set(\"X-Extra-Header\", \"extra value\"\
+    )\r\n\r\n        c.DataFromReader(http.StatusOK, 5, gin.MIMEHTML, strings.NewReader(\"\
+    1234\\n\"), nil) // If I don't want to set extra headers it crashes\r\n    })\r\
+    \n\r\n    r.Run(\":5000\")\r\n}\r\n```\r\n\r\n## Expectations\r\n\r\nSuccessful\
+    \ response\r\n```bash\r\n$ curl -v http://localhost:5000\r\n# ...\r\n< HTTP/1.1\
+    \ 200 OK\r\n# ...\r\n```\r\n\r\n## Actual result\r\n\r\nrecovered panic and 500\
+    \ HTTP response\r\n```bash\r\n$ curl -v http://localhost:5000\r\n# ...\r\n< HTTP/1.1\
+    \ 500 Internal Server Error\r\n# ...\r\n```\r\n\r\n## Environment\r\n\r\n- go\
+    \ version: go1.13 linux/amd64\r\n- gin version (or commit ref): v1.4.0 and master\r\
+    \n- operating system: ubuntu\r\n\n"
+  expected:
+  - render/reader.go
+- id: gin-gonic__gin-2755
+  repo: gin-gonic/gin
+  commit: f2bbdfe9f26d84cb994f381050692a9e4553bf75
+  query: "Using gin.CreateTestContext, and then engine.HandleContext causes panic\
+    \ if params are not filled in\n## Description\r\n\r\nPanic in tree.go:446 when\
+    \ calling router.HandleContext on a context that does not have params parsed\r\
+    \n\r\n## How to reproduce\r\n\r\n```\r\npackage main\r\n\r\nimport (\r\n\t\"fmt\"\
+    \r\n\t\"net/http\"\r\n\t\"net/http/httptest\"\r\n\r\n\t\"github.com/gin-gonic/gin\"\
+    \r\n)\r\n\r\nfunc main() {\r\n\tw := httptest.NewRecorder()\r\n\tctx, engine :=\
+    \ gin.CreateTestContext(w)\r\n\tengine.GET(\"/hello/:name\", func(ctx *gin.Context)\
+    \ {\r\n\t\tctx.String(http.StatusOK, \"Hello %s\", ctx.Param(\"name\"))\r\n\t\
+    })\r\n\tvar err error\r\n\tctx.Request, err = http.NewRequest(http.MethodGet,\
+    \ \"/hello/something\", nil)\r\n\tif err != nil {\r\n\t\tpanic(err)\r\n\t}\r\n\
+    \tengine.HandleContext(ctx)\r\n\r\n\tfmt.Print(\"We should get here\")\r\n}\r\n\
+    ```\r\n\r\n## Expectations\r\n\r\n<!-- Your expectation result of 'curl' command,\
+    \ like -->\r\n```\r\n$ curl http://localhost:8201/hello/world\r\nWe should get\
+    \ here\r\n```\r\n\r\n## Actual result\r\n\r\n<!-- Actual result showing the problem\
+    \ -->\r\n```\r\n$ curl -i http://localhost:8201/hello/world\r\n[GIN-debug] GET\
+    \    /hello/:name              --> main.main.func1 (1 handlers)\r\npanic: runtime\
+    \ error: slice bounds out of range [:1] with capacity 0\r\n\r\ngoroutine 1 [running]:\r\
+    \ngithub.com/gin-gonic/gin.(*node).getValue(0xc000327a40, 0x18464ce, 0x9, 0xc00031a120,\
+    \ 0x1000001010c00, 0x0, 0x0, 0x0, 0xc00031a120, 0x0, ...)\r\n      /go/pkg/mod/github.com/gin-gonic/gin@v1.7.1/tree.go:446\
+    \ +0x1105\r\ngithub.com/gin-gonic/gin.(*Engine).handleHTTPRequest(0xc00037e4e0,\
+    \ 0xc000310100)\r\n       /go/pkg/mod/github.com/gin-gonic/gin@v1.7.1/gin.go:482\
+    \ +0x2f9\r\ngithub.com/gin-gonic/gin.(*Engine).HandleContext(0xc00037e4e0, 0xc000310100)\r\
+    \n      /go/pkg/mod/github.com/gin-gonic/gin@v1.7.1/gin.go:456 +0x52\r\nmain.main()\r\
+    \n       cmd/scratch/main.go:22 +0x27d\r\nExiting.\r\n```\r\n\r\n## Environment\r\
+    \n\r\n- go version: 1.16.3\r\n- gin version (or commit ref): 1.7.1\r\n- operating\
+    \ system: macosx\r\n\n"
+  expected:
+  - tree.go
+- id: gin-gonic__gin-3227
+  repo: gin-gonic/gin
+  commit: 51aea73ba0f125f6cacc3b4b695efdf21d9c634f
+  query: "RedirectFixedPath redirecting trailing slashes\n## Description\r\n\r\nRedirectFixedPath\
+    \ is redirecting trailing slashes regardless of the RedirectTrailingSlash setting.\r\
+    \n\r\nIn [gin.go](https://github.com/gin-gonic/gin/blob/master/gin.go#L73) there\
+    \ is a comment that the RedirectTrailingSlash is independent, but then the comment\
+    \ does not indicate that the behavior would be to also redirect trailing slashes\
+    \ in RedirectFixedPath always. If it's the intended behavior then the comment\
+    \ should be clarified.\r\n\r\nIf it's not the intended behavior then the trouble\
+    \ is in [gin.go](https://github.com/gin-gonic/gin/blob/master/gin.go#L421) where\
+    \ it uses engine.RedirectFixedPath for the trailingSlash parameter, which is always\
+    \ going to evaluate to true in where RedirectFixedPath is in use.\r\n\r\n## How\
+    \ to reproduce\r\n\r\n```\r\npackage main\r\n\r\nimport (\r\n\t\"fmt\"\r\n\t\"\
+    net/http/httptest\"\r\n\r\n\t\"github.com/gin-gonic/gin\"\r\n)\r\n\r\nfunc main()\
+    \ {\r\n\tr := gin.Default()\r\n\tr.RedirectTrailingSlash = false\r\n\tr.RedirectFixedPath\
+    \ = true\r\n\tr.GET(\"/ping\", func(c *gin.Context) {\r\n\t\tc.String(200, \"\
+    pong\")\r\n\t})\r\n\r\n\tresp := httptest.NewRecorder()\r\n\tr.ServeHTTP(resp,\
+    \ httptest.NewRequest(\"GET\", \"/ping/\", nil))\r\n\tfmt.Println(resp.Result().StatusCode,\
+    \ resp.Header().Get(\"Location\"))\r\n}\r\n```\r\n\r\n## Expectations\r\n\r\n\
+    ```\r\n$ curl localhost:8080/ping/\r\n404 page not found\r\n```\r\n\r\n## Actual\
+    \ result\r\n\r\n```\r\n$ curl localhost:8080/ping/\r\n<a href=\"/ping\">Moved\
+    \ Permanently</a>.\r\n```\r\n\r\n## Environment\r\n\r\n- go version: go version\
+    \ go1.13.8 darwin/amd64\r\n- gin version (or commit ref): v1.5.0\r\n- operating\
+    \ system: macOS High Sierra\r\n\n"
+  expected:
+  - tree.go
+- id: gin-gonic__gin-3741
+  repo: gin-gonic/gin
+  commit: c2ba8f19ec19914b73290c53a32de479cd463555
+  query: "Logging colour for < 200 should be white?\n## Description\r\n\r\nWhen the\
+    \ logger logs a response with a status code < 200 it is coloured red:\r\n\r\n\
+    https://github.com/gin-gonic/gin/blob/c2ba8f19ec19914b73290c53a32de479cd463555/logger.go#L81-L95\r\
+    \n\r\nHttp status codes under 200 are informative rather than errors. Would it\
+    \ be better for < 200 to be white?\r\n\r\nI notice this with web socket switching:\
+    \ https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/101\r\n\n"
+  expected:
+  - logger.go
+- id: gin-gonic__gin-3820
+  repo: gin-gonic/gin
+  commit: 9f598a31aafb92d675f38f1c8371e4ac76f858bf
+  query: "Binding a non mandatory file parameter will directly result in an error\
+    \ message\n- With issues:\r\n  - Use the search tool before opening a new issue.\r\
+    \n  - Please provide source code and commit sha if you found a bug.\r\n  - Review\
+    \ existing issues and provide feedback or react to them.\r\n\r\n## Description\r\
+    \n\r\nBind a a non mandatory file parameter will report an error. \r\n\r\n## How\
+    \ to reproduce\r\n \r\n```\r\n\r\npackage main\r\n\r\nimport (\r\n\t\"fmt\"\r\n\
+    \t\"github.com/gin-gonic/gin\"\r\n\t\"mime/multipart\"\r\n\t\"net/http\"\r\n)\r\
+    \n\r\nvar html = `<!doctype html>\r\n<html lang=\"en\">\r\n<head>\r\n    <meta\
+    \ charset=\"utf-8\">\r\n    <title>File binding</title>\r\n</head>\r\n<body>\r\
+    \n<h1>Bind file with fields</h1>\r\n<form action=\"/upload\" method=\"post\" enctype=\"\
+    multipart/form-data\">\r\n    Name: <input type=\"text\" name=\"name\"><br>\r\n\
+    \    Email: <input type=\"email\" name=\"email\"><br>\r\n    File: <input type=\"\
+    file\" name=\"file\"><br><br>\r\n    <input type=\"submit\" value=\"Submit\">\r\
+    \n</form>\r\n</body>`\r\n\r\ntype BindFile struct {\r\n\tName  string        \
+    \        `form:\"name\" binding:\"required\"`\r\n\tEmail string              \
+    \  `form:\"email\" binding:\"required\"`\r\n\tFile  *multipart.FileHeader `form:\"\
+    file\" `\r\n}\r\n\r\nfunc main() {\r\n\trouter := gin.Default()\r\n\t// Set a\
+    \ lower memory limit for multipart forms (default is 32 MiB)\r\n\trouter.GET(\"\
+    /\", func(ctx *gin.Context) {\r\n\t\tctx.Header(\"Content-Type\", \"text/html\"\
+    )\r\n\t\tctx.String(200, html)\r\n\t})\r\n\trouter.POST(\"/upload\", func(c *gin.Context)\
+    \ {\r\n\t\tvar bindFile BindFile\r\n\t\tif err := c.ShouldBind(&bindFile); err\
+    \ != nil {\r\n\t\t\t// will report an error when file is not uploaded.\r\n\t\t\
+    \t// Can we set it a nil pointer by default ?\r\n\t\t\tc.String(http.StatusBadRequest,\
+    \ fmt.Sprintf(\"err: %s\", err.Error()))\r\n\t\t\treturn\r\n\t\t}\r\n\t\t// TODO::...\r\
+    \n\t\tc.String(http.StatusOK, fmt.Sprintf(\"File %s uploaded successfully with\
+    \ fields name=%s and email=%s.\", file.Filename, bindFile.Name, bindFile.Email))\r\
+    \n\t})\r\n\trouter.Run(\":8080\")\r\n}\r\n\r\n\r\n```\r\n\r\n## Expectations\r\
+    \n\r\n```\r\n$ curl 'http://localhost:8080/upload' \\\r\n  -H 'Content-Type: multipart/form-data;\
+    \ boundary=----WebKitFormBoundaryK7Skf1qO5bW9JEX0' \\\r\n  --data-raw $'------WebKitFormBoundaryK7Skf1qO5bW9JEX0\\\
+    r\\nContent-Disposition: form-data; name=\"name\"\\r\\n\\r\\n\\r\\n------WebKitFormBoundaryK7Skf1qO5bW9JEX0\\\
+    r\\nContent-Disposition: form-data; name=\"email\"\\r\\n\\r\\n\\r\\n------WebKitFormBoundaryK7Skf1qO5bW9JEX0\\\
+    r\\nContent-Disposition: form-data; name=\"file\"; filename=\"\"\\r\\nContent-Type:\
+    \ application/octet-stream\\r\\n\\r\\n\\r\\n------WebKitFormBoundaryK7Skf1qO5bW9JEX0--\\\
+    r\\n' \r\n```\r\n\r\n## Actual result\r\n\r\n```\r\nerr: unexpected end of JSON\
+    \ input\r\n```\r\n\r\n## Environment\r\n\r\n- go version:  go version go1.20.4\
+    \ darwin/arm64\r\n- gin version (or commit ref):  [53fbf4d](https://github.com/gin-gonic/gin/commit/53fbf4dbfbf465b552057e6f8d199a275151b7a1)\r\
+    \n- operating system: macOS\r\n\n"
+  expected:
+  - binding/form_mapping.go
+- id: gin-gonic__gin-4003
+  repo: gin-gonic/gin
+  commit: 9c081de9cdd1948f521d47d170d18cbc2981c33a
+  query: "runtime error: makeslice: cap out of range when HandleMethodNotAllowed=true\
+    \ and no request handler registered\n## Description\r\nGin server panics with\
+    \ `runtime error: makeslice: cap out of range` when `HandleMethodNotAllowed` is\
+    \ set to `true` and no handler are registered.\r\n\r\n## How to reproduce\r\n\
+    ```go\r\npackage main\r\n\r\nimport (\r\n\t\"net/http/httptest\"\r\n\r\n\t\"github.com/gin-gonic/gin\"\
+    \r\n)\r\n\r\nfunc main() {\r\n\tg := gin.New()\r\n\tg.HandleMethodNotAllowed =\
+    \ true\r\n\r\n\treq := httptest.NewRequest(\"GET\", \"/\", nil)\r\n\tresp := httptest.NewRecorder()\r\
+    \n\tg.ServeHTTP(resp, req) // <-- Will panic\r\n}\r\n```\r\n\r\n## Expectations\r\
+    \n\r\nNo crash. I would have instead expected an HTTP error response like a 404\r\
+    \n\r\n## Actual result\r\n\r\n```\r\npanic: runtime error: makeslice: cap out\
+    \ of range\r\n\r\ngoroutine 1 [running]:\r\ngithub.com/gin-gonic/gin.(*Engine).handleHTTPRequest(0xc00009bba0,\
+    \ 0xc0001ab900)\r\n\t/go/pkg/mod/github.com/gin-gonic/gin@v1.10.0/gin.go:652 +0x43f\r\
+    \ngithub.com/gin-gonic/gin.(*Engine).ServeHTTP(0xc00009bba0, {0x10de2878, 0xc000406780},\
+    \ 0xc0003fa5a0)\r\n\t/go/pkg/mod/github.com/gin-gonic/gin@v1.10.0/gin.go:589 +0x1b2\r\
+    \nmain.main()\r\n\tmain.go:15 +0xc9\r\n```\r\n\r\n## Environment\r\n\r\n- go version:\
+    \ 1.22.4\r\n- gin version (or commit ref): 1.10.0\r\n- operating system: MacOS\r\
+    \n\n"
+  expected:
+  - gin.go
+- id: gohugoio__hugo-12171
+  repo: gohugoio/hugo
+  commit: a322282e70c2935c79f9c0f5c593bfdd032eb964
+  query: "Parent .Pages collection incorrect when adjacent sections are named similarly\n\
+    The issue title isn't great. The problem occurs with v0.123.0 and later.\r\n\r\
+    \nI ran into this on the Hugo docs site when visiting <https://gohugo.io/methods/>.\
+    \ You should see 10 entries, one for each subsection. Instead, there are 14 entries.\
+    \ The 4 extra entries are regular pages under the \"menu\" directory. Adjacent\
+    \ to the \"menu\" directory is the \"menu-entries\" directory. The two directories\
+    \ both begin with \"menu\" --- that is what triggers the problem (i.e., rename\
+    \ the \"menu\" directory to \"x\" and the problem goes away).\r\n\r\n\r\n### Example\r\
+    \n\r\n```text\r\ncontent/\r\n\u251C\u2500\u2500 s1/\r\n\u2502\_\_ \u251C\u2500\
+    \u2500 _index.md\r\n\u2502\_\_ \u2514\u2500\u2500 p1.md\r\n\u251C\u2500\u2500\
+    \ s1-foo/\r\n\u2502\_\_ \u251C\u2500\u2500 _index.md\r\n\u2502\_\_ \u2514\u2500\
+    \u2500 p2.md\r\n\u2514\u2500\u2500 _index.md\r\n```\r\n\r\nOn the home page, the\
+    \ `.Page.Pages` collection should contain s1 and s1-foo.  Instead, it contains\
+    \ s1, s1-foo, and p1. The problem occurs on section pages as well as the home\
+    \ page.\r\n\r\n```text\r\ngit clone --single-branch -b hugo-github-issue-12169\
+    \ https://github.com/jmooring/hugo-testing hugo-github-issue-12169\r\ncd hugo-github-issue-12169\r\
+    \nrm -rf public/ && hugo && cat public/index.html \r\n```\r\n\r\nExpected (v0.122.0)\r\
+    \n\r\n```text\r\n__|s1|s1-foo|__\r\n```\r\n\r\nActual (v0.123.4)\r\n\r\n```text\r\
+    \n__|p1|s1|s1-foo|__\r\n```\r\n\r\n**The hyphen is part of the problem:**\r\n\
+    If you rename the `s1-foo` directory to `s1foo` everything works as expected.\r\
+    \n\r\n### Failing test case\r\n\r\nThis test certainly fails, but fails just a\
+    \ bit differently than shown above. The actual result is:\r\n\r\n```text\r\n__|p1|p2|s1|s1-foo|__\r\
+    \n```\r\n\r\nNote the addition of p2 to the collection. Not sure why this fails\
+    \ differently.\r\n\r\n<details>\r\n<summary>failing test case</summary>\r\n\r\n\
+    ```go\r\nfunc TestFoo(t *testing.T) {\r\n\tt.Parallel()\r\n\r\n\tfiles := `\r\n\
+    -- config.toml --\r\ndisableKinds = ['rss','sitemap','taxonomy','term']\r\n--\
+    \ layouts/_default/list.html --\r\n__|{{ range .Pages }}{{ .Title }}|{{ end }}__\r\
+    \n-- layouts/_default/single.html --\r\n{{ .Title }}|\r\n-- content/s1/_index.md\
+    \ --\r\n---\r\ntitle: s1\r\n---\r\n-- content/s1/p1.md --\r\n---\r\ntitle: p1\r\
+    \n---\r\n-- content/s1-foo/_index.md --\r\n---\r\ntitle: s1-foo\r\n---\r\n-- content/s1/p2.md\
+    \ --\r\n---\r\ntitle: p2\r\n---\r\n  `\r\n\r\n\tb := hugolib.Test(t, files)\r\n\
+    \r\n\tb.AssertFileContent(\"public/index.html\", \"__|s1|s1-foo|__\")\r\n}\r\n\
+    ```\r\n</details>\r\n<br>\r\n\r\n\n"
+  expected:
+  - hugolib/content_map_page.go
+- id: gohugoio__hugo-12343
+  repo: gohugoio/hugo
+  commit: 060cce0a910ffd9dc4e92efbe758fc5f187c3145
+  query: "`#` in links causes them to be truncated\nIf the generated link for a resource\
+    \ contains a '#', the link gets truncated.\r\n\r\nGiven a content file, `content/posts/hash-in-title.md`:\r\
+    \n\r\n```yaml\r\n---\r\ntitle: 'Newsletter #4'\r\ndate: 2024-04-04T12:27:52-07:00\r\
+    \n---\r\nFoo\r\n```\r\n\r\nAnd a permalinks config in your site config:\r\n```yaml\r\
+    \npermalinks:\r\n  posts: \"/posts/:year/:month/:slug/\"\r\n```\r\n\r\nYou'll\
+    \ wind up with a `public/posts/2024/04/newsletter-#4/index.html`, but `.RelPermaLink`\
+    \ for that page resolves to `/posts/2024/04/newsletter-`, i.e. a broken link.\n"
+  expected:
+  - resources/page/page_paths.go
+- id: gohugoio__hugo-12448
+  repo: gohugoio/hugo
+  commit: 196132753649e6e714f05c83122737cabd0da310
+  query: "Page does not reload after modifying a different page\nReference: <https://discourse.gohugo.io/t/no-re-rendering-on-document-changes/49465>\r\
+    \n\r\n```text\r\ngit clone --single-branch -b hugo-forum-topic-49465 https://github.com/jmooring/hugo-testing\
+    \ hugo-forum-topic-49465\r\ncd hugo-forum-topic-49465\r\nhugo server\r\n```\r\n\
+    \r\nOpen your browser to `http://localhost:1313/about/`.\r\n\r\nThen in a new\
+    \ console:\r\n\r\n```text\r\necho \"foo\" >> content/_index.md\r\necho \"bar\"\
+    \ >> content/about/index.md\r\n```\r\n\r\nExpected: content/about/index.md changes\
+    \ in browser.\r\n\r\nActual: content/about/index.md does not change in browser.\r\
+    \n\r\nThis works as expected with v0.122.0, but fails with v0.123.0 and later.\r\
+    \n\r\n---\r\n\r\nI tried to create an integration test for this, but _both_ of\
+    \ the final assertions are failing, so I'm probably doing it wrong:\r\n\r\n```go\r\
+    \nfunc TestFoo(t *testing.T) {\r\n\tt.Parallel()\r\n\r\n\tfiles := `\r\n-- hugo.toml\
+    \ --\r\ndisableKinds = ['rss','sitemap','taxonomy','term']\r\n-- layouts/_default/list.html\
+    \ --\r\n{{ .Content }}\r\n-- layouts/_default/single.html --\r\n{{ .Content }}\r\
+    \n-- content/_index.md --\r\n---\r\ntitle: home\r\n---\r\nhome-content|\r\n--\
+    \ content/p1/index.md --\r\n---\r\ntitle: p1\r\n---\r\np1-content|\r\n`\r\n\r\n\
+    \tb := hugolib.Test(t, files, hugolib.TestOptRunning())\r\n\r\n\tb.AssertFileContent(\"\
+    public/index.html\", \"home-content|\")  // pass\r\n\tb.AssertFileContent(\"public/p1/index.html\"\
+    , \"p1-content|\") // pass\r\n\r\n\tb.EditFiles(\"content/_index.md\", \"home-content|foo\"\
+    , \"content/p1/index.md\", \"p1-content|bar\")\r\n\r\n\tb.AssertFileContent(\"\
+    public/index.html\", \"home-content|foo\")  // fail\r\n\tb.AssertFileContent(\"\
+    public/p1/index.html\", \"p1-content|bar\") // fail\r\n}\r\n```\n"
+  expected:
+  - hugolib/content_map_page.go
+- id: gohugoio__hugo-12562
+  repo: gohugoio/hugo
+  commit: c8dac67defbb512877e974814e196782989b8214
+  query: "content adapter: Site.GetPage without fully qualified path cannot find page\n\
+    Given that page `/s2/p2` was created by a content adapter:\r\n\r\n```text\r\n\
+    {{ (site.GetPage \"/s2/p2\").Title }} --> p2  (pass)\r\n{{ (site.GetPage \"p2\"\
+    ).Title }}     --> \"\"  (fail)\r\n```\r\n\r\nIn comparison, when `/s1/p1` is\
+    \ backed by a file:\r\n\r\n```text\r\n{{ (site.GetPage \"/s1/p1\").Title }} -->\
+    \ p1  (pass)\r\n{{ (site.GetPage \"p1\").Title }}     --> p1  (pass)\r\n```\r\n\
+    \r\nTest case:\r\n\r\n```go\r\nfunc TestFoo(t *testing.T) {\r\n\tt.Parallel()\r\
+    \n\r\n\tfiles := `\r\n-- hugo.toml --\r\ndisableKinds = ['rss','section','sitemap','taxonomy','term']\r\
+    \n-- layouts/index.html --\r\nTest A: {{ (site.GetPage \"/s1/p1\").Title }}\r\n\
+    Test B: {{ (site.GetPage \"p1\").Title }}\r\nTest C: {{ (site.GetPage \"/s2/p2\"\
+    ).Title }}\r\nTest D: {{ (site.GetPage \"p2\").Title }}\r\n-- layouts/_default/single.html\
+    \ --\r\n{{ .Title }}\r\n-- content/s1/p1.md --\r\n---\r\ntitle: p1\r\n---\r\n\
+    -- content/s2/_content.gotmpl --\r\n{{ .AddPage (dict \"path\" \"p2\" \"title\"\
+    \ \"p2\") }}\r\n`\r\n\r\n\tb := hugolib.Test(t, files)\r\n\r\n\tb.AssertFileExists(\"\
+    public/s1/p1/index.html\", true)\r\n\tb.AssertFileExists(\"public/s2/p2/index.html\"\
+    , true)\r\n\tb.AssertFileContent(\"public/index.html\",\r\n\t\t\"Test A: p1\"\
+    ,\r\n\t\t\"Test B: p1\",\r\n\t\t\"Test C: p2\",\r\n\t\t\"Test D: p2\", // fails\r\
+    \n\t)\r\n}\r\n```\r\n\r\nReference: <https://discourse.gohugo.io/t/site-getpage-does-not-get-pages-created-with-an-adapter/50099/>\n"
+  expected:
+  - hugolib/content_map_page.go
+- id: gohugoio__hugo-12579
+  repo: gohugoio/hugo
+  commit: 9c4e14eb4f890d2a3caad2dcd9209609b7274914
+  query: "Let PAGES.GroupByParam return nil instead of error\nTypical construct:\r\
+    \n\r\n```text\r\n{{ range site.Pages.GroupByParam \"foo\" }}\r\n  <h2>{{ .Key\
+    \ }}</h2>\r\n  {{ range .Pages }}\r\n    <h3><a href=\"{{ .RelPermalink }}\">{{\
+    \ .LinkTitle }}</a></h3>\r\n  {{ end }}\r\n{{ end }}\r\n```\r\n\r\nFor an existing\
+    \ site where one or more of the pages contains `params.foo` in front matter, this\
+    \ works great.\r\n\r\nBut if none of the pages contains `params.foo` in front\
+    \ matter, the `GroupByParam` method throws this error:\r\n\r\n> error calling\
+    \ GroupByParam: there is no such param\r\n\r\nI think we should return nil instead.\
+    \ Reasoning:\r\n\r\n1. Symmetry\r\n    - `Pages.SortByParam` doesn't complain\
+    \ about missing param\r\n    - `Pages.GroupByParamDate` doesn't complain about\
+    \ missing param\r\n2. Avoid dead ends. For example, a new empty site when a theme\
+    \ contains a construct similar to the above.\r\n\r\nReference: <https://discourse.gohugo.io/t/error-calling-groupbyparam-there-is-no-such-param/50205>\r\
+    \n\n"
+  expected:
+  - resources/page/pagegroup.go
+- id: gohugoio__hugo-12768
+  repo: gohugoio/hugo
+  commit: 83235262d06a060bd22c168b3413903667b8aeb6
+  query: "Hugo alert heading is case-sensitive and upper case only ([!NOTE]), but\
+    \ GitHub Alert Markdown extension is case-insensitive ([!note])\n### What version\
+    \ of Hugo are you using (`hugo version`)?\r\n\r\n<pre>\r\n$ hugo version\r\nhugo\
+    \ v0.132.1+extended linux/amd64 BuildDate=unknown\r\n</pre>\r\n\r\n### Does this\
+    \ issue reproduce with the latest release?\r\nYes\r\n\r\n---\r\n\r\n[Alerts](https://gohugo.io/render-hooks/blockquotes/#alerts)\
+    \ are introduced in Hugo v0.132.0. Documentation says that syntax is compatible\
+    \ with GitHub Alert Markdown extension. However, GitHub allows writing alert heading\
+    \ in lower case, while Hugo doesn't.\r\n\r\n```markdown\r\n> [!note]\r\n> Example\r\
+    \n```\r\n\r\n> [!note]\r\n> Example\r\n\r\nHugo won't render `[!note]`, or `[!Note]`,\
+    \ or `[!nOtE]` as alert while GitHub will.\r\n\r\nProbably need to change this\
+    \ regex filter:\r\nhttps://github.com/gohugoio/hugo/blob/665ac949bdc2e54d378ef5c00778c830440a1a9d/markup/goldmark/blockquotes/blockquotes.go#L238\r\
+    \n\n"
+  expected:
+  - markup/goldmark/blockquotes/blockquotes.go
+- id: hashicorp__terraform-34580
+  repo: hashicorp/terraform
+  commit: 8faa757e20d8df6c458a002c6bd4e1bc26f41581
+  query: "`terraform fmt` does not handle `.tfmock.hcl` files\n### Terraform Version\r\
+    \n\r\n```shell\r\nTerraform v1.7.1\r\n```\r\n\r\n\r\n### Use Cases\r\n\r\nWhen\
+    \ using the Terraform 1.7 mocks feature as suggested in the official tutorial:\
+    \ https://developer.hashicorp.com/terraform/language/tests/mocking#mock-provider-data\r\
+    \n\r\nTerraform formatting does not apply to the `.tfmock.hcl` files\r\n\r\n```shell\r\
+    \nterraform fmt tests/aws/data.tfmock.hcl\r\n\u2577\r\n\u2502 Error: Only .tf,\
+    \ .tfvars, and .tftest.hcl files can be processed with terraform fmt\r\n\u2502\
+    \ \r\n\u2502 \r\n\u2575\r\n```\r\n\r\n### Attempted Solutions\r\n\r\nRenaming\
+    \ the file with `.tftest.hcl` extension before formatting is a workaround to get\
+    \ it formatted with:\r\n`terraform fmt tests/aws/data.tftest.hcl`\r\n\r\n### Proposal\r\
+    \n\r\nExtending `fmt` subcommand to `.tfmock.hcl` files\r\n\r\n### References\r\
+    \n\r\n_No response_\n"
+  expected:
+  - internal/command/fmt.go
+- id: hashicorp__terraform-34814
+  repo: hashicorp/terraform
+  commit: 310331bdc6b747b68b2e2dd6be257dfc78677973
+  query: "SSH connections are kept open\n### Terraform Version\n\n```shell\nTerraform\
+    \ v1.6.2\r\non linux_amd64\r\n+ provider registry.terraform.io/hashicorp/null\
+    \ v3.1.1\n```\n\n\n### Terraform Configuration Files\n\n```terraform\r\nterraform\
+    \ {\r\n  required_version = \"~> 1.1\"\r\n  required_providers {\r\n    null =\
+    \ {\r\n      source  = \"hashicorp/null\"\r\n      version = \"~> 3.1.1\"\r\n\
+    \    }\r\n  }\r\n}\r\n\r\nvariable \"host\" {\r\n  type = string\r\n  default\
+    \ = \"139.144.128.15\"\r\n}\r\nvariable \"user\" {\r\n  type = string\r\n  default\
+    \ = \"root\"\r\n}\r\nvariable \"private_key\" {\r\n  type = string\r\n  default\
+    \ = \"/home/mkovarik/.ssh/mkovarik-dev\"\r\n}\r\n\r\n\r\nresource \"null_resource\"\
+    \ \"ssh_connection\" {\r\n  connection {\r\n    type                = \"ssh\"\r\
+    \n    host                = var.host\r\n    agent               = \"false\"\r\n\
+    \    user                = var.user\r\n    timeout             = \"600s\"\r\n\
+    \    private_key         = file(var.private_key)\r\n  }\r\n  provisioner \"remote-exec\"\
+    \ {\r\n    inline = [\r\n       \"touch abc\",\r\n    ]\r\n  }\r\n}\r\nresource\
+    \ \"null_resource\" \"more_ssh_connections\" {\r\n  connection {\r\n    type \
+    \               = \"ssh\"\r\n    host                =  var.host\r\n    agent\
+    \               = \"false\"\r\n    user                =  var.user\r\n    timeout\
+    \             = \"600s\"\r\n    private_key         = file(var.private_key)\r\n\
+    \  }\r\n  provisioner \"remote-exec\" {\r\n    inline = [\r\n       \"touch abc\"\
+    ,\r\n       \"touch abc\",\r\n    ]\r\n  }\r\n  provisioner \"remote-exec\" {\r\
+    \n    inline = [\r\n       \"touch abc\",\r\n    ]\r\n  }\r\n}\r\nresource \"\
+    null_resource\" \"local-sleep\" {\r\n  depends_on = [\r\n     null_resource.ssh_connection,\r\
+    \n     null_resource.more_ssh_connections\r\n  ]\r\n  provisioner \"local-exec\"\
+    \ {\r\n       command = \"sleep 10; netstat -natp | grep ${var.host}\"\r\n  }\r\
+    \n}\r\n\r\n```\r\n\n\n### Debug Output\n\nhttps://gist.github.com/Michkov/302f06370581fa66f216ed80bac09097\n\
+    \n### Expected Behavior\n\nExecution of netstat should not show ESTABLISHED connection\
+    \ to the host, SSH connection should be closed directly after execution.\n\n###\
+    \ Actual Behavior\n\nSSH connections to the host are still ESTABLISHED even the\
+    \ commands were executed.\n\n### Steps to Reproduce\n\n1. Set variables -> host,\
+    \ user and private_key\r\n2. `terraform init`\r\n3. `terraform apply`\r\n\n\n\
+    ### Additional Context\n\nTerraform keeps SSH connections opened. This is problematic\
+    \ when hosts are having connection limits set. Also when using Bastions there\
+    \ are too many unnecessary connections kept established.\n\n### References\n\n\
+    _No response_\n"
+  expected:
+  - internal/builtin/provisioners/remote-exec/resource_provisioner.go
+- id: hashicorp__terraform-34900
+  repo: hashicorp/terraform
+  commit: f2e4cb411ed6dfd36fd4f9960a74d8f29c7b8882
+  query: "Set nested block with sensitive attribute always detects changes on `v1.8.0-rc1`\n\
+    ### Terraform Version\n\n```shell\nTerraform v1.8.0-rc1\r\non darwin_arm64\n```\n\
+    \n\n### Terraform Configuration Files\n\n```terraform\r\nterraform {\r\n  required_providers\
+    \ {\r\n    examplecloud = {\r\n      source = \"austinvalle/sandbox\"\r\n    }\r\
+    \n  }\r\n}\r\n\r\nresource \"examplecloud_thing\" \"test\" {\r\n  set_nested_block\
+    \ {\r\n    sensitive_str = \"hello world.... but don't tell anyone\"\r\n  }\r\n\
+    }\r\n\r\n\r\n```\r\n\n\n### Debug Output\n\nhttps://gist.github.com/austinvalle/75b70321f778e79b3ab1ed663ac19a4a\n\
+    \n### Expected Behavior\n\nNo change should be detected\n\n### Actual Behavior\n\
+    \nGiven a managed resource schema (see provided TF config) that contains a set\
+    \ nested block with a sensitive attribute, all applies following creation will\
+    \ detect a change but no diff is displayed.\r\n\r\n```bash\r\n $ terraform apply\
+    \ -auto-approve\r\n\r\nexamplecloud_thing.test: Refreshing state...\r\n\r\nTerraform\
+    \ used the selected providers to generate the following execution plan. Resource\
+    \ actions are indicated with the following\r\nsymbols:\r\n  ~ update in-place\r\
+    \n\r\nTerraform will perform the following actions:\r\n\r\n  # examplecloud_thing.test\
+    \ will be updated in-place\r\n  ~ resource \"examplecloud_thing\" \"test\" {\r\
+    \n\r\n        # (1 unchanged block hidden)\r\n    }\r\n\r\nPlan: 0 to add, 1 to\
+    \ change, 0 to destroy.\r\nexamplecloud_thing.test: Modifying...\r\nexamplecloud_thing.test:\
+    \ Modifications complete after 0s\r\n\r\nApply complete! Resources: 0 added, 1\
+    \ changed, 0 destroyed.\r\n```\r\n\r\nApplying the same configuration with Terraform\
+    \ `1.7.5` produces no difference.\n\n### Steps to Reproduce\n\nI have a simple\
+    \ sandbox provider to display this behavior: https://github.com/austinvalle/terraform-provider-sandbox/tree/516288103cd2d9c0566d363d43ed996f57c654da\r\
+    \n\r\n1. Clone the repo\r\n2. Build the provider and setup a dev_override for\
+    \ it\r\n3. Run a `terraform apply` on the [supplied Terraform config ](https://github.com/austinvalle/terraform-provider-sandbox/blob/516288103cd2d9c0566d363d43ed996f57c654da/examples/resources/resource.tf)\r\
+    \n4. After successful apply, running another `terraform apply` will detect a diff,\
+    \ but none is shown\n\n### Additional Context\n\nState from `v1.8.0-rc1`:\r\n\
+    ```json\r\n{\r\n  \"version\": 4,\r\n  \"terraform_version\": \"1.8.0\",\r\n \
+    \ \"serial\": 1,\r\n  \"lineage\": \"c20d560c-6729-d85d-ac1a-7e544d242839\",\r\
+    \n  \"outputs\": {},\r\n  \"resources\": [\r\n    {\r\n      \"mode\": \"managed\"\
+    ,\r\n      \"type\": \"examplecloud_thing\",\r\n      \"name\": \"test\",\r\n\
+    \      \"provider\": \"provider[\\\"registry.terraform.io/austinvalle/sandbox\\\
+    \"]\",\r\n      \"instances\": [\r\n        {\r\n          \"schema_version\"\
+    : 0,\r\n          \"attributes\": {\r\n            \"set_nested_block\": [\r\n\
+    \              {\r\n                \"sensitive_str\": \"hello world.... but don't\
+    \ tell anyone\"\r\n              }\r\n            ]\r\n          },\r\n      \
+    \    \"sensitive_attributes\": [\r\n            [\r\n              {\r\n     \
+    \           \"type\": \"get_attr\",\r\n                \"value\": \"set_nested_block\"\
+    \r\n              }\r\n            ]\r\n          ]\r\n        }\r\n      ]\r\n\
+    \    }\r\n  ],\r\n  \"check_results\": null\r\n}\r\n```\r\n\r\nState from `v1.7.5`:\r\
+    \n```json\r\n{\r\n  \"version\": 4,\r\n  \"terraform_version\": \"1.7.5\",\r\n\
+    \  \"serial\": 3,\r\n  \"lineage\": \"c20d560c-6729-d85d-ac1a-7e544d242839\",\r\
+    \n  \"outputs\": {},\r\n  \"resources\": [\r\n    {\r\n      \"mode\": \"managed\"\
+    ,\r\n      \"type\": \"examplecloud_thing\",\r\n      \"name\": \"test\",\r\n\
+    \      \"provider\": \"provider[\\\"registry.terraform.io/austinvalle/sandbox\\\
+    \"]\",\r\n      \"instances\": [\r\n        {\r\n          \"schema_version\"\
+    : 0,\r\n          \"attributes\": {\r\n            \"set_nested_block\": [\r\n\
+    \              {\r\n                \"sensitive_str\": \"hello world.... but don't\
+    \ tell anyone\"\r\n              }\r\n            ]\r\n          },\r\n      \
+    \    \"sensitive_attributes\": []\r\n        }\r\n      ]\r\n    }\r\n  ],\r\n\
+    \  \"check_results\": null\r\n}\r\n\r\n```\n\n### References\n\n_No response_\n"
+  expected:
+  - internal/terraform/node_resource_abstract_instance.go
+  - internal/terraform/node_resource_plan_partialexp.go
+  - internal/terraform/marks.go
+- id: hashicorp__terraform-35543
+  repo: hashicorp/terraform
+  commit: 24833a2b062126a71ef30a86a6d1fc3823afdfdb
+  query: "terraform validate does not validate import blocks\n### Terraform Version\n\
+    \n```shell\nTerraform v1.9.3\r\non linux_amd64\n```\n\n\n### Terraform Configuration\
+    \ Files\n\n```terraform\r\nresource \"null_resource\" \"undef-local\" {\r\n}\r\
+    \n\r\nresource \"null_resource\" \"undef-var\" {\r\n}\r\n\r\nimport {\r\n  to\
+    \ = null_resource.undef-local\r\n  id = local.something_not_defined\r\n}\r\n\r\
+    \nimport {\r\n  to = null_resource.undef-var\r\n  id = var.some_other_undefined_thing\r\
+    \n}\r\n\r\nimport {\r\n    to = null_resource.not-a-real-resource\r\n    id =\
+    \ \"blah\"\r\n}\r\n```\r\n\n\n### Debug Output\n\nhttps://gist.github.com/TylerReid/1b83440cd5dc79d76e7092bea3ed4158\n\
+    \n### Expected Behavior\n\nI expected `terraform validate` to catch undefined\
+    \ variables and resources in `import` blocks\n\n### Actual Behavior\n\n`validate`\
+    \ returns `Success! The configuration is valid.`\n\n### Steps to Reproduce\n\n\
+    1. `terraform validate`\n\n### Additional Context\n\n_No response_\n\n### References\n\
+    \n_No response_\n"
+  expected:
+  - internal/terraform/transform_config.go
+  - internal/terraform/eval_for_each.go
+  - internal/terraform/context_validate.go
+  - internal/terraform/node_resource_plan.go
+  - internal/terraform/graph_builder_plan.go
+  - internal/terraform/eval_import.go
+  - internal/terraform/node_resource_validate.go
+  - internal/terraform/transform_attach_config_resource.go
+- id: hashicorp__terraform-35611
+  repo: hashicorp/terraform
+  commit: 047c1af0b4a9e1e650f3811d011bcb92b2ceb15a
+  query: "When using \u201Cmodule\u201D, local-exec commands written in \u201Cremoved\
+    \ block\u201D are not executed\n### Terraform Version\n\n```shell\nTerraform v1.9.4\r\
+    \non darwin_arm64\r\n+ provider registry.terraform.io/hashicorp/null v3.2.2\n\
+    ```\n\n\n### Terraform Configuration Files\n\nThis is `main.tf` file.\r\n```terraform\r\
+    \nterraform {\r\n  backend \"local\" {\r\n  }\r\n}\r\n\r\nremoved {\r\n  from\
+    \ = module.null.null_resource.main\r\n  provisioner \"local-exec\" {\r\n    when\
+    \    = destroy\r\n    command = \"echo 'test========================================='\"\
+    \r\n  }\r\n}\r\n```\r\n\r\nThis is `./module/main.tf` file\r\n```terraform\r\n\
+    resource \"null_resource\" \"main\" {}\r\n```\r\n\r\nThe following `main.tf` is\
+    \ applied in advance.\r\n```terraform\r\nterraform {\r\n  backend \"local\" {\r\
+    \n  }\r\n}\r\n\r\nmodule \"null\" {\r\n  source = \"./module\"\r\n}\r\n```\n\n\
+    ### Debug Output\n\nhttps://gist.github.com/bbq-all-stars/71f38ff5ec2b75e9cf193ae754836aad\n\
+    \n### Expected Behavior\n\nThe `local-exec` command for removed block is executed.\n\
+    \n### Actual Behavior\n\nIt appears that the local-exec command is not being executed,\
+    \ as shown below.\r\n```terraform\r\n % terraform apply\r\nmodule.null.null_resource.main:\
+    \ Refreshing state... [id=47603039451433078]\r\n\r\nTerraform used the selected\
+    \ providers to generate the following execution plan. Resource actions are indicated\
+    \ with the following\r\nsymbols:\r\n  - destroy\r\n\r\nTerraform will perform\
+    \ the following actions:\r\n\r\n  # module.null.null_resource.main will be destroyed\r\
+    \n  # (because null_resource.main is not in configuration)\r\n  - resource \"\
+    null_resource\" \"main\" {\r\n      - id = \"47603039451433078\" -> null\r\n \
+    \   }\r\n\r\nPlan: 0 to add, 0 to change, 1 to destroy.\r\n\r\nDo you want to\
+    \ perform these actions?\r\n  Terraform will perform the actions described above.\r\
+    \n  Only 'yes' will be accepted to approve.\r\n\r\n  Enter a value: yes\r\n\r\n\
+    module.null.null_resource.main: Destroying... [id=47603039451433078]\r\nmodule.null.null_resource.main:\
+    \ Destruction complete after 0s\r\n\r\nApply complete! Resources: 0 added, 0 changed,\
+    \ 1 destroyed.\r\n```\n\n### Steps to Reproduce\n\n1. Create a file named `./module/main.tf`\
+    \ as follows.\r\n    ```terraform\r\n    resource \"null_resource\" \"main\" {}\r\
+    \n    ```\r\n2. Create a file named `main.tf` as follows.\r\n    ```terraform\r\
+    \n    terraform {\r\n      backend \"local\" {\r\n      }\r\n    }\r\n    \r\n\
+    \    module \"null\" {\r\n      source = \"./module\"\r\n    }\r\n    ```\r\n\
+    3. Exec `terraform init` and `terraform apply`\r\n4. Fix `main.tf` file like this.\r\
+    \n    ```terraform\r\n    terraform {\r\n      backend \"local\" {\r\n      }\r\
+    \n    }\r\n    \r\n    removed {\r\n      from = module.null.null_resource.main\r\
+    \n      provisioner \"local-exec\" {\r\n        when    = destroy\r\n        command\
+    \ = \"echo 'test========================================='\"\r\n      }\r\n  \
+    \  }\r\n    ```\r\n5. Exec `terraform apply` again.\r\n6. Make sure that `null_resource`\
+    \ removed and the execution result of the local-exec command is not output.\n\n\
+    ### Additional Context\n\nIf module is not used, the results of the execution\
+    \ of the local-exec command are output.\r\nI followed these steps to confirm.\r\
+    \n\r\n1. Create a file `main.tf`\r\n    ```terraform\r\n    terraform {\r\n  \
+    \    backend \"local\" {\r\n      }\r\n    }\r\n    \r\n    resource \"null_resource\"\
+    \ \"main\" {}\r\n    ```\r\n2. Exec `terraform apply`\r\n3. Fix `main.tf` file\
+    \ like this.\r\n    ```terraform\r\n    terraform {\r\n      backend \"local\"\
+    \ {\r\n      }\r\n    }\r\n    \r\n    removed {\r\n      from = null_resource.main\r\
+    \n      provisioner \"local-exec\" {\r\n        when    = destroy\r\n        command\
+    \ = \"echo 'test========================================='\"\r\n      }\r\n  \
+    \  }\r\n    ```\r\n4. The results of local-exec execution are output as follows.\r\
+    \n    ```\r\n     % terraform apply\r\n    null_resource.main: Refreshing state...\
+    \ [id=922260470866626639]\r\n    \r\n    Terraform used the selected providers\
+    \ to generate the following execution plan. Resource actions are indicated with\
+    \ the following\r\n    symbols:\r\n      - destroy\r\n    \r\n    Terraform will\
+    \ perform the following actions:\r\n    \r\n      # null_resource.main will be\
+    \ destroyed\r\n      # (because null_resource.main is not in configuration)\r\n\
+    \      - resource \"null_resource\" \"main\" {\r\n          - id = \"922260470866626639\"\
+    \ -> null\r\n        }\r\n    \r\n    Plan: 0 to add, 0 to change, 1 to destroy.\r\
+    \n    \r\n    Do you want to perform these actions?\r\n      Terraform will perform\
+    \ the actions described above.\r\n      Only 'yes' will be accepted to approve.\r\
+    \n    \r\n      Enter a value: yes\r\n    \r\n    null_resource.main: Destroying...\
+    \ [id=922260470866626639]\r\n    null_resource.main: Provisioning with 'local-exec'...\r\
+    \n    null_resource.main (local-exec): Executing: [\"/bin/sh\" \"-c\" \"echo 'test========================================='\"\
+    ]\r\n    null_resource.main (local-exec): test=========================================\r\
+    \n    null_resource.main: Destruction complete after 0s\r\n    \r\n    Apply complete!\
+    \ Resources: 0 added, 0 changed, 1 destroyed.\r\n    ```\n\n### References\n\n\
+    _No response_\n"
+  expected:
+  - internal/terraform/transform_attach_config_resource.go
+- id: prometheus__prometheus-10633
+  repo: prometheus/prometheus
+  commit: 64fc3e58fec13af55968db89a484b9e0c5425bd6
+  query: "PuppetDB Service Discovery - Numerical parameters not converted to __meta_puppetdb_parameter\
+    \ labels\n### What did you do?\r\n\r\nHi,\r\n\r\nWe use puppetdb_sd to populate\
+    \ targets for scraping, with parameters enabled to be used with relabeling. \r\
+    \n\r\nWe've noticed some of the parameters were missing, based on their type.\r\
+    \n\r\nIt doesn't look like there is a case for `int` or `float` values in discovery/puppetdb/resources.go\r\
+    \n\r\nhttps://github.com/prometheus/prometheus/blob/01c55822169a9123367e333dc407edd8a263f75d/discovery/puppetdb/resources.go#L39-L72\r\
+    \n\r\n### What did you expect to see?\r\n\r\nAll parameters converted to labels\
+    \ with the `__meta_puppetdb_parameter_<parametername>`, e.g.:\r\n\r\n```\r\n \
+    \   \"parameters\": {\r\n      \"host\": \"example.hostname.com\",\r\n      \"\
+    port\": 25,\r\n      \"labels\": false,\r\n      \"module\": \"smtp_starttls\"\
+    \r\n    },\r\n```\r\n\r\nwould become meta labels, available for relabelling:\r\
+    \n\r\n```\r\n__meta_puppetdb_parameter_host=\"example.hostname.com\"\r\n__meta_puppetdb_parameter_port=\"\
+    25\"\r\n__meta_puppetdb_parameter_labels=\"false\"\r\n__meta_puppetdb_parameter_module=\"\
+    smtp_starttls\"\r\n```\r\n\r\n### What did you see instead? Under which circumstances?\r\
+    \n\r\nAny parameters that are not strings or booleans are ignored, so the `port`\
+    \ in the example is missing:\r\n\r\n```\r\n__meta_puppetdb_parameter_host=\"example.hostname.com\"\
+    \r\n__meta_puppetdb_parameter_labels=\"false\"\r\n__meta_puppetdb_parameter_module=\"\
+    smtp_starttls\"\r\n```\r\n\r\n\r\n### System information\r\n\r\nLinux 5.4.72-microsoft-standard-WSL2\
+    \ x86_64\r\n\r\n### Prometheus version\r\n\r\n```text\r\nprometheus, version 2.35.0\
+    \ (branch: HEAD, revision: 6656cd29fe6ac92bab91ecec0fe162ef0f187654)\r\n  build\
+    \ user:       root@cf6852b14d68\r\n  build date:       20220421-09:53:42\r\n \
+    \ go version:       go1.18.1\r\n  platform:         linux/amd64\r\n```\r\n\r\n\
+    \r\n### Prometheus configuration file\r\n\r\n```yaml\r\nscrape_configs:\r\n\r\n\
+    \  - job_name: \"test-blackbox\"\r\n    puppetdb_sd_configs:\r\n      - url: http://localhost:8080\r\
+    \n        include_parameters: true\r\n        query: 'resources { type = \"Profile::Prometheus_blackbox_service\"\
+    \ }'\r\n    metrics_path: /probe\r\n    relabel_configs:\r\n      - source_labels:\
+    \ [__meta_puppetdb_parameter_module]\r\n        target_label: __param_module\r\
+    \n      - source_labels: [__meta_puppetdb_parameter_host]\r\n        target_label:\
+    \ __param_target\r\n```\r\n\r\n\r\n### Alertmanager version\r\n\r\n_No response_\r\
+    \n\r\n### Alertmanager configuration file\r\n\r\n_No response_\r\n\r\n### Logs\r\
+    \n\r\n_No response_\n"
+  expected:
+  - discovery/puppetdb/resources.go
+  - discovery/puppetdb/fixtures/vhosts.json
+- id: prometheus__prometheus-10720
+  repo: prometheus/prometheus
+  commit: 89de30a0b754f4eb54fb543037683f3db6cda109
+  query: "PromQL function day_of_year\n<!--\r\n\r\n    Please do *NOT* ask support\
+    \ questions in Github issues.\r\n\r\n    If your issue is not a feature request\
+    \ or bug report use our\r\n    community support.\r\n\r\n    https://prometheus.io/community/\r\
+    \n\r\n    There is also commercial support available.\r\n\r\n    https://prometheus.io/support-training/\r\
+    \n\r\n-->\r\n## Proposal\r\n**Use case. Why is this important?**\r\n\r\nWe have\
+    \ day of month, day of week, but day_of_year would be handy as well, to complete\
+    \ our date functions.\r\n\n"
+  expected:
+  - web/ui/module/codemirror-promql/src/complete/promql.terms.ts
+  - docs/querying/functions.md
+  - web/ui/module/lezer-promql/src/promql.grammar
+  - promql/parser/functions.go
+  - promql/functions.go
+  - web/ui/module/codemirror-promql/src/promql.ts
+  - web/ui/module/codemirror-promql/src/types/function.ts
+- id: prometheus__prometheus-11859
+  repo: prometheus/prometheus
+  commit: 5ec1b4baaf01dae0b22567db53886c83b74e0e76
+  query: "Prometheus loading old memory snapshots instead of newer one during startup\n\
+    ### What did you do?\n\n- Enabled `memory-snapshot-on-shutdown` a few months ago\r\
+    \n- Multiple restart of Prometheus since the feature was enabled\r\n- Noticed\
+    \ recently that restarting prometheus cause us to lose the last ~2h of data\r\n\
+    - After investigation, I found that Prometheus keeps reloading an old snapshot\
+    \ from Aug 19 (`chunk_snapshot.178079.0114884608`) after each restart, instead\
+    \ of loading a recent snapshot (`chunk_snapshot.013482.0001871216`):\r\n```\r\n\
+    /prom-data $ ls -lah\r\ntotal 348K\r\ndrwxrwsr-x   38 root     1000      148.0K\
+    \ Nov 21 12:00 .\r\ndrwxr-xr-x    1 root     root        4.0K Nov 21 12:00 ..\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Sep 28 10:22 01FN5M8F1NZ34Q8Q76AMJ4G615\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Sep 28 10:22 01G3TWM7NDTB6GG5MT7DEBK4PD\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Sep 28 10:22 01G5F177SD2ZS8RTDY7PS8FYZ6\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Sep 28 10:23 01G8QB0788VZMKP82A531M7G6K\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Sep 28 10:22 01GBZDP4GN9Z1HD6PAEK5QJPFH\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Sep 22 23:07 01GDKG80QAWDPCFQ2BSR1AWCQ9\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 13 09:28 01GF80XFE30XV4P0SF5C0JY9H9\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 10:17 01GFDF59TP8YZK5H6QX5BGQNX5\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 11:20 01GFDJCEFB9G942VP5MTTS2WGD\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 12:07 01GFDP099FP76QTFXH2MY0SKCN\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 12:51 01GFDRNTNQ0DC8TQSXK7K8T911\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 13:30 01GFDV7B2HE77ZMA6SH8EXV80G\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 14:09 01GFDXEEEX3GS7WYQTBJKRN0VF\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 14:48 01GFDZNZMNXXXM5J2G0KKNEQWB\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 15:30 01GFE1WE9J0T8QQ8SVXW5WKQTN\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 16:06 01GFE49TGCDRVPSJVTEG8X3NV0\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 16:40 01GFE6B5R4Q5V9PDXRF4ZQA233\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Oct 15 17:19 01GFE898VRT7VH05HKBJT067V6\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Nov  2 10:35 01GGVT3C90JX24KWB384V6AVXJ\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Nov  9 06:00 01GHDDSJRW3H6777TWPGT7HSXH\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Nov 15 23:59 01GHYT2VY54WWVX23MF22YEJ0D\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Nov 18 05:28 01GJ4JH5Z8ZTA3N9VSSHX6J9BF\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Nov 20 09:23 01GJA4FQWZQA1D1FXQ9CG9KCR2\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Nov 21 05:12 01GJC97TC8004SB99R0VQ3R8X2\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Nov 21 09:03 01GJCPMW3YN6AFFRRR90NKS7SJ\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Nov 21 11:02 01GJCXGKBZG1YRZNVCNGR4QXG8\r\
+    \ndrwxrwsr-x    3 1000     1000        4.0K Nov 21 11:10 01GJCXR816JV1XXVFV7KXGC35C\r\
+    \ndrwxrwsr-x    2 1000     1000        4.0K Oct 10 08:59 chunk_snapshot.003006.0012550144.tmp\r\
+    \ndrwxrwsr-x    2 1000     1000        4.0K Nov 11 14:37 chunk_snapshot.010843.0070025216.tmp\r\
+    \ndrwxrwsr-x    2 1000     1000        4.0K Nov 21 12:00 chunk_snapshot.013482.0001871216\r\
+    \ndrwxrwsr-x    2 1000     1000        4.0K Nov 21 12:00 chunk_snapshot.013482.0001900544.tmp\r\
+    \ndrwxrwsr-x    2 1000     1000        4.0K Aug 19 23:08 chunk_snapshot.178079.0114884608\r\
+    \ndrwxrwsr-x    2 1000     1000        4.0K Nov 21 11:02 chunks_head\r\ndrwxrwsr-x\
+    \    3 1000     1000        4.0K Oct 10  2019 data\r\n-rw-r--r--    1 1000   \
+    \  1000           0 Nov 21 12:00 lock\r\ndrwxrws---    2 root     1000       16.0K\
+    \ Jul 23  2019 lost+found\r\n-rw-rw-r--    1 1000     1000       19.5K Nov 21\
+    \ 12:20 queries.active\r\ndrwxrwsr-x    3 1000     1000       20.0K Nov 21 12:16\
+    \ wal\r\n``` \r\n\r\n\n\n### What did you expect to see?\n\n- Old snapshot should\
+    \ have been removed a long time ago\r\n- New startup should have been loaded instead\
+    \ of old one\r\n- If both exist, new snapshot should be prioritised\n\n### What\
+    \ did you see instead? Under which circumstances?\n\n- Prometheus loaded the oldest\
+    \ snapshot instead of the newer one (August vs November)\r\n```\r\nts=2022-11-21T12:04:07.804Z\
+    \ caller=head_wal.go:1477 level=info component=tsdb msg=\"chunk snapshot loaded\"\
+    \ dir=/prom-data/chunk_snapshot.178079.0114884608 num_series=3128116 duration=45.38936241s\r\
+    \n```\n\n### System information\n\nLinux 5.4.170+ x86_64\n\n### Prometheus version\n\
+    \n```text\nprometheus, version 2.40.1 (branch: HEAD, revision: 965274259f993801d63f553639d248588287120b)\r\
+    \n  build user:       root@d020f7085e1e\r\n  build date:       20221109-14:30:50\r\
+    \n  go version:       go1.19.3\r\n  platform:         linux/amd64\n```\n\n\n###\
+    \ Prometheus configuration file\n\n```yaml\n--enable-feature=memory-snapshot-on-shutdown\n\
+    ```\n\n\n### Alertmanager version\n\n_No response_\n\n### Alertmanager configuration\
+    \ file\n\n_No response_\n\n### Logs\n\n```text\nts=2022-11-21T12:00:48.640Z caller=main.go:178\
+    \ level=info msg=\"Experimental memory snapshot on shutdown enabled\"\r\nts=2022-11-21T12:00:48.640Z\
+    \ caller=main.go:193 level=info msg=\"Automatically set GOMAXPROCS to match Linux\
+    \ container CPU quota\"\r\nts=2022-11-21T12:00:48.640Z caller=main.go:175 level=info\
+    \ msg=\"Experimental in-memory exemplar storage enabled\"\r\nts=2022-11-21T12:00:48.645Z\
+    \ caller=main.go:556 level=info msg=\"Starting Prometheus Server\" mode=server\
+    \ version=\"(version=2.40.1, branch=HEAD, revision=965274259f993801d63f553639d248588287120b)\"\
+    \r\nts=2022-11-21T12:00:48.645Z caller=main.go:561 level=info build_context=\"\
+    (go=go1.19.3, user=root@d020f7085e1e, date=20221109-14:30:50)\"\r\nts=2022-11-21T12:00:48.645Z\
+    \ caller=main.go:562 level=info host_details=\"(Linux 5.4.170+ #1 SMP Wed Mar\
+    \ 23 10:13:41 PDT 2022 x86_64 prometheus-0 (none))\"\r\nts=2022-11-21T12:00:48.645Z\
+    \ caller=main.go:563 level=info fd_limits=\"(soft=1048576, hard=1048576)\"\r\n\
+    ts=2022-11-21T12:00:48.645Z caller=main.go:564 level=info vm_limits=\"(soft=unlimited,\
+    \ hard=unlimited)\"\r\nts=2022-11-21T12:00:48.650Z caller=main.go:605 level=info\
+    \ component=automaxprocs msg=\"Updating GOMAXPROCS=4: determined from CPU quota\"\
+    \r\nts=2022-11-21T12:00:48.742Z caller=web.go:559 level=info component=web msg=\"\
+    Start listening for connections\" address=0.0.0.0:9080\r\nts=2022-11-21T12:00:48.743Z\
+    \ caller=main.go:993 level=info msg=\"Starting TSDB ...\"\r\nts=2022-11-21T12:00:48.744Z\
+    \ caller=tls_config.go:232 level=info component=web msg=\"Listening on\" address=[::]:9080\r\
+    \nts=2022-11-21T12:00:48.744Z caller=tls_config.go:235 level=info component=web\
+    \ msg=\"TLS is disabled.\" http2=false address=[::]:9080\r\nts=2022-11-21T12:00:48.788Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1635876000008\
+    \ maxt=1637625600000 ulid=01FN5M8F1NZ34Q8Q76AMJ4G615\r\nts=2022-11-21T12:00:48.820Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1651622400005\
+    \ maxt=1653372000000 ulid=01G3TWM7NDTB6GG5MT7DEBK4PD\r\nts=2022-11-21T12:00:48.838Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1653372000011\
+    \ maxt=1655121600000 ulid=01G5F177SD2ZS8RTDY7PS8FYZ6\r\nts=2022-11-21T12:00:48.885Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1656871200004\
+    \ maxt=1658620800000 ulid=01G8QB0788VZMKP82A531M7G6K\r\nts=2022-11-21T12:00:48.937Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1660370400000\
+    \ maxt=1662120000000 ulid=01GBZDP4GN9Z1HD6PAEK5QJPFH\r\nts=2022-11-21T12:00:48.944Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1662120000000\
+    \ maxt=1663869600000 ulid=01GDKG80QAWDPCFQ2BSR1AWCQ9\r\nts=2022-11-21T12:00:49.009Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1663869600005\
+    \ maxt=1665619200000 ulid=01GF80XFE30XV4P0SF5C0JY9H9\r\nts=2022-11-21T12:00:49.065Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1658620800000\
+    \ maxt=1660370400000 ulid=01GFDF59TP8YZK5H6QX5BGQNX5\r\nts=2022-11-21T12:00:49.112Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1655121600019\
+    \ maxt=1656871200000 ulid=01GFDJCEFB9G942VP5MTTS2WGD\r\nts=2022-11-21T12:00:49.129Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1649872800002\
+    \ maxt=1651622400000 ulid=01GFDP099FP76QTFXH2MY0SKCN\r\nts=2022-11-21T12:00:49.143Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1648123200000\
+    \ maxt=1649872800000 ulid=01GFDRNTNQ0DC8TQSXK7K8T911\r\nts=2022-11-21T12:00:49.181Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1646373600002\
+    \ maxt=1648123200000 ulid=01GFDV7B2HE77ZMA6SH8EXV80G\r\nts=2022-11-21T12:00:49.182Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1644624000004\
+    \ maxt=1646373600000 ulid=01GFDXEEEX3GS7WYQTBJKRN0VF\r\nts=2022-11-21T12:00:49.183Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1642874400004\
+    \ maxt=1644624000000 ulid=01GFDZNZMNXXXM5J2G0KKNEQWB\r\nts=2022-11-21T12:00:49.203Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1641124800004\
+    \ maxt=1642874400000 ulid=01GFE1WE9J0T8QQ8SVXW5WKQTN\r\nts=2022-11-21T12:00:49.226Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1639375200000\
+    \ maxt=1641124800000 ulid=01GFE49TGCDRVPSJVTEG8X3NV0\r\nts=2022-11-21T12:00:49.228Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1637625600004\
+    \ maxt=1639375200000 ulid=01GFE6B5R4Q5V9PDXRF4ZQA233\r\nts=2022-11-21T12:00:49.229Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1634126400001\
+    \ maxt=1635876000000 ulid=01GFE898VRT7VH05HKBJT067V6\r\nts=2022-11-21T12:00:49.241Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1665619200000\
+    \ maxt=1667368800000 ulid=01GGVT3C90JX24KWB384V6AVXJ\r\nts=2022-11-21T12:00:49.250Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1667368800002\
+    \ maxt=1667952000000 ulid=01GHDDSJRW3H6777TWPGT7HSXH\r\nts=2022-11-21T12:00:49.269Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1667952000009\
+    \ maxt=1668535200000 ulid=01GHYT2VY54WWVX23MF22YEJ0D\r\nts=2022-11-21T12:00:49.287Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1668535200001\
+    \ maxt=1668729600000 ulid=01GJ4JH5Z8ZTA3N9VSSHX6J9BF\r\nts=2022-11-21T12:00:49.330Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1668729600000\
+    \ maxt=1668924000000 ulid=01GJA4FQWZQA1D1FXQ9CG9KCR2\r\nts=2022-11-21T12:00:49.370Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1668924000004\
+    \ maxt=1668988800000 ulid=01GJC97TC8004SB99R0VQ3R8X2\r\nts=2022-11-21T12:00:49.410Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1669010400005\
+    \ maxt=1669017600000 ulid=01GJCPMW3YN6AFFRRR90NKS7SJ\r\nts=2022-11-21T12:00:49.434Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1669017600005\
+    \ maxt=1669024800000 ulid=01GJCXGKBZG1YRZNVCNGR4QXG8\r\nts=2022-11-21T12:00:49.455Z\
+    \ caller=repair.go:56 level=info component=tsdb msg=\"Found healthy block\" mint=1668988800004\
+    \ maxt=1669010400000 ulid=01GJCXR816JV1XXVFV7KXGC35C\r\nts=2022-11-21T12:03:22.415Z\
+    \ caller=head.go:562 level=info component=tsdb msg=\"Replaying on-disk memory\
+    \ mappable chunks if any\"\r\nts=2022-11-21T12:03:22.415Z caller=head.go:569 level=info\
+    \ component=tsdb msg=\"Chunk snapshot is enabled, replaying from the snapshot\"\
+    \r\nts=2022-11-21T12:04:07.804Z caller=head_wal.go:1477 level=info component=tsdb\
+    \ msg=\"chunk snapshot loaded\" dir=/prom-data/chunk_snapshot.178079.0114884608\
+    \ num_series=3128116 duration=45.38936241s\r\nts=2022-11-21T12:04:07.805Z caller=head.go:583\
+    \ level=info component=tsdb msg=\"Chunk snapshot loading time\" duration=45.389627289s\r\
+    \nts=2022-11-21T12:04:08.760Z caller=head.go:606 level=info component=tsdb msg=\"\
+    On-disk memory mappable chunks replay completed\" duration=954.908993ms\r\nts=2022-11-21T12:04:08.760Z\
+    \ caller=head.go:612 level=info component=tsdb msg=\"Replaying WAL, this may take\
+    \ a while\"\r\nts=2022-11-21T12:04:08.760Z caller=head.go:720 level=info component=tsdb\
+    \ msg=\"WAL replay completed\" checkpoint_replay_duration=182.199\xB5s wal_replay_duration=439ns\
+    \ wbl_replay_duration=164ns total_replay_duration=46.344834642s\r\nts=2022-11-21T12:04:22.539Z\
+    \ caller=main.go:1014 level=info fs_type=EXT4_SUPER_MAGIC\r\nts=2022-11-21T12:04:22.540Z\
+    \ caller=main.go:1017 level=info msg=\"TSDB started\"\r\nts=2022-11-21T12:04:22.540Z\
+    \ caller=main.go:1197 level=info msg=\"Loading configuration file\" filename=/etc/prometheus/config.yml\r\
+    \nts=2022-11-21T12:04:22.545Z caller=kubernetes.go:326 level=info component=\"\
+    discovery manager scrape\" discovery=kubernetes msg=\"Using pod service account\
+    \ via in-cluster config\"\r\nts=2022-11-21T12:04:22.547Z caller=kubernetes.go:326\
+    \ level=info component=\"discovery manager scrape\" discovery=kubernetes msg=\"\
+    Using pod service account via in-cluster config\"\r\nts=2022-11-21T12:04:22.548Z\
+    \ caller=kubernetes.go:326 level=info component=\"discovery manager scrape\" discovery=kubernetes\
+    \ msg=\"Using pod service account via in-cluster config\"\r\nts=2022-11-21T12:04:22.548Z\
+    \ caller=kubernetes.go:326 level=info component=\"discovery manager scrape\" discovery=kubernetes\
+    \ msg=\"Using pod service account via in-cluster config\"\r\nts=2022-11-21T12:04:22.549Z\
+    \ caller=kubernetes.go:326 level=info component=\"discovery manager scrape\" discovery=kubernetes\
+    \ msg=\"Using pod service account via in-cluster config\"\r\nts=2022-11-21T12:04:22.549Z\
+    \ caller=kubernetes.go:326 level=info component=\"discovery manager scrape\" discovery=kubernetes\
+    \ msg=\"Using pod service account via in-cluster config\"\r\nts=2022-11-21T12:04:22.549Z\
+    \ caller=kubernetes.go:326 level=info component=\"discovery manager scrape\" discovery=kubernetes\
+    \ msg=\"Using pod service account via in-cluster config\"\r\nts=2022-11-21T12:04:22.549Z\
+    \ caller=kubernetes.go:326 level=info component=\"discovery manager scrape\" discovery=kubernetes\
+    \ msg=\"Using pod service account via in-cluster config\"\r\nts=2022-11-21T12:04:22.550Z\
+    \ caller=kubernetes.go:326 level=info component=\"discovery manager scrape\" discovery=kubernetes\
+    \ msg=\"Using pod service account via in-cluster config\"\r\nts=2022-11-21T12:04:22.550Z\
+    \ caller=kubernetes.go:326 level=info component=\"discovery manager scrape\" discovery=kubernetes\
+    \ msg=\"Using pod service account via in-cluster config\"\r\nts=2022-11-21T12:04:22.662Z\
+    \ caller=main.go:1234 level=info msg=\"Completed loading of configuration file\"\
+    \ filename=/etc/prometheus/config.yml totalDuration=122.394627ms db_storage=3.243\xB5\
+    s remote_storage=2.447\xB5s web_handler=1.05\xB5s query_engine=1.746\xB5s scrape=649.458\xB5\
+    s scrape_sd=5.224646ms notify=33.423\xB5s notify_sd=33.847\xB5s rules=111.664967ms\
+    \ tracing=14.489\xB5s\r\nts=2022-11-21T12:04:22.662Z caller=main.go:978 level=info\
+    \ msg=\"Server is ready to receive web requests.\"\r\nts=2022-11-21T12:04:22.662Z\
+    \ caller=manager.go:944 level=info component=\"rule manager\" msg=\"Starting rule\
+    \ manager...\"\n```\n\n"
+  expected:
+  - tsdb/head.go
+- id: prometheus__prometheus-12874
+  repo: prometheus/prometheus
+  commit: 9071913fd99fcdea9ea069b277f2be66b08e549c
+  query: "Duplicate sample not discarded when chunk is created due to reaching chunk\
+    \ size limit\n### What did you do?\n\nIngesting about 1.7M series.\r\n\n\n###\
+    \ What did you expect to see?\n\nThe resulting chunks in the written block after\
+    \ compaction are not overlapping.\r\n\n\n### What did you see instead? Under which\
+    \ circumstances?\n\nWe are using Mimir [compactor](https://grafana.com/docs/mimir/v2.9.x/references/architecture/components/compactor/)\
+    \ and it detects overlapping chunks. In particular it detected that the timestamp+sample\
+    \ at the end of some chunks was the the same as the first timestamp+sample of\
+    \ the next chunk.\r\n\r\nThe problem is that https://github.com/prometheus/prometheus/blob/83891135c6585fc2e9990824c9d12478acfe6b10/tsdb/head_append.go#L1285\
+    \ branch in the code is missing the check \r\n```\r\nif c.maxTime >= t {\r\n\t\
+    return c, false, false\r\n}\r\n```\n\n### System information\n\nKubernetes, amd64\n\
+    \n### Prometheus version\n\n```text\nEmbedded in Mimir at Prometheus version b6f903b5f\
+    \ (2023-09-01)\n```\n\n\n### Prometheus configuration file\n\n```yaml\nN/A\n```\n\
+    \n\n### Alertmanager version\n\n```text\nN/A\n```\n\n\n### Alertmanager configuration\
+    \ file\n\n```yaml\nN/A\n```\n\n\n### Logs\n\n```text\nts=2023-09-14T16:02:28.413933811Z\
+    \ caller=bucket_compactor.go:256 level=error component=compactor user=*********\
+    \ groupKey=0@17241709254077376921-split-8_of_16-1694692800000-1694700000000 minTime=\"\
+    2023-09-14 12:00:00 +0000 UTC\" maxTime=\"2023-09-14 14:00:00 +0000 UTC\" msg=\"\
+    compaction job failed\" duration=44.76685907s duration_ms=44766 err=\"blocks with\
+    \ out-of-order chunks are dropped from compaction:  /data/compact/0@17241709254077376921-split-8_of_16-1694692800000-1694700000000/01HAA3WZR80EF79HGJZ4X49WWS:\
+    \ 14/1399689 series have an average of 1.000 out-of-order chunks: 0.000 of these\
+    \ are exact duplicates (in terms of data and time range)\"\n```\n\n"
+  expected:
+  - tsdb/head_append.go
+- id: prometheus__prometheus-13845
+  repo: prometheus/prometheus
+  commit: 25a8d576717f4a69290d6f6755b4a90cfaab08ff
+  query: "Queries return same series twice with non-stringlabels build\n### What did\
+    \ you do?\r\n\r\nIn some cases range queries return multiple separate series with\
+    \ identical label sets where only one series is expected.\r\n\r\nThe conditions\
+    \ seem to be:\r\n* metric needs to have at least one label lexicographically smaller\
+    \ than `__name__`, for example `__address__`\r\n* metric needs to have at least\
+    \ one label lexicographically larger than `__name__`\r\n* query needs to drop\
+    \ metric name, for example `metric * 2`\r\n* it needs to be a range query\r\n\r\
+    \nHere's a unit test showing the problem: https://github.com/jDomantas/prometheus/commit/171c965380ef8a8665ad9386cbcea2b44e2b3e5b\r\
+    \n\r\nTest error shows that prom engine returns two metrics - first one contains\
+    \ the first datapoint, and the second one contains the rest. Second metric has\
+    \ a duplicate label, which disappears when querying the api because response represents\
+    \ label set as a map.\r\n\r\n```\r\nError:      \tNot equal:\r\n            \t\
+    expected: {__address__=\"bar\", job=\"1\"} =>\r\n            \t200 @[0]\r\n  \
+    \          \t200 @[60000]\r\n            \t200 @[120000]\r\n            \tactual\
+    \  : {__address__=\"bar\", job=\"1\"} =>\r\n            \t200 @[0]\r\n       \
+    \     \t{__address__=\"bar\", job=\"1\", job=\"1\"} =>\r\n            \t200 @[60000]\r\
+    \n            \t200 @[120000]\_\_promql.Matrix{\r\n            \t\_\_\t{\r\n \
+    \           \t\_\_\t\tMetric: s`{__address__=\"bar\", job=\"1\"}`,\r\n       \
+    \     \t\_\_\t\tFloats: []promql.FPoint{\r\n            \t\_\_\t\t\t{F: 200},\r\
+    \n            \t-\_\t\t\ts\"200 @[60000]\",\r\n            \t-\_\t\t\ts\"200 @[120000]\"\
+    ,\r\n            \t\_\_\t\t},\r\n            \t\_\_\t\tHistograms: nil,\r\n  \
+    \          \t\_\_\t},\r\n            \t+\_\ts\"{__address__=\\\"bar\\\", job=\\\
+    \"1\\\", job=\\\"1\\\"} =>\\n200 @[60000]\\n200 @[120000]\",\r\n            \t\
+    \_\_}\r\nTest:       \tTestRangeQuery/duplicate-result\r\n```\r\n\r\nThis bug\
+    \ appears to be introduced in #13446 - `DropMetricName` modifies `Labels` slice\
+    \ in-place, which sometimes screws up labels for other samples.\r\n\r\n### What\
+    \ did you expect to see?\r\n\r\nNo duplicate series returned\r\n\r\n### What did\
+    \ you see instead? Under which circumstances?\r\n\r\nFirst datapoint of the range\
+    \ query result returned as separate series\r\n\r\n### System information\r\n\r\
+    \n_No response_\r\n\r\n### Prometheus version\r\n\r\n```text\r\nPrometheus version\
+    \ v2.51.0-rc.0 (used as a library)\r\n```\r\n\r\n\r\n### Prometheus configuration\
+    \ file\r\n\r\n_No response_\r\n\r\n### Alertmanager version\r\n\r\n_No response_\r\
+    \n\r\n### Alertmanager configuration file\r\n\r\n_No response_\r\n\r\n### Logs\r\
+    \n\r\n_No response_\n"
+  expected:
+  - model/labels/labels.go
+- id: prometheus__prometheus-14861
+  repo: prometheus/prometheus
+  commit: 9f57f14d6c5e3c10ed212010cb34522458f43d64
+  query: "Agent mode PromQL engine shutdown ends in crash due to nil pointer dereference\n\
+    ### What did you do?\r\n\r\nRan Prometheus (built from `main`) in agent mode and\
+    \ then shut it down.\r\n\r\n### What did you expect to see?\r\n\r\nAn orderly\
+    \ shutdown.\r\n\r\n### What did you see instead? Under which circumstances?\r\n\
+    \r\nA crash:\r\n\r\n```\r\nts=2024-09-07T19:41:50.112Z caller=main.go:1041 level=warn\
+    \ msg=\"Received an OS signal, exiting gracefully...\" signal=interrupt\r\npanic:\
+    \ runtime error: invalid memory address or nil pointer dereference\r\n[signal\
+    \ SIGSEGV: segmentation violation code=0x1 addr=0x28 pc=0x2f2865d]\r\n\r\ngoroutine\
+    \ 20 [running]:\r\ngithub.com/prometheus/prometheus/promql.(*Engine).Close(...)\r\
+    \n\t/home/julius/gosrc/src/github.com/prometheus/prometheus/promql/engine.go:438\r\
+    \nmain.main.func10()\r\n\t/home/julius/gosrc/src/github.com/prometheus/prometheus/cmd/prometheus/main.go:1048\
+    \ +0x33d\r\ngithub.com/oklog/run.(*Group).Run.func1({0xc000898000?, 0xc0008a4000?})\r\
+    \n\t/home/julius/gosrc/pkg/mod/github.com/oklog/run@v1.1.0/group.go:38 +0x29\r\
+    \ncreated by github.com/oklog/run.(*Group).Run in goroutine 1\r\n\t/home/julius/gosrc/pkg/mod/github.com/oklog/run@v1.1.0/group.go:37\
+    \ +0x5a\r\n```\r\n\r\nI did a git bisect and this bug seems to have gotten introduced\
+    \ in commit 0cc99e677ad3da2cf00599cb0e6c272ab58688f1 of https://github.com/prometheus/prometheus/pull/14064\n"
+  expected:
+  - promql/engine.go
+- id: prometheus__prometheus-15142
+  repo: prometheus/prometheus
+  commit: 16bba78f1549cfd7909b61ebd7c55c822c86630b
+  query: "race in tsdb.headAppender.AppendHistogram\n### What did you do?\r\n\r\n\
+    Run Mimir with race detection enabled.\r\n\r\n### What did you expect to see?\r\
+    \n\r\nNo race condition.\r\n\r\n### What did you see instead? Under which circumstances?\r\
+    \n\r\nWARNING: DATA RACE\r\nWrite at 0x00c08329f350 by goroutine 148443:\r\n \
+    \ github.com/prometheus/prometheus/tsdb.(*headAppender).AppendHistogram()\r\n\
+    \     .../vendor/github.com/prometheus/prometheus/tsdb/head_append.go:668 +0x6ed\r\
+    \n  github.com/prometheus/prometheus/tsdb.(*dbAppender).AppendHistogram()\r\n\
+    \      <autogenerated>:1 +0xa1\r\n  ...\r\n\r\nPrevious write at 0x00c08329f350\
+    \ by goroutine 236366:\r\n  github.com/prometheus/prometheus/tsdb.(*memSeries).appendHistogram()\r\
+    \n      .../vendor/github.com/prometheus/prometheus/tsdb/head_append.go:1403 +0x1c9\r\
+    \n  github.com/prometheus/prometheus/tsdb.(*headAppender).Commit()\r\n      .../vendor/github.com/prometheus/prometheus/tsdb/head_append.go:1168\
+    \ +0x2d48\r\n  github.com/prometheus/prometheus/tsdb.dbAppender.Commit()\r\n \
+    \     .../vendor/github.com/prometheus/prometheus/tsdb/db.go:1278 +0x49\r\n  github.com/prometheus/prometheus/tsdb.(*dbAppender).Commit()\r\
+    \n      <autogenerated>:1 +0x4e\r\n ...\r\n\r\n### System information\r\n\r\n\
+    _No response_\r\n\r\n### Prometheus version\r\n\r\n_No response_\r\n\r\n### Prometheus\
+    \ configuration file\r\n\r\n_No response_\r\n\r\n### Alertmanager version\r\n\r\
+    \n_No response_\r\n\r\n### Alertmanager configuration file\r\n\r\n_No response_\r\
+    \n\r\n### Logs\r\n\r\n_No response_\n"
+  expected:
+  - tsdb/head_append.go
+- id: prometheus__prometheus-9248
+  repo: prometheus/prometheus
+  commit: 1fb3c1b5980d2ae3f844b6b9ae2ad38117710aa0
+  query: "`atan2` is currently not allowed between scalar values\nIn PromQL testing\
+    \ I noticed that `atan2` is currently not allowed between scalar values like `1\
+    \ atan2 2` (`operator \"atan2\" not allowed for Scalar operations`). Is there\
+    \ a good reason for this? I would just treat it like any of the other arithmetic\
+    \ operators, which also work between scalars.\r\n\r\n_Originally posted by @juliusv\
+    \ in https://github.com/prometheus/prometheus/issues/9248#issuecomment-939952244_\n"
+  expected:
+  - web/ui/module/codemirror-promql/src/complete/promql.terms.ts
+  - promql/parser/lex.go
+  - web/ui/module/codemirror-promql/src/promql.ts
+  - web/ui/module/codemirror-promql/src/grammar/tokens.js
+  - docs/querying/operators.md
+  - promql/engine.go
+  - web/ui/module/codemirror-promql/src/grammar/promql.grammar
+  - promql/parser/generated_parser.y.go
+  - promql/parser/generated_parser.y

@@ -172,6 +172,33 @@ Separate retrieval benchmark mirroring CodeGraph's own `runner.ts` methodology (
 
 When CodeGraph misses, it returns 0 results — methods exist in the repo but aren't indexed (standalone functions, React hooks, route handlers in monorepo sub-packages). JIDRA's tree-sitter extractor captures all of these. Explore gap widens in complex monorepo structures: Shapeshift 6/6 vs 3/6 because CodeGraph's traversal doesn't cross package boundaries. Full data: [JIDRA_vs_CodeGraph_retrieval_final.md](docs/JIDRA_vs_CodeGraph_retrieval_final.md).
 
+## SWE-bench Style File Retrieval (8 repos, 279 cases)
+
+Broader evaluation using [SWE-bench](https://www.swebench.com/) issue-to-file mapping: given a GitHub issue description, retrieve the files a human developer actually touched. Scored at file level (≥50% file recall = pass). Four-way comparison: JIDRA search, JIDRA explore, CodeGraph search, and CodeGraph explore†.
+
+| Repo | Cases | JIDRA Search | JIDRA Explore | CG Search | CG Explore† |
+|------|------:|:------------:|:-------------:|:---------:|:-----------:|
+| axios | 6 | **100%** | 83% | 50% | 17% |
+| preact | 17 | **94%** | **94%** | 47% | 29% |
+| matplotlib | 23 | **91%** | 83% | 26% | 9% |
+| django | 114 | **87%** | 74% | 31% | 16% |
+| caddy | 14 | **79%** | 71% | 7% | 21% |
+| sympy | 77 | **70%** | **70%** | 14% | 10% |
+| docusaurus | 5 | **60%** | 40% | 20% | 0% |
+| scikit-learn | 23 | **48%** | 43% | 30% | 22% |
+| **Aggregate** | **279** | **~78%** | **~70%** | **~28%** | **~16%** |
+
+† CG explore is a 1-hop edge approximation of CodeGraph's semantic exploration — not an exact equivalent of JIDRA's multi-hop graph traversal.
+
+Key findings:
+- JIDRA search beats CodeGraph search by ~50 percentage points on average across all 8 repos
+- JIDRA explore (the mode used by the MCP agent) adds graph-traversal context that further improves file discovery for multi-file changes
+- CodeGraph's FTS gaps are most severe in Go (caddy: 7%) and domain-heavy Python (sympy: 14%); JIDRA's tree-sitter extractor indexes standalone functions and hooks CG misses
+- scikit-learn's 48% ceiling is a semantic gap: high-level math concept queries (e.g. "ridge regression convergence") have no lexical match to function names — requires embedding-based search
+
+Per-repo detailed reports: [docs/evals/](docs/evals/)
+Consolidated analysis: [docs/FINDINGS_PYTHON.md](docs/FINDINGS_PYTHON.md) · [docs/FINDINGS_TYPESCRIPT.md](docs/FINDINGS_TYPESCRIPT.md) · [docs/JIDRA_vs_CodeGraph_retrieval_all.md](docs/JIDRA_vs_CodeGraph_retrieval_all.md)
+
 ## What JIDRA Does NOT Do (By Design)
 
 - ❌ **Autonomous agent loops** - Claude already does this; we provide context
