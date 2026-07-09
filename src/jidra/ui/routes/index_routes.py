@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import signal
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -427,6 +429,59 @@ async def reindex(req: ReindexRequest) -> dict:
         codebase, graph_path, hint_changed_files=req.changed_files
     )
     return {"summary": summary}
+
+
+class ReindexStatusRequest(BaseModel):
+    repo_path: str
+    output_path: str | None = None
+
+
+@router.get("/reindex/status")
+async def reindex_status(repo_path: str, output_path: str | None = None) -> dict:
+    out_dir = _out_dir(repo_path, output_path)
+    pid_file = out_dir / "reindex.pid"
+    log_file = out_dir / "reindex.log"
+
+    if not pid_file.exists():
+        return {"running": False, "pid": None, "log_tail": _read_log_tail(log_file)}
+
+    try:
+        pid = int(pid_file.read_text().strip())
+        os.kill(pid, 0)  # check process exists
+        return {"running": True, "pid": pid, "log_tail": _read_log_tail(log_file)}
+    except (ProcessLookupError, ValueError):
+        pid_file.unlink(missing_ok=True)
+        return {"running": False, "pid": None, "log_tail": _read_log_tail(log_file)}
+
+
+def _read_log_tail(log_file: Path, lines: int = 30) -> list[str]:
+    if not log_file.exists():
+        return []
+    try:
+        text = log_file.read_text(encoding="utf-8", errors="replace")
+        return text.splitlines()[-lines:]
+    except OSError:
+        return []
+
+
+@router.post("/reindex/stop")
+async def reindex_stop(req: ReindexStatusRequest) -> dict:
+    out_dir = _out_dir(req.repo_path, req.output_path)
+    pid_file = out_dir / "reindex.pid"
+
+    if not pid_file.exists():
+        return {"stopped": False, "reason": "not running"}
+
+    try:
+        pid = int(pid_file.read_text().strip())
+        os.kill(pid, signal.SIGTERM)
+        pid_file.unlink(missing_ok=True)
+        return {"stopped": True, "pid": pid}
+    except (ProcessLookupError, ValueError):
+        pid_file.unlink(missing_ok=True)
+        return {"stopped": False, "reason": "process not found"}
+    except PermissionError:
+        return {"stopped": False, "reason": "permission denied"}
 
 
 class HooksRequest(BaseModel):

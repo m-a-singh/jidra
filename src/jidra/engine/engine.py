@@ -1109,19 +1109,32 @@ class JidraEngine:
         hits.sort(key=lambda h: h[0], reverse=True)
         return [row for _matched, row in hits[:limit]]
 
-    def search(self, query: str, limit: int = 20, language: str | None = None) -> dict:
+    def search(
+        self,
+        query: str,
+        limit: int = 20,
+        language: str | None = None,
+        exact: bool = False,
+    ) -> dict:
         """FTS5 keyword search over method names, signatures, and source.
 
         After FTS, expands results with 1-hop call-graph neighbors so that
         callers/callees of matched methods surface even when not directly
         indexed under the query terms.
+
+        When exact=True: skip neighbor expansion and class supplement, cap at
+        top-5 BM25 seeds only. Use this for known-symbol lookups where you want
+        a definitive yes/no rather than broad recall.
         """
+        _exact_limit = 5
+        fetch_limit = _exact_limit if exact else limit
+
         with self._conn_lock:
             rows = graph_store.search_methods(
-                self.conn, query, limit=limit, language=language
+                self.conn, query, limit=fetch_limit, language=language
             )
         if not rows:
-            rows = self._search_fallback(query, limit=limit, language=language)
+            rows = self._search_fallback(query, limit=fetch_limit, language=language)
 
         # Re-sort FTS rows: demote generated/build paths so real source ranks first.
         # BM25 scores are negative — more negative = better match, so sort ascending.
@@ -1134,14 +1147,40 @@ class JidraEngine:
         rows = sorted(rows, key=_fts_sort_key)
 
         # If all top results are generated, fetch more rows to find real source
-        if rows and all(
-            any(m in r.get("file_path", "") for m in _GENERATED_MARKERS) for r in rows
+        if (
+            not exact
+            and rows
+            and all(
+                any(m in r.get("file_path", "") for m in _GENERATED_MARKERS)
+                for r in rows
+            )
         ):
             with self._conn_lock:
                 extended = graph_store.search_methods(
                     self.conn, query, limit=limit * 5, language=language
                 )
             rows = sorted(extended, key=_fts_sort_key)
+
+        if exact:
+            results = [
+                {
+                    "method_id": r["id"],
+                    "method_name": r["method_name"],
+                    "signature": r["signature"],
+                    "class_full_name": r["class_full_name"],
+                    "file_path": r["file_path"],
+                    "language": r["language"],
+                    "score": round(-float(r.get("score") or 0.0), 6),
+                    "source": "fts",
+                }
+                for r in rows[:_exact_limit]
+            ]
+            return {
+                "query": query,
+                "count": len(results),
+                "results": results,
+                "exact": True,
+            }
 
         seed_ids = {r["id"] for r in rows}
 

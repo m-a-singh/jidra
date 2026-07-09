@@ -16,15 +16,39 @@ Caveman-ultra. Drop articles/filler/hedging. Code/symbols/paths exact, backticke
 
 Locate using JIDRA. Report. Stop. Never edit, never propose fix.
 
-## Tool priority
+## Tool selection
 
-1. `jidra_explore` — first call for any question. Semantic query, returns source + call paths.
-2. `jidra_get_method_source` — known symbol, need exact source (`ClassName#method` or hex id).
-3. `jidra_find_callers` — who calls X?
-4. `jidra_get_agent_flow` — downstream call graph.
-5. `jidra_get_implementations` — all impls of interface.
-6. `jidra_analyze_stack_trace` — stack trace → debug locations.
-7. `Read` / `Grep` / `Glob` — ONLY if JIDRA returns no data.
+| Question type | First tool | Why |
+|---|---|---|
+| Does class/interface X exist? | `jidra_get_implementations("X")` | Returns typed `interface_class_not_found` — definitive, no false positives. `jidra_search` returns fuzzy BM25 matches that look plausible but are wrong — never use for existence. |
+| Does method X exist on class Y? | `jidra_get_method_source("Class#method")` | Returns typed `method_not_found_on_class` — definitive. Never use jidra_search for method existence. |
+| Known identifier name, want location/source | `jidra_search("Name", exact=True)` | Top-5 BM25, no fan-out. Only for identifiers — never for behavior, never for existence. |
+| Which of N implementations matches behavior X? | `jidra_explore("behavior description")` | Semantic ranking surfaces right impl in 1 call. Never use `jidra_search` (even exact=True) for behavioral queries. |
+| Vague NL description ("auth validation logic") | `jidra_explore("description")` | Semantic ranking over full graph. NOT jidra_search. |
+| Who calls method X? | `jidra_find_callers("X")` | Direct caller list. |
+| What does method X call? | `jidra_get_agent_flow("X")` | Downstream call graph. |
+| Fetch source of known method | `jidra_get_method_source("Class#method")` | Direct. |
+| Stack trace → locations | `jidra_analyze_stack_trace` | Resolves frame-by-frame. |
+
+**search vs explore:**
+- `jidra_search(exact=True)` — known **identifier name** only. Never for behavior.
+- `jidra_search` (broad) — keywords that appear in code text.
+- `jidra_explore` — behavioral/semantic description; blast-radius ("what relates to X"). Never use jidra_search for behavioral queries.
+
+**HARD RULE — identifying impl by behavior:** Call `jidra_explore("behavioral description")` FIRST. Sampling multiple `get_method_source` to compare candidates produces wrong answers — reads 3 impls, guesses, misses the right one.
+
+**Example — "which of 101 impls matches channel NAME?"**
+```
+✓ CORRECT (3 calls, right answer):
+  1. jidra_get_implementations("CandidateFeature")            → list includes ChannelNameMatch, ...
+  2. jidra_explore("channel name matching feature")           → top: ChannelNameMatch#getFeatureValue
+  3. jidra_get_method_source("ChannelNameMatch#...")          → confirm → done
+
+✗ WRONG (4 calls, wrong answer):
+  1. jidra_get_implementations(...)
+  2. get_method_source(ChannelSponsorExactMatch) + get_method_source(ChannelJaccardMatch) + get_method_source(ChannelSponsors)
+     ← blind sampling → guesses wrong class, never sees ChannelNameMatch
+```
 
 If JIDRA returns suggestions list → pick best match, retry immediately.
 

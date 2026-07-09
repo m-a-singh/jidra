@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import Any
+
+import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +29,14 @@ from ..models import (
 )
 from ..engine.parallel import parallel_map
 from ..utils.parser import make_parser
+
+try:
+    import jidra_resolver as _jidra_resolver
+
+    _RUST_RESOLVER_AVAILABLE = True
+except ImportError:
+    _jidra_resolver = None
+    _RUST_RESOLVER_AVAILABLE = False
 
 
 @dataclass
@@ -2272,6 +2283,7 @@ def _build_java_graph(
         )
     )
 
+    t0 = time.perf_counter()
     for result in parallel_map(_extract_file, file_paths):
         all_classes.extend(result.classes)
         all_methods.extend(result.methods)
@@ -2280,6 +2292,7 @@ def _build_java_graph(
         all_inheritance_edges.extend(result.inheritance_edges)
         if on_progress:
             on_progress(1, 1)
+    t1 = time.perf_counter()
 
     graph = Graph(
         classes=all_classes,
@@ -2290,7 +2303,13 @@ def _build_java_graph(
         resolved_call_edges=[],
     )
 
-    _resolve_calls(graph)
+    if not _RUST_RESOLVER_AVAILABLE:
+        _resolve_calls(graph)
+    t2 = time.perf_counter()
+    print(
+        f"[jidra-timing] extract={t1 - t0:.2f}s resolve={'rust' if _RUST_RESOLVER_AVAILABLE else f'{t2 - t1:.2f}s'}",
+        flush=True,
+    )
 
     return graph
 
@@ -2358,58 +2377,77 @@ def build_graph(
     if not langs:
         langs = ["java"]  # backward-compat fallback
 
-    graphs: list[Graph] = []
-
-    if "typescript" in langs:
+    def _extract_typescript() -> Graph:
         from .ts_extractor import build_ts_graph
 
         # "tsmorph" selects the Docker sidecar; auto/treesitter stay in-process.
         backend = "tsmorph" if ts_backend == "tsmorph" else ts_backend
-        graphs.append(
-            build_ts_graph(
-                codebase_root,
-                on_progress=on_progress,
-                backend=backend,
-                skip_folders=skip_folders,
-            )
+        return build_ts_graph(
+            codebase_root,
+            on_progress=on_progress,
+            backend=backend,
+            skip_folders=skip_folders,
         )
 
-    if "python" in langs:
+    def _extract_python() -> Graph:
         from .py_extractor import build_py_graph
 
-        graphs.append(
-            build_py_graph(
-                codebase_root, on_progress=on_progress, skip_folders=skip_folders
-            )
+        return build_py_graph(
+            codebase_root, on_progress=on_progress, skip_folders=skip_folders
         )
 
-    if "scala" in langs:
+    def _extract_scala() -> Graph:
         from .scala_extractor import build_scala_graph
 
-        scala_graph = build_scala_graph(codebase_root, on_progress=on_progress)
-        graphs.append(scala_graph)
+        return build_scala_graph(codebase_root, on_progress=on_progress)
 
-    if "go" in langs:
+    def _extract_go() -> Graph:
         from .go_extractor import build_go_graph
 
-        graphs.append(
-            build_go_graph(
-                codebase_root, on_progress=on_progress, skip_folders=skip_folders
-            )
+        return build_go_graph(
+            codebase_root, on_progress=on_progress, skip_folders=skip_folders
         )
 
-    if "java" in langs:
-        java_graph = _build_java_graph(
+    def _extract_java() -> Graph:
+        g = _build_java_graph(
             codebase_root,
             on_progress=on_progress,
             extra_java_roots=extra_java_roots,
             skip_folders=skip_folders,
         )
-        for cls in java_graph.classes:
+        for cls in g.classes:
             cls.language = "java"
-        for m in java_graph.methods:
+        for m in g.methods:
             m.language = "java"
-        graphs.append(java_graph)
+        return g
+
+    lang_tasks: dict[str, Any] = {
+        "typescript": _extract_typescript,
+        "python": _extract_python,
+        "scala": _extract_scala,
+        "go": _extract_go,
+        "java": _extract_java,
+    }
+    active = [(lang, fn) for lang, fn in lang_tasks.items() if lang in langs]
+
+    def _timed(lang: str, fn: Any) -> Graph:
+        print(f"  [{lang}] parsing ...", flush=True)
+        t0 = time.perf_counter()
+        result = fn()
+        elapsed = time.perf_counter() - t0
+        print(f"  [{lang}] done ({elapsed:.1f}s)", flush=True)
+        return result
+
+    if len(active) == 1:
+        graphs = [_timed(*active[0])]
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        graphs = []
+        with ThreadPoolExecutor(max_workers=len(active)) as pool:
+            futures = {pool.submit(_timed, lang, fn): lang for lang, fn in active}
+            for fut in as_completed(futures):
+                graphs.append(fut.result())
 
     if len(graphs) == 1:
         return graphs[0]
@@ -2516,6 +2554,90 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
     )
 
 
+def _marshal_for_rust(graph: "Graph") -> tuple:
+    """Convert Graph dataclasses to the flat tuples jidra_resolver expects."""
+    methods = [
+        (
+            m.id,
+            m.class_id,
+            m.class_full_name,
+            m.method_name,
+            m.return_type,
+            m.parameter_types,
+            m.parameter_names,
+            m.file_path,
+            m.language,
+            m.local_variable_types,
+            m.field_reads,
+        )
+        for m in graph.methods
+    ]
+    classes = [
+        (
+            c.id,
+            c.full_name,
+            c.package_name,
+            c.file_path,
+            c.stereotypes,
+            c.implements,
+            c.extends or "",
+            c.imports,
+        )
+        for c in graph.classes
+    ]
+    callsites = [
+        (
+            cs.id,
+            cs.caller_method_id,
+            cs.callee_name,
+            cs.receiver,  # Option<String> — None or str
+            cs.receiver_type_raw or "",
+            cs.argument_count,
+            cs.argument_types,
+            cs.text,
+            cs.file_path,
+        )
+        for cs in graph.callsites
+    ]
+    edges = [
+        (e.source_class, e.target_class, e.relation) for e in graph.inheritance_edges
+    ]
+    fields = [(f.class_id, f.name, f.type_name) for f in graph.fields]
+    return methods, classes, callsites, edges, fields
+
+
+def _rust_resolve_and_store(
+    db_path: str,
+    graph: "Graph",
+    module_id: str | None = None,
+) -> None:
+    """Call jidra_resolver.resolve_and_store once for all callsites.
+
+    Rust derives main/test variant per callsite from its file_path — avoids
+    building the LookupTable twice (once per variant).
+    """
+    methods, classes, callsites, edges, fields = _marshal_for_rust(graph)
+    if not callsites:
+        return
+
+    stats = _jidra_resolver.resolve_and_store(
+        methods,
+        classes,
+        callsites,
+        edges,
+        fields,
+        db_path,
+        "main",
+        module_id,  # variant arg is ignored by Rust; kept for API compat
+    )
+    print(
+        f"[jidra-rust] module={module_id} "
+        f"resolved={stats.resolved}/{stats.total_callsites} "
+        f"duration={stats.duration_ms}ms",
+        flush=True,
+    )
+
+
 def build_graph_partitioned(
     codebase_root: Path,
     output_dir: Path,
@@ -2542,16 +2664,46 @@ def build_graph_partitioned(
     modules = _detect_build_directories(str(codebase_root))
 
     if len(modules) <= 1:
+        _t0 = time.perf_counter()
         graph = build_graph(codebase_root, on_progress=on_progress)
+        _t1 = time.perf_counter()
         graph_store.save_full_graph(conn, graph)
+        _t2 = time.perf_counter()
+        if _RUST_RESOLVER_AVAILABLE:
+            _rust_resolve_and_store(str(db_path), graph)
+        _t3 = time.perf_counter()
+        print(
+            f"[jidra-timing] extract={_t1 - _t0:.2f}s "
+            f"store={_t2 - _t1:.2f}s "
+            f"rust_resolve={_t3 - _t2:.2f}s",
+            flush=True,
+        )
         return {"multi_module": False, "db_path": str(db_path), "modules": {}}
 
     index: dict[str, str] = {}
+    _extract_total = 0.0
+    _store_total = 0.0
+    _rust_total = 0.0
     for tool, module_dir in modules:
         module_name = module_dir.name
+        _t0 = time.perf_counter()
         module_graph = build_graph(module_dir, on_progress=on_progress)
+        _t1 = time.perf_counter()
         graph_store.save_full_graph(conn, module_graph, module_id=module_name)
+        _t2 = time.perf_counter()
+        if _RUST_RESOLVER_AVAILABLE:
+            _rust_resolve_and_store(str(db_path), module_graph, module_id=module_name)
+        _t3 = time.perf_counter()
+        _extract_total += _t1 - _t0
+        _store_total += _t2 - _t1
+        _rust_total += _t3 - _t2
         graph_store.save_module_metadata(conn, module_name, str(module_dir), tool)
         index[module_name] = str(module_dir)
+    print(
+        f"[jidra-timing] extract={_extract_total:.2f}s "
+        f"store={_store_total:.2f}s "
+        f"rust_resolve={_rust_total:.2f}s",
+        flush=True,
+    )
 
     return {"multi_module": True, "db_path": str(db_path), "modules": index}
