@@ -269,8 +269,8 @@ def _dispatch_get_docs(
     linked_class: str | None,
     limit: int,
 ) -> dict:
-    from ..indexing import doc_store
     from ..graph import graph_store as gs
+    from ..indexing import doc_store
 
     conn = gs.connect(Path(graph_path))
     doc_store.migrate(conn)
@@ -306,8 +306,8 @@ def _dispatch_get_docs(
 
 
 def _dispatch_index_docs(graph_path: str, path: str) -> dict:
-    from ..indexing import doc_store
     from ..graph import graph_store as gs
+    from ..indexing import doc_store
     from ..indexing.doc_indexer import (
         extract_graph_names,
         index_directory,
@@ -446,6 +446,7 @@ def dispatch_tool(
                 query=p["query"],
                 limit=p.get("limit", 20),
                 language=p.get("language"),
+                exact=p.get("exact", False),
             ),
             graph_dir,
         )
@@ -579,6 +580,7 @@ def dispatch_tool(
 # Primary tier: lean, high-confidence grounding tools. Always visible.
 PRIMARY_TOOLS = [
     "jidra_explore",
+    "jidra_search",
     "jidra_get_method_source",
     "jidra_find_callers",
     "jidra_get_agent_flow",
@@ -767,12 +769,19 @@ def build_mcp(
         graph_path: str | None = None,
         limit: int = 20,
         language: str | None = None,
+        exact: bool = False,
     ) -> dict:
         """Keyword/full-text search over method names, signatures, and source in
-        the local code graph. Use this when you DON'T know the exact method name —
-        e.g. jidra_search("token validation"). Returns ranked method hits; follow
-        up with jidra_get_method_context on a hit. Optionally filter by language
-        (java, python, typescript, ...)."""
+        the local code graph.
+
+        Default (exact=False): broad recall — returns up to `limit` FTS seeds plus
+        1-hop call-graph neighbors and class-level supplements. Use when you DON'T
+        know the exact method name, e.g. jidra_search("token validation").
+
+        exact=True: precise lookup — returns top-5 BM25 seeds only, no neighbor
+        expansion, no class supplement. Use when you know the symbol name and want
+        a definitive yes/no on whether it exists, e.g. jidra_search("purgeCache",
+        exact=True). A count of 0 means the symbol is absent from the graph."""
         return invoke(
             "jidra_search",
             {
@@ -780,6 +789,7 @@ def build_mcp(
                 "graph_path": graph_path,
                 "limit": limit,
                 "language": language,
+                "exact": exact,
             },
         )
 
@@ -925,6 +935,9 @@ def build_mcp(
     ) -> dict:
         """List ALL concrete implementations of interface/abstract class in ONE call.
         Use instead of repeated searches asking 'implements X', 'how many impls', 'what classes handle interface'.
+        Also use as a CLASS/INTERFACE EXISTENCE CHECK — returns interface_class_not_found immediately
+        if the class does not exist in the graph. This is more reliable than jidra_search for existence
+        checks because it returns a typed definitive error with no false positives.
         limit: max implementations to return (default 30); detail: 'summary' or 'full'.
         """
         return invoke(

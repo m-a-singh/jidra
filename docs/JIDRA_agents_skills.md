@@ -70,15 +70,20 @@ Spawns jidra-investigator with structured blast radius prompt:
 
 ## Example session — DeviceController.saveDevice blast radius
 
+**Risk: HIGH** — every major search flow routes through this method. Any signature or behavior change needs all 13 callers updated atomically.
+
+---
 
 ## Token & cost comparison — same query, 4 approaches
 
 | Approach | Agent | in tokens | out tokens | cost |
 |---|---|---|---|---|
 | No JIDRA (caveman grep) | cavecrew-investigator | 188,836 | 514 | $0.161 |
+| No slash cmd (main session + redundant agent) | jidra-investigator (wasted) | 276,588 | 905 | ~$0.056* |
 | Explicit `/jidra-blast-radius` | jidra-investigator | 142,219 | 1,337 | $0.182 |
 | Natural language (auto-triggered skill) | jidra-investigator | 189,736 | 1,133 | $0.217 |
 
+*Image 32 showed $0.000 — calculated using Haiku pricing ($0.80/1M in, $4.00/1M out): ~$0.045 in + $0.004 out ≈ $0.056
 
 **Key observations:**
 - Grep approach cheapest but missed depth-2 chain entirely — no HTTP endpoint flag, no risk rating
