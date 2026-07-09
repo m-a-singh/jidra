@@ -80,7 +80,9 @@ export function GraphStatusPanel({ repoPath, outputPath }: Props) {
 
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, 5000);
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 5000);
     return () => clearInterval(id);
   }, [refresh]);
 
