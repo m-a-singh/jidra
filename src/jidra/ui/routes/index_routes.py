@@ -431,43 +431,80 @@ async def reindex(req: ReindexRequest) -> dict:
     return {"summary": summary}
 
 
-class ReindexStatusRequest(BaseModel):
+class DaemonRequest(BaseModel):
     repo_path: str
     output_path: str | None = None
 
 
-@router.get("/reindex/status")
-async def reindex_status(repo_path: str, output_path: str | None = None) -> dict:
-    out_dir = _out_dir(repo_path, output_path)
-    pid_file = out_dir / "reindex.pid"
-    log_file = out_dir / "reindex.log"
-
-    if not pid_file.exists():
-        return {"running": False, "pid": None, "log_tail": _read_log_tail(log_file)}
-
+def _daemon_pid_alive(pid: int) -> bool:
     try:
-        pid = int(pid_file.read_text().strip())
-        os.kill(pid, 0)  # check process exists
-        return {"running": True, "pid": pid, "log_tail": _read_log_tail(log_file)}
-    except (ProcessLookupError, ValueError):
-        pid_file.unlink(missing_ok=True)
-        return {"running": False, "pid": None, "log_tail": _read_log_tail(log_file)}
-
-
-def _read_log_tail(log_file: Path, lines: int = 30) -> list[str]:
-    if not log_file.exists():
-        return []
-    try:
-        text = log_file.read_text(encoding="utf-8", errors="replace")
-        return text.splitlines()[-lines:]
+        os.kill(pid, 0)
+        return True
     except OSError:
-        return []
+        return False
 
 
-@router.post("/reindex/stop")
-async def reindex_stop(req: ReindexStatusRequest) -> dict:
+@router.get("/daemon/status")
+async def daemon_status(repo_path: str, output_path: str | None = None) -> dict:
+    from ...engine.daemon import pid_path
+    from ...engine.reindexer import load_manifest
+
+    out_dir = _out_dir(repo_path, output_path)
+    pid_file = pid_path(str(out_dir / "graph.db"))
+
+    pid = None
+    running = False
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text().strip())
+            running = _daemon_pid_alive(pid)
+            if not running:
+                pid_file.unlink(missing_ok=True)
+                pid = None
+        except (ValueError, OSError):
+            pid = None
+
+    manifest = load_manifest(out_dir)
+    last_indexed_at = None
+    if manifest.get("last_indexed_at_ns"):
+        from datetime import datetime, timezone
+
+        dt = datetime.fromtimestamp(
+            manifest["last_indexed_at_ns"] / 1_000_000_000, tz=timezone.utc
+        )
+        last_indexed_at = dt.isoformat()
+
+    return {"running": running, "pid": pid, "last_indexed_at": last_indexed_at}
+
+
+@router.post("/daemon/start")
+async def daemon_start(req: DaemonRequest) -> dict:
+    from ...engine.daemon import JidraDaemon, pid_path
+
     out_dir = _out_dir(req.repo_path, req.output_path)
-    pid_file = out_dir / "reindex.pid"
+    graph_db = out_dir / "graph.db"
+    if not graph_db.exists():
+        raise HTTPException(status_code=400, detail="graph.db not found — run index first")
+
+    pid_file = pid_path(str(graph_db))
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text().strip())
+            if _daemon_pid_alive(pid):
+                return {"started": False, "reason": "already running", "pid": pid}
+        except (ValueError, OSError):
+            pass
+
+    JidraDaemon(str(graph_db), req.repo_path).start(daemonize=True)
+    return {"started": True}
+
+
+@router.post("/daemon/stop")
+async def daemon_stop(req: DaemonRequest) -> dict:
+    from ...engine.daemon import pid_path
+
+    out_dir = _out_dir(req.repo_path, req.output_path)
+    pid_file = pid_path(str(out_dir / "graph.db"))
 
     if not pid_file.exists():
         return {"stopped": False, "reason": "not running"}
@@ -484,25 +521,36 @@ async def reindex_stop(req: ReindexStatusRequest) -> dict:
         return {"stopped": False, "reason": "permission denied"}
 
 
-class HooksRequest(BaseModel):
-    repo_path: str
-    output_path: str | None = None
-    action: str = "install"
-
-
-@router.post("/hooks")
-async def hooks(req: HooksRequest) -> dict:
-    from ...graph.graph_store import resolve_graph_db_path
-    from ...utils.git_hooks import install_hooks, uninstall_hooks
-
-    repo = Path(req.repo_path).resolve()
-    out_dir = _out_dir(req.repo_path, req.output_path)
-    graph_path = resolve_graph_db_path(out_dir)
+@router.get("/daemon/log")
+async def daemon_log(repo_path: str, output_path: str | None = None, limit: int = 50) -> dict:
+    out_dir = _out_dir(repo_path, output_path)
+    log_path = out_dir / "reindex.log"
+    if not log_path.exists():
+        return {"entries": []}
     try:
-        if req.action == "install":
-            written = install_hooks(repo, graph_path)
-            return {"action": "install", "hooks": written}
-        removed = uninstall_hooks(repo)
-        return {"action": "uninstall", "hooks": removed}
-    except SystemExit as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+        entries = []
+        for line in lines[-limit:]:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+        entries.reverse()
+        return {"entries": entries}
+    except OSError:
+        return {"entries": []}
+
+
+@router.get("/daemon/stale")
+async def daemon_stale(repo_path: str, output_path: str | None = None) -> dict:
+    from ...engine.reindexer import check_staleness
+
+    out_dir = _out_dir(repo_path, output_path)
+    graph_db = out_dir / "graph.db"
+    if not graph_db.exists():
+        return {"stale": False, "reason": "not indexed"}
+    codebase = Path(repo_path).resolve()
+    return check_staleness(codebase, out_dir)
