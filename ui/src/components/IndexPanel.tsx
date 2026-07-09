@@ -34,7 +34,7 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
   useEffect(() => {
     if (!repoPath) return;
     function poll() {
-      api.index.reindexStatus(repoPath, outputPath || undefined)
+      api.daemon.status(repoPath, outputPath || undefined)
         .then((s) => setBgReindex({ running: s.running, pid: s.pid }))
         .catch(() => {});
     }
@@ -81,8 +81,7 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
             setRunning(false);
             refreshStatus();
             setLogOpen(true);
-            api.index.hooks({ repo_path: repoPath, output_path: outputPath || undefined, action: "install" })
-              .then((res) => push(`Git hooks installed: ${res.hooks.join(", ") || "(none)"}`, "ok"))
+            api.daemon.start({ repo_path: repoPath, output_path: outputPath || undefined })
               .catch(() => {});
           }
         }
@@ -199,7 +198,7 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
             className="ml-auto px-3 py-1 text-xs h-auto"
             onClick={async () => {
               setStopping(true);
-              await api.index.reindexStop({ repo_path: repoPath, output_path: outputPath || undefined }).catch(() => {});
+              await api.daemon.stop({ repo_path: repoPath, output_path: outputPath || undefined }).catch(() => {});
               setBgReindex({ running: false, pid: null });
               setStopping(false);
             }}

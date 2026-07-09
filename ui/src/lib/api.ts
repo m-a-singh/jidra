@@ -70,12 +70,6 @@ export const api = {
     }, cb: (e: string, d: unknown) => void) => sse("/index/run", body, cb),
     reindex: (body: { repo_path: string; output_path?: string; changed_files?: string[] }) =>
       post<{ summary: Record<string, unknown> }>("/index/reindex", body),
-    hooks: (body: { repo_path: string; output_path?: string; action: "install" | "uninstall" }) =>
-      post<{ action: string; hooks: string[] }>("/index/hooks", body),
-    reindexStatus: (repo_path: string, output_path?: string) =>
-      get<{ running: boolean; pid: number | null; log_tail: string[] }>("/index/reindex/status", { repo_path, ...(output_path ? { output_path } : {}) }),
-    reindexStop: (body: { repo_path: string; output_path?: string }) =>
-      post<{ stopped: boolean; pid?: number; reason?: string }>("/index/reindex/stop", body),
     listFolders: (repo_path: string, subpath?: string) =>
       get<{ path: string; folders: { name: string; path: string; default_excluded: boolean }[] }>("/index/list-folders", { repo_path, subpath }),
   },
@@ -122,6 +116,19 @@ export const api = {
       get<{ sources: { source_path: string; source_type: string; title: string; chunk_count: number; indexed_at: number }[] }>("/docs/sources", { repo_path, output_path }),
     graph: (repo_path: string, output_path?: string) =>
       get<{ nodes: Record<string, unknown>[]; edges: Record<string, unknown>[]; stats: { docs: number; chunks: number; classes: number; links: number } }>("/docs/graph", { repo_path, output_path }),
+  },
+
+  daemon: {
+    status: (repo_path: string, output_path?: string) =>
+      get<{ running: boolean; pid: number | null; last_indexed_at: string | null }>("/index/daemon/status", { repo_path, ...(output_path ? { output_path } : {}) }),
+    start: (body: { repo_path: string; output_path?: string }) =>
+      post<{ started: boolean; reason?: string; pid?: number }>("/index/daemon/start", body),
+    stop: (body: { repo_path: string; output_path?: string }) =>
+      post<{ stopped: boolean; reason?: string; pid?: number }>("/index/daemon/stop", body),
+    log: (repo_path: string, output_path?: string, limit = 50) =>
+      get<{ entries: { ts: number; reloaded: boolean; summary?: Record<string, unknown>; error?: string }[] }>("/index/daemon/log", { repo_path, limit, ...(output_path ? { output_path } : {}) }),
+    stale: (repo_path: string, output_path?: string) =>
+      get<{ stale: boolean; changed_files_count: number; deleted_files_count: number; oldest_changed_file: string | null; last_indexed_at: string | null; hint: string; reason?: string }>("/index/daemon/stale", { repo_path, ...(output_path ? { output_path } : {}) }),
   },
 
   history: {
