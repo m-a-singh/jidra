@@ -1,7 +1,7 @@
 [
   {
-    "case_id": "scikit-learn__scikit-learn-10297",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-11400",
+    "repo": "sympy/sympy",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -10,30 +10,30 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sklearn/linear_model/ridge.py"
+      "sympy/printing/ccode.py"
     ],
-    "latency_ms": 139.6274589933455,
+    "latency_ms": 199.83308401424438,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-10508",
-    "repo": "scikit-learn/scikit-learn",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
+    "case_id": "sympy__sympy-11870",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.09090909090909091,
     "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sklearn/preprocessing/label.py"
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/functions/elementary/trigonometric.py"
     ],
-    "latency_ms": 85.59912495547906,
+    "missed_files": [],
+    "latency_ms": 159.50620803050697,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-10949",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-11897",
+    "repo": "sympy/sympy",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 1.0,
@@ -41,47 +41,15 @@
     "explore_recall": 1.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sklearn/utils/validation.py"
+      "sympy/printing/latex.py"
     ],
     "missed_files": [],
-    "latency_ms": 62.08124995464459,
+    "latency_ms": 233.47075004130602,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-11040",
-    "repo": "scikit-learn/scikit-learn",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sklearn/neighbors/base.py"
-    ],
-    "latency_ms": 60.602583980653435,
-    "n_results": 40
-  },
-  {
-    "case_id": "scikit-learn__scikit-learn-11281",
-    "repo": "scikit-learn/scikit-learn",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sklearn/mixture/base.py"
-    ],
-    "latency_ms": 54.92958298418671,
-    "n_results": 40
-  },
-  {
-    "case_id": "scikit-learn__scikit-learn-12471",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-12171",
+    "repo": "sympy/sympy",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 1.0,
@@ -89,15 +57,15 @@
     "explore_recall": 1.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sklearn/preprocessing/_encoders.py"
+      "sympy/printing/mathematica.py"
     ],
     "missed_files": [],
-    "latency_ms": 102.58449998218566,
+    "latency_ms": 312.0834159781225,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-13142",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-12236",
+    "repo": "sympy/sympy",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -106,14 +74,14 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sklearn/mixture/base.py"
+      "sympy/polys/domains/polynomialring.py"
     ],
-    "latency_ms": 133.37708299513906,
+    "latency_ms": 246.88466702355072,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-13241",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-12419",
+    "repo": "sympy/sympy",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -122,30 +90,46 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sklearn/decomposition/kernel_pca.py"
+      "sympy/matrices/expressions/matexpr.py"
     ],
-    "latency_ms": 64.6127499639988,
+    "latency_ms": 259.1055409866385,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-13439",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-12454",
+    "repo": "sympy/sympy",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sympy/matrices/matrices.py"
+    ],
+    "latency_ms": 234.27220899611712,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-12481",
+    "repo": "sympy/sympy",
     "passed": true,
     "file_recall": 1.0,
-    "mrr": 0.05555555555555555,
+    "mrr": 1.0,
     "search_recall": 0.0,
     "explore_recall": 1.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sklearn/pipeline.py"
+      "sympy/combinatorics/permutations.py"
     ],
     "missed_files": [],
-    "latency_ms": 108.23604097822681,
+    "latency_ms": 193.77816701307893,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-13496",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-13031",
+    "repo": "sympy/sympy",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -154,14 +138,30 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sklearn/ensemble/iforest.py"
+      "sympy/matrices/sparse.py"
     ],
-    "latency_ms": 100.81487498246133,
+    "latency_ms": 148.4308330109343,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-13497",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-13043",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/integrals/intpoly.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 149.22162500442937,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-13146",
+    "repo": "sympy/sympy",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -170,14 +170,14 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sklearn/feature_selection/mutual_info_.py"
+      "sympy/core/operations.py"
     ],
-    "latency_ms": 34.208874974865466,
+    "latency_ms": 227.8987499885261,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-13584",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-13177",
+    "repo": "sympy/sympy",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 0.3333333333333333,
@@ -185,15 +185,95 @@
     "explore_recall": 1.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sklearn/utils/_pprint.py"
+      "sympy/core/mod.py"
     ],
     "missed_files": [],
-    "latency_ms": 47.77154099429026,
+    "latency_ms": 242.33658297453076,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-13779",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-13437",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/functions/combinatorial/numbers.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 261.5300000179559,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-13471",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.16666666666666666,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/core/numbers.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 240.6565000419505,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-13480",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/functions/elementary/hyperbolic.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 246.19633296970278,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-13647",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.5,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/matrices/common.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 157.76987496064976,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-13773",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.5,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/matrices/common.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 165.0339579791762,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-13895",
+    "repo": "sympy/sympy",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -202,14 +282,14 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sklearn/ensemble/voting.py"
+      "sympy/core/numbers.py"
     ],
-    "latency_ms": 71.01083302404732,
+    "latency_ms": 258.7715410045348,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-14087",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-13915",
+    "repo": "sympy/sympy",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -218,14 +298,30 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sklearn/linear_model/logistic.py"
+      "sympy/core/mul.py"
     ],
-    "latency_ms": 148.9847920020111,
+    "latency_ms": 189.72645897883922,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-14092",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-13971",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.3333333333333333,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/latex.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 171.3509580004029,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-14024",
+    "repo": "sympy/sympy",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -234,14 +330,94 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sklearn/neighbors/nca.py"
+      "sympy/core/numbers.py"
     ],
-    "latency_ms": 245.7869159989059,
+    "latency_ms": 285.8928330242634,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-14894",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-14308",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.16666666666666666,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/pretty/pretty.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 183.35254199337214,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-14317",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.25,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/latex.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 186.94300000788644,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-14396",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/polys/polyoptions.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 333.7337079574354,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-14774",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/latex.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 120.1794589869678,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-14817",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.1,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/pretty/pretty.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 396.16175001719967,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-15011",
+    "repo": "sympy/sympy",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -250,14 +426,14 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sklearn/svm/base.py"
+      "sympy/utilities/lambdify.py"
     ],
-    "latency_ms": 148.0932499980554,
-    "n_results": 37
+    "latency_ms": 211.4779160474427,
+    "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-14983",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-15308",
+    "repo": "sympy/sympy",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 1.0,
@@ -265,15 +441,15 @@
     "explore_recall": 1.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sklearn/model_selection/_split.py"
+      "sympy/printing/latex.py"
     ],
     "missed_files": [],
-    "latency_ms": 88.7244589976035,
+    "latency_ms": 143.1449999799952,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-15512",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-15345",
+    "repo": "sympy/sympy",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 1.0,
@@ -281,31 +457,15 @@
     "explore_recall": 1.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sklearn/cluster/_affinity_propagation.py"
+      "sympy/printing/mathematica.py"
     ],
     "missed_files": [],
-    "latency_ms": 121.84291594894603,
+    "latency_ms": 91.16241696756333,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-15535",
-    "repo": "scikit-learn/scikit-learn",
-    "passed": true,
-    "file_recall": 1.0,
-    "mrr": 1.0,
-    "search_recall": 0.0,
-    "explore_recall": 1.0,
-    "combined_recall": 1.0,
-    "found_files": [
-      "sklearn/metrics/cluster/_supervised.py"
-    ],
-    "missed_files": [],
-    "latency_ms": 56.71979201724753,
-    "n_results": 40
-  },
-  {
-    "case_id": "scikit-learn__scikit-learn-25500",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-15346",
+    "repo": "sympy/sympy",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -314,14 +474,30 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sklearn/isotonic.py"
+      "sympy/simplify/trigsimp.py"
     ],
-    "latency_ms": 197.12583295768127,
+    "latency_ms": 206.74962498014793,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-25570",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-15609",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.2,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/latex.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 316.9159999815747,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-15678",
+    "repo": "sympy/sympy",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 1.0,
@@ -329,15 +505,15 @@
     "explore_recall": 1.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sklearn/compose/_column_transformer.py"
+      "sympy/geometry/util.py"
     ],
     "missed_files": [],
-    "latency_ms": 310.7263330020942,
+    "latency_ms": 290.1688329875469,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-25638",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-16106",
+    "repo": "sympy/sympy",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 1.0,
@@ -345,15 +521,63 @@
     "explore_recall": 1.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sklearn/utils/multiclass.py"
+      "sympy/printing/mathml.py"
     ],
     "missed_files": [],
-    "latency_ms": 99.1344170179218,
+    "latency_ms": 256.1664170352742,
     "n_results": 40
   },
   {
-    "case_id": "scikit-learn__scikit-learn-25747",
-    "repo": "scikit-learn/scikit-learn",
+    "case_id": "sympy__sympy-16281",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.5,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/pretty/pretty.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 253.83700005477294,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-16503",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.2,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/pretty/pretty.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 124.4410410290584,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-16792",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.3333333333333333,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/utilities/codegen.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 391.81608299259096,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-16988",
+    "repo": "sympy/sympy",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 1.0,
@@ -361,10 +585,650 @@
     "explore_recall": 1.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sklearn/utils/_set_output.py"
+      "sympy/sets/sets.py"
     ],
     "missed_files": [],
-    "latency_ms": 240.1310419663787,
+    "latency_ms": 185.72012503864244,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-17022",
+    "repo": "sympy/sympy",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sympy/printing/pycode.py"
+    ],
+    "latency_ms": 265.8479589736089,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-17139",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.2,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/simplify/fu.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 351.0882499977015,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-17630",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.03333333333333333,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/matrices/expressions/matexpr.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 252.33241700334474,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-17655",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/geometry/point.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 349.6432499960065,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-18057",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.03333333333333333,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/core/expr.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 249.07508300384507,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-18087",
+    "repo": "sympy/sympy",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sympy/core/exprtools.py"
+    ],
+    "latency_ms": 153.09791697654873,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-18189",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/solvers/diophantine.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 165.28358298819512,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-18199",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/ntheory/residue_ntheory.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 179.47491601807997,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-18532",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/core/basic.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 154.0519169648178,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-18621",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.3333333333333333,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/matrices/expressions/blockmatrix.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 297.0785410143435,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-18698",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/polys/polytools.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 116.62816698662937,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-18835",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/utilities/iterables.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 320.92995796119794,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-19007",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/matrices/expressions/blockmatrix.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 179.66675001662225,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-19254",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/polys/factortools.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 160.434375051409,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-19487",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/functions/elementary/complexes.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 201.83012500638142,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-20049",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/physics/vector/point.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 331.42783399671316,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-20154",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/utilities/iterables.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 216.3511249818839,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-20212",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.2,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/core/power.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 162.68387500895187,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-20322",
+    "repo": "sympy/sympy",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sympy/core/mul.py"
+    ],
+    "latency_ms": 137.7794169820845,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-20442",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/physics/units/util.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 246.48195900954306,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-20590",
+    "repo": "sympy/sympy",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sympy/core/_print_helpers.py"
+    ],
+    "latency_ms": 229.49187498306856,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-20639",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.025,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/pretty/pretty.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 177.3634580313228,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-21055",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.5,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/assumptions/refine.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 224.05858302954584,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-21171",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/latex.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 814.4816249841824,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-21379",
+    "repo": "sympy/sympy",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sympy/core/mod.py"
+    ],
+    "latency_ms": 295.1078750193119,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-21612",
+    "repo": "sympy/sympy",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sympy/printing/str.py"
+    ],
+    "latency_ms": 190.28795894701034,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-21614",
+    "repo": "sympy/sympy",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sympy/core/function.py"
+    ],
+    "latency_ms": 135.7672919984907,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-21627",
+    "repo": "sympy/sympy",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sympy/functions/elementary/complexes.py"
+    ],
+    "latency_ms": 113.30370896030217,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-21847",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/polys/monomials.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 163.67125004762784,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-22005",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/solvers/polysys.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 268.11587502015755,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-22714",
+    "repo": "sympy/sympy",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "sympy/geometry/point.py"
+    ],
+    "latency_ms": 311.147416010499,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-22840",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.3333333333333333,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/simplify/cse_main.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 619.7697080206126,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-23117",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.3333333333333333,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/tensor/array/ndim_array.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 236.13229196052998,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-23191",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.09090909090909091,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/printing/pretty/pretty.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 344.0502079902217,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-23262",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.5,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/utilities/lambdify.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 242.63537500519305,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-24066",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/physics/units/unitsystem.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 148.58191600069404,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-24102",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/parsing/mathematica.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 183.7881249957718,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-24152",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/physics/quantum/tensorproduct.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 376.16366700967774,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-24213",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/physics/units/unitsystem.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 188.34304198389873,
+    "n_results": 40
+  },
+  {
+    "case_id": "sympy__sympy-24909",
+    "repo": "sympy/sympy",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 0.0,
+    "explore_recall": 1.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "sympy/physics/units/prefixes.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 154.26124999066815,
     "n_results": 40
   }
 ]

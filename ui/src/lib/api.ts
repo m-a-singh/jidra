@@ -72,6 +72,10 @@ export const api = {
       post<{ summary: Record<string, unknown> }>("/index/reindex", body),
     hooks: (body: { repo_path: string; output_path?: string; action: "install" | "uninstall" }) =>
       post<{ action: string; hooks: string[] }>("/index/hooks", body),
+    reindexStatus: (repo_path: string, output_path?: string) =>
+      get<{ running: boolean; pid: number | null; log_tail: string[] }>("/index/reindex/status", { repo_path, ...(output_path ? { output_path } : {}) }),
+    reindexStop: (body: { repo_path: string; output_path?: string }) =>
+      post<{ stopped: boolean; pid?: number; reason?: string }>("/index/reindex/stop", body),
     listFolders: (repo_path: string, subpath?: string) =>
       get<{ path: string; folders: { name: string; path: string; default_excluded: boolean }[] }>("/index/list-folders", { repo_path, subpath }),
   },

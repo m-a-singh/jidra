@@ -1395,6 +1395,16 @@ def _index(
 
     save_cache(output_path, {"fingerprint": fp, "manifest": manifest})
 
+    # Rust resolution runs after all Python writes are committed.
+    from .extractors.extractor import (
+        _RUST_RESOLVER_AVAILABLE,
+        _rust_resolve_and_store,
+    )
+
+    if _RUST_RESOLVER_AVAILABLE:
+        conn.close()
+        _rust_resolve_and_store(str(db_path), graph)
+
     health = compute_graph_health(graph)
 
     if not _quiet:
@@ -2001,9 +2011,40 @@ def _uninit(codebase_arg: str | None = None, yes: bool = False) -> None:
     ui.success("Done.")
 
 
+def _ensure_rust_resolver() -> None:
+    """Build jidra-resolver Rust extension if not already installed."""
+    try:
+        import jidra_resolver  # noqa: F401
+
+        return
+    except ImportError:
+        pass
+
+    # Resolver dir is two levels up from this file: src/jidra/cli.py -> repo root
+    resolver_dir = Path(__file__).resolve().parents[2] / "jidra-resolver"
+    if not resolver_dir.exists():
+        ui.warn("jidra-resolver not found — call resolution will use Python fallback")
+        return
+
+    ui.banner("Building Rust resolver (one-time)", "maturin develop --release")
+    import shutil
+    import subprocess
+
+    if not shutil.which("maturin"):
+        subprocess.run(["pip", "install", "maturin"], check=True)
+
+    result = subprocess.run(
+        ["maturin", "develop", "--release"],
+        cwd=resolver_dir,
+    )
+    if result.returncode != 0:
+        ui.warn("Rust resolver build failed — call resolution will use Python fallback")
+
+
 def _init(codebase_arg: str | None = None, force: bool = False) -> None:
     """Initialize JIDRA for a project: build graph in .jidra/, write global MCP config."""
     ui.banner("JIDRA init", "Build code graph · write global MCP config")
+    _ensure_rust_resolver()
 
     repo = Path(codebase_arg).resolve() if codebase_arg else Path.cwd()
     if not repo.exists():
