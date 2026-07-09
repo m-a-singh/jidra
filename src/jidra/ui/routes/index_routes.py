@@ -484,7 +484,9 @@ async def daemon_start(req: DaemonRequest) -> dict:
     out_dir = _out_dir(req.repo_path, req.output_path)
     graph_db = out_dir / "graph.db"
     if not graph_db.exists():
-        raise HTTPException(status_code=400, detail="graph.db not found — run index first")
+        raise HTTPException(
+            status_code=400, detail="graph.db not found — run index first"
+        )
 
     pid_file = pid_path(str(graph_db))
     if pid_file.exists():
@@ -522,7 +524,9 @@ async def daemon_stop(req: DaemonRequest) -> dict:
 
 
 @router.get("/daemon/log")
-async def daemon_log(repo_path: str, output_path: str | None = None, limit: int = 50) -> dict:
+async def daemon_log(
+    repo_path: str, output_path: str | None = None, limit: int = 50
+) -> dict:
     out_dir = _out_dir(repo_path, output_path)
     log_path = out_dir / "reindex.log"
     if not log_path.exists():
