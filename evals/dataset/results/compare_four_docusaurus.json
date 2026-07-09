@@ -1,0 +1,62 @@
+{
+  "jidra_search_file": "evals/dataset/results/results_jidra_search.json",
+  "jidra_explore_file": "evals/dataset/results/results_jidra_explore.json",
+  "cg_search_file": "evals/dataset/results/results_cg_search.json",
+  "cg_explore_file": "evals/dataset/results/results_cg_explore.json",
+  "aggregate_jidra_search": {
+    "total": 5,
+    "passed": 3,
+    "pass_rate": 0.6,
+    "mean_recall": 0.6,
+    "mean_mrr": 0.0321,
+    "mean_latency_ms": 123.3,
+    "p50_latency_ms": 119.1,
+    "p95_latency_ms": 148.3
+  },
+  "aggregate_jidra_explore": {
+    "total": 5,
+    "passed": 2,
+    "pass_rate": 0.4,
+    "mean_recall": 0.4,
+    "mean_mrr": 0.0722,
+    "mean_latency_ms": 43.5,
+    "p50_latency_ms": 42.4,
+    "p95_latency_ms": 53.0
+  },
+  "aggregate_cg_search": {
+    "total": 5,
+    "passed": 1,
+    "pass_rate": 0.2,
+    "mean_recall": 0.2,
+    "mean_mrr": 0.01,
+    "mean_latency_ms": 0.6,
+    "p50_latency_ms": 0.2,
+    "p95_latency_ms": 1.6
+  },
+  "aggregate_cg_explore": {
+    "total": 5,
+    "passed": 0,
+    "pass_rate": 0.0,
+    "mean_recall": 0.0,
+    "mean_mrr": 0.0,
+    "mean_latency_ms": 0.5,
+    "p50_latency_ms": 0.3,
+    "p95_latency_ms": 1.5
+  },
+  "win_loss": {
+    "total": 5,
+    "both_pass": 1,
+    "jidra_only": 2,
+    "cg_only": 0,
+    "both_fail": 2,
+    "jidra_only_ids": [
+      "facebook__docusaurus-10309",
+      "facebook__docusaurus-8927"
+    ],
+    "cg_only_ids": [],
+    "both_fail_ids": [
+      "facebook__docusaurus-9183",
+      "facebook__docusaurus-9897"
+    ]
+  }
+}

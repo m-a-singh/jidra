@@ -529,14 +529,14 @@ def build_scala_graph(
 ) -> Graph:
     """Build a JIDRA Graph from a Scala codebase using SemanticDB."""
     if on_progress:
-        on_progress(0)
+        on_progress(0, 1)
 
     with tempfile.TemporaryDirectory() as tmp_out:
         _run_sidecar(codebase_root, tmp_out, timeout=timeout)
         graph = _build_graph_from_semanticdb(Path(tmp_out), codebase_root)
 
     if on_progress:
-        on_progress(len(graph.classes))
+        on_progress(1, 1)
 
     return graph
 

@@ -343,9 +343,12 @@ def incremental_reindex(
     current_fps = compute_fingerprints(codebase_root)
     changed_files_set, deleted_files_set = diff_fingerprints(current_fps, manifest)
 
-    # Union with hint
+    # Union with hint — resolve relative paths to absolute against codebase_root
     if hint_changed_files:
-        changed_files_set.update(hint_changed_files)
+        for f in hint_changed_files:
+            p = Path(f)
+            resolved = str(p if p.is_absolute() else (codebase_root / p).resolve())
+            changed_files_set.add(resolved)
 
     if not changed_files_set and not deleted_files_set:
         # No changes
@@ -369,8 +372,36 @@ def incremental_reindex(
     changed_files_paths = {Path(f) for f in changed_files_set if Path(f).exists()}
 
     if not changed_files_paths:
-        # All changed files deleted; full rebuild
-        return _full_rebuild(list(changed_files_set))
+        # All changed files were deleted — strip their records, no parse needed.
+        graph_store.delete_for_files(conn, deleted_files_set, variant=_REINDEX_VARIANT)
+        last_indexed_at_ns = int(time.time_ns())
+        save_manifest(graph_dir, current_fps, last_indexed_at_ns)
+        elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
+        return {
+            "change_type": "deletion_only",
+            "changed_files": list(deleted_files_set),
+            "added_methods": 0,
+            "removed_methods": len(deleted_files_set),
+            "elapsed_ms": elapsed_ms,
+            "actuator_cache_warning": None,
+        }
+
+    # Eagerly purge deleted files before diff so removed methods don't appear as
+    # "existing" and confuse diff_graph_records into a metadata_only/callsite path.
+    if deleted_files_set:
+        graph_store.delete_for_files(conn, deleted_files_set, variant=_REINDEX_VARIANT)
+        existing_graph.classes = [
+            c for c in existing_graph.classes if c.file_path not in deleted_files_set
+        ]
+        existing_graph.methods = [
+            m for m in existing_graph.methods if m.file_path not in deleted_files_set
+        ]
+        existing_graph.fields = [
+            f for f in existing_graph.fields if f.file_path not in deleted_files_set
+        ]
+        existing_graph.callsites = [
+            c for c in existing_graph.callsites if c.file_path not in deleted_files_set
+        ]
 
     mini_graph = build_graph_for_files(changed_files_paths, codebase_root)
 

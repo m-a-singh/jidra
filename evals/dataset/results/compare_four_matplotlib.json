@@ -1,0 +1,75 @@
+{
+  "jidra_search_file": "evals/dataset/results/results_jidra_search.json",
+  "jidra_explore_file": "evals/dataset/results/results_jidra_explore.json",
+  "cg_search_file": "evals/dataset/results/results_cg_search.json",
+  "cg_explore_file": "evals/dataset/results/results_cg_explore.json",
+  "aggregate_jidra_search": {
+    "total": 23,
+    "passed": 21,
+    "pass_rate": 0.913,
+    "mean_recall": 0.913,
+    "mean_mrr": 0.5788,
+    "mean_latency_ms": 379.2,
+    "p50_latency_ms": 334.0,
+    "p95_latency_ms": 761.0
+  },
+  "aggregate_jidra_explore": {
+    "total": 23,
+    "passed": 19,
+    "pass_rate": 0.8261,
+    "mean_recall": 0.8261,
+    "mean_mrr": 0.6028,
+    "mean_latency_ms": 87.6,
+    "p50_latency_ms": 70.1,
+    "p95_latency_ms": 165.4
+  },
+  "aggregate_cg_search": {
+    "total": 23,
+    "passed": 6,
+    "pass_rate": 0.2609,
+    "mean_recall": 0.2609,
+    "mean_mrr": 0.0479,
+    "mean_latency_ms": 0.9,
+    "p50_latency_ms": 0.8,
+    "p95_latency_ms": 1.7
+  },
+  "aggregate_cg_explore": {
+    "total": 23,
+    "passed": 2,
+    "pass_rate": 0.087,
+    "mean_recall": 0.087,
+    "mean_mrr": 0.0326,
+    "mean_latency_ms": 0.6,
+    "p50_latency_ms": 0.4,
+    "p95_latency_ms": 1.5
+  },
+  "win_loss": {
+    "total": 23,
+    "both_pass": 6,
+    "jidra_only": 15,
+    "cg_only": 0,
+    "both_fail": 2,
+    "jidra_only_ids": [
+      "matplotlib__matplotlib-22711",
+      "matplotlib__matplotlib-22835",
+      "matplotlib__matplotlib-23314",
+      "matplotlib__matplotlib-23476",
+      "matplotlib__matplotlib-23562",
+      "matplotlib__matplotlib-23563",
+      "matplotlib__matplotlib-23964",
+      "matplotlib__matplotlib-23987",
+      "matplotlib__matplotlib-24149",
+      "matplotlib__matplotlib-24334",
+      "matplotlib__matplotlib-24970",
+      "matplotlib__matplotlib-25332",
+      "matplotlib__matplotlib-25433",
+      "matplotlib__matplotlib-25442",
+      "matplotlib__matplotlib-26020"
+    ],
+    "cg_only_ids": [],
+    "both_fail_ids": [
+      "matplotlib__matplotlib-24265",
+      "matplotlib__matplotlib-25311"
+    ]
+  }
+}
