@@ -101,6 +101,7 @@ class JidraDaemon:
         self._active = 0
         self._active_lock = threading.Lock()
         self._last_active = time.time()
+        self._start_time = time.time()
         self._stop = threading.Event()
         self._watcher = None
 
@@ -128,13 +129,23 @@ class JidraDaemon:
             os.setsid()
             if os.fork() > 0:
                 os._exit(0)  # first child exits; grandchild is the daemon
-            # Detach std streams so the daemon outlives the launching shell.
-            devnull = os.open(os.devnull, os.O_RDWR)
-            for fd in (0, 1, 2):
+            # Redirect stdin to /dev/null; stdout+stderr to daemon.log so
+            # startup crashes are visible instead of silently lost.
+            devnull = os.open(os.devnull, os.O_RDONLY)
+            try:
+                os.dup2(devnull, 0)
+            except OSError:
+                pass
+            log_path = _jidra_dir(self.graph_path) / "daemon.log"
+            log_fd = os.open(
+                str(log_path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644
+            )
+            for fd in (1, 2):
                 try:
-                    os.dup2(devnull, fd)
+                    os.dup2(log_fd, fd)
                 except OSError:
                     pass
+            os.close(log_fd)
 
         if not self._acquire_lock():
             os._exit(0) if daemonize else None
@@ -209,9 +220,15 @@ class JidraDaemon:
         while not self._stop.is_set():
             time.sleep(self.POLL_INTERVAL)
             with self._active_lock:
-                idle = self._active == 0 and (
-                    time.time() - self._last_active > self.IDLE_TIMEOUT
+                watcher_running = (
+                    self._watcher is not None
+                    and getattr(self._watcher, "_observer", None) is not None
                 )
+            idle = (
+                self._active == 0
+                and not watcher_running
+                and (time.time() - self._last_active > self.IDLE_TIMEOUT)
+            )
             if idle:
                 self._stop.set()
                 try:  # nudge the accept() loop awake
@@ -275,6 +292,24 @@ class JidraDaemon:
         try:
             if method == "ping":
                 return {"id": rid, "result": "pong"}
+            if method == "jidra/status":
+                watcher_running = (
+                    self._watcher is not None
+                    and getattr(self._watcher, "_observer", None) is not None
+                )
+                with self._active_lock:
+                    active = self._active
+                return {
+                    "id": rid,
+                    "result": {
+                        "pid": os.getpid(),
+                        "graph_path": self.graph_path,
+                        "codebase_path": self.codebase_path,
+                        "watcher_running": watcher_running,
+                        "active_connections": active,
+                        "uptime_s": int(time.time() - self._start_time),
+                    },
+                }
             if method == "tools/list":
                 return {"id": rid, "result": mcp_server.visible_tool_names()}
             if method == "jidra/reload":

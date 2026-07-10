@@ -66,6 +66,9 @@ def ts_hallucinated_refs(text: str, oracle: Oracle) -> list[str]:
         if m in _JS_ECOSYSTEM:
             continue
         if m not in oracle.file_basenames:
+            # accept if m is a suffix of a real hyphenated file (e.g. "adapter.ts" from "analytics-adapter.ts")
+            if any(f.endswith("-" + m) for f in oracle.file_basenames):
+                continue
             bad.append(m)
     for m in _re.findall(
         r"\b[A-Z][a-zA-Z0-9]*(?:Service|Controller|Manager|Handler|Factory|Hook|Store|Provider|Context|Middleware|Guard|Interceptor|Resolver|Module)\b",
