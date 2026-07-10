@@ -1788,13 +1788,20 @@ def _write_claude_md(repo: Path, langs: list[str]) -> None:
         )
 
     jidra_section = f"""{_JIDRA_CLAUDE_MD_MARKER}
-## JIDRA — Code Graph Tools (MANDATORY)
+## JIDRA — Code Navigation (MANDATORY)
 
-ALWAYS call a JIDRA tool first before reading any file, running grep, or using
-glob — for any question about code structure, call flows, or method implementations.{lang_note}
+For ANY question about code structure, call flows, callers, implementations, or method source — delegate to a JIDRA skill. Do NOT call JIDRA MCP tools directly in the main session.{lang_note}
 
-- If a JIDRA tool returns suggestions, pick the best match and retry immediately.
-- Only fall back to file reads if JIDRA explicitly returns no data.
+| Question type | Skill to invoke |
+|---|---|
+| Who calls X / what calls X / find callers | `/jidra-navigate` |
+| What does X call / call tree / flow from X | `/jidra-flow` |
+| Blast radius / impact of changing X / safe to change | `/jidra-blast-radius` |
+| Stack trace / exception / why did X fail | `/jidra-error-investigate` |
+
+- Invoke the matching skill first. Only call JIDRA tools yourself if no skill matches.
+- If a skill returns suggestions, pick the best match and retry immediately.
+- Only fall back to file reads if the skill explicitly returns no data.
 <!-- /jidra-managed -->"""
 
     claude_md = repo / "CLAUDE.md"
@@ -1913,6 +1920,7 @@ def _install_agent(repo: Path) -> None:
         "jidra-navigate",
         "jidra-blast-radius",
         "jidra-error-investigate",
+        "jidra-flow",
     ):
         skill_text = _read_bundled_text(f"skills/{skill_name}/SKILL.md")
         if skill_text is None:
@@ -1962,6 +1970,10 @@ def _uninit(codebase_arg: str | None = None, yes: bool = False) -> None:
         (
             ".claude/skills/jidra-error-investigate",
             repo / ".claude" / "skills" / "jidra-error-investigate",
+        ),
+        (
+            ".claude/skills/jidra-flow",
+            repo / ".claude" / "skills" / "jidra-flow",
         ),
     ]
 
@@ -2545,9 +2557,6 @@ def _up() -> None:
     else:
         ui.kv_panel("JIDRA is ready", ready_rows)
         _print_manual_mcp(manual_mcp_lines)
-
-    if write_config:
-        _write_claude_md(repo, langs)
 
 
 def _write_doc_graph(output_dir: Path, db_path: Path) -> Path | None:
@@ -3249,20 +3258,12 @@ def main() -> None:
         except ImportError:
             raise SystemExit("UI dependencies missing. Run: pip install 'jidra[ui]'")
 
-        # Auto-start daemon for cwd repo if already initialized, so the
-        # watcher is live for the duration of the UI session.
-        _ui_jidra_dir = Path.cwd() / ".jidra"
-        _ui_graph = _ui_jidra_dir / "graph.db"
-        if _ui_graph.exists():
-            from .engine.daemon import JidraDaemon
-
-            JidraDaemon(str(_ui_graph), str(Path.cwd())).start(daemonize=True)
-
         uvicorn.run(
             _ui_app,
             host=args.host,
             port=args.port,
             reload=args.reload,
+            log_level="warning",
         )
         return
 

@@ -71,9 +71,25 @@ class JidraWatcher:
             def on_any_event(self, event):
                 if event.is_directory:
                     return
-                watcher._on_change(getattr(event, "dest_path", "") or event.src_path)
+                watcher._on_change(
+                    str(getattr(event, "dest_path", "") or event.src_path)
+                )
 
-        self._observer = Observer()
+        # FSEvents (default on macOS) cannot start after fork() — CoreFoundation
+        # restriction. Fall back to KqueueObserver, then PollingObserver.
+        try:
+            from watchdog.observers.kqueue import KqueueObserver  # type: ignore[import]
+
+            observer = KqueueObserver()
+        except Exception:
+            try:
+                from watchdog.observers.polling import PollingObserver  # type: ignore[import]
+
+                observer = PollingObserver()
+            except Exception:
+                observer = Observer()
+
+        self._observer = observer
         self._observer.schedule(_Handler(), str(self.codebase_root), recursive=True)
         self._observer.start()
         return True

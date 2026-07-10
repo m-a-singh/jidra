@@ -125,10 +125,14 @@ export const api = {
       post<{ started: boolean; reason?: string; pid?: number }>("/index/daemon/start", body),
     stop: (body: { repo_path: string; output_path?: string }) =>
       post<{ stopped: boolean; reason?: string; pid?: number }>("/index/daemon/stop", body),
+    startupLog: (repo_path: string, output_path?: string, lines = 50) =>
+      get<{ lines: string[] }>("/index/daemon/startup-log", { repo_path, lines, ...(output_path ? { output_path } : {}) }),
     log: (repo_path: string, output_path?: string, limit = 50) =>
       get<{ entries: { ts: number; reloaded: boolean; summary?: Record<string, unknown>; error?: string }[] }>("/index/daemon/log", { repo_path, limit, ...(output_path ? { output_path } : {}) }),
-    stale: (repo_path: string, output_path?: string) =>
-      get<{ stale: boolean; changed_files_count: number; deleted_files_count: number; oldest_changed_file: string | null; last_indexed_at: string | null; hint: string; reason?: string }>("/index/daemon/stale", { repo_path, ...(output_path ? { output_path } : {}) }),
+    stale: (repo_path: string, output_path?: string, full = false) =>
+      get<{ stale: boolean; changed_files_count?: number; deleted_files_count?: number; oldest_changed_file?: string | null; last_indexed_at?: string | null; hint: string; reason?: string }>("/index/daemon/stale", { repo_path, full, ...(output_path ? { output_path } : {}) }),
+    list: () =>
+      get<{ daemons: { sock: string; alive: boolean; pid?: number; graph_path?: string | null; codebase_path?: string | null; watcher_running?: boolean; active_connections?: number; uptime_s?: number }[] }>("/index/daemons"),
   },
 
   history: {

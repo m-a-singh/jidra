@@ -220,7 +220,9 @@ def check_staleness(codebase_root: Path, graph_path: Path) -> dict:
     is_stale = bool(changed_files or deleted_files)
     oldest_changed = None
     if changed_files:
-        oldest_changed = sorted(changed_files)[0]
+        oldest_changed = min(
+            changed_files, key=lambda f: current.get(f, {}).get("mtime_ns", 0)
+        )
 
     last_indexed_at_ns = manifest.get("last_indexed_at_ns")
     last_indexed_at = None
@@ -320,11 +322,49 @@ def incremental_reindex(
     manifest = load_manifest(graph_dir)
 
     def _full_rebuild(changed_files: list[str]) -> dict:
-        full_graph = build_graph(codebase_root)
-        last_indexed_at_ns = int(time.time_ns())
         fps = compute_fingerprints(codebase_root)
+        last_indexed_at_ns = int(time.time_ns())
         save_manifest(graph_dir, fps, last_indexed_at_ns)
-        graph_store.save_full_graph(conn, full_graph, variant=_REINDEX_VARIANT)
+
+        # If "main" already has data (e.g. from a prior `jidra index` run that
+        # included the Rust resolver), promote it to "validated" via bean filter
+        # rather than re-running build_graph with Python-only resolution.
+        _conn = graph_store.connect(db_path)
+        main_edge_count = _conn.execute(
+            "SELECT COUNT(*) FROM resolved_call_edges WHERE variant='main'"
+        ).fetchone()[0]
+
+        if main_edge_count > 0:
+            main_graph = graph_store.load_graph(_conn, variant="main")
+            from ..graph.graph_validator import (
+                load_confirmed_beans_for_reindex,
+                validate_graph,
+            )
+
+            confirmed_beans, _ = load_confirmed_beans_for_reindex(graph_dir, main_graph)
+            if confirmed_beans:
+                filtered_graph, _ = validate_graph(
+                    main_graph, confirmed_beans, verbose=False
+                )
+            else:
+                filtered_graph = main_graph
+            graph_store.save_full_graph(_conn, filtered_graph, variant=_REINDEX_VARIANT)
+            _conn.close()
+            elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
+            return {
+                "change_type": "full_rebuild",
+                "changed_files": changed_files,
+                "added_methods": len(main_graph.methods),
+                "removed_methods": 0,
+                "elapsed_ms": elapsed_ms,
+                "actuator_cache_warning": None,
+            }
+
+        _conn.close()
+        full_graph = build_graph(codebase_root)
+        _conn2 = graph_store.connect(db_path)
+        graph_store.save_full_graph(_conn2, full_graph, variant=_REINDEX_VARIANT)
+        _conn2.close()
         elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
         return {
             "change_type": "full_rebuild",

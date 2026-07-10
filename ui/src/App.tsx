@@ -68,8 +68,9 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <RepoSelector {...repo} />
         <div className="flex-1 overflow-hidden flex flex-col">
-          {tab === "index"   && <IndexPanel {...repo} onNavigate={(t) => setTab(t as Tab)} />}
-          {tab === "status"  && <GraphStatusPanel repoPath={repo.repoPath} outputPath={repo.outputPath} />}
+          {/* Keep polling tabs mounted, hide with CSS to preserve state */}
+          <div className={tab === "index"  ? "contents" : "hidden"}><IndexPanel {...repo} onNavigate={(t) => setTab(t as Tab)} /></div>
+          <div className={tab === "status" ? "contents" : "hidden"}><GraphStatusPanel repoPath={repo.repoPath} outputPath={repo.outputPath} /></div>
           {tab === "graph"   && <GraphViewer {...repo} />}
           {tab === "sql"     && <SqlEditor {...repo} />}
           {tab === "mcp"     && <McpInspector {...repo} />}
