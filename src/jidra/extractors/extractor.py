@@ -2669,7 +2669,8 @@ def build_graph_partitioned(
         _t1 = time.perf_counter()
         graph_store.save_full_graph(conn, graph)
         _t2 = time.perf_counter()
-        if _RUST_RESOLVER_AVAILABLE:
+        _is_java = any(getattr(m, "language", None) == "java" for m in graph.methods)
+        if _RUST_RESOLVER_AVAILABLE and _is_java:
             _rust_resolve_and_store(str(db_path), graph)
         _t3 = time.perf_counter()
         print(
@@ -2691,7 +2692,10 @@ def build_graph_partitioned(
         _t1 = time.perf_counter()
         graph_store.save_full_graph(conn, module_graph, module_id=module_name)
         _t2 = time.perf_counter()
-        if _RUST_RESOLVER_AVAILABLE:
+        _is_java_module = any(
+            getattr(m, "language", None) == "java" for m in module_graph.methods
+        )
+        if _RUST_RESOLVER_AVAILABLE and _is_java_module:
             _rust_resolve_and_store(str(db_path), module_graph, module_id=module_name)
         _t3 = time.perf_counter()
         _extract_total += _t1 - _t0

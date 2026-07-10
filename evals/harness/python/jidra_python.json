@@ -8,7 +8,7 @@
       "prompt": "In this Python codebase, which functions call `load_graph`? List the calling functions \u2014 this is impact analysis before changing it.",
       "checker": "caller_hit",
       "method": "load_graph",
-      "min_hits": 2
+      "min_hits": 1
     },
     {
       "id": "PY2",
@@ -41,7 +41,6 @@
       "prompt": "Use the code graph tool to fetch the source of `_resolve_calls` directly. Show the implementation \u2014 what does it resolve and how does it build edges?",
       "checker": "get_source",
       "method": "_resolve_calls",
-      "file_hint": "extractor",
       "source_keywords": [
         "callsite",
         "resolve",

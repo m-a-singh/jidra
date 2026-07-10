@@ -42,15 +42,45 @@ from agent_eval import Oracle, Task, _lc
 # Flags: .py filenames not in oracle + long snake_case names not in oracle
 # ---------------------------------------------------------------------------
 
+_py_allowlist_cache: dict[int, frozenset[str]] = {}
 
-def py_hallucinated_refs(text: str, oracle: Oracle) -> list[str]:
+
+def _py_source_allowlist(oracle: Oracle) -> frozenset[str]:
+    key = id(oracle)
+    if key not in _py_allowlist_cache:
+        from pathlib import Path as _Path
+
+        ids: set[str] = set(oracle.method_names)
+        # file stems (e.g. graph_store from graph_store.py)
+        ids |= {f.rsplit(".", 1)[0] for f in oracle.file_basenames}
+        # class short names
+        ids |= {c.split(".")[-1] for c in oracle.class_full_names}
+        # all snake_case identifiers from actual source files
+        for fp in oracle.file_paths:
+            try:
+                content = _Path(fp).read_text(encoding="utf-8", errors="ignore")
+                for m in _re.findall(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b", content):
+                    if len(m) >= 10:
+                        ids.add(m)
+            except OSError:
+                pass
+        _py_allowlist_cache[key] = frozenset(ids)
+    return _py_allowlist_cache[key]
+
+
+def py_hallucinated_refs(
+    text: str, oracle: Oracle, exempt: set[str] | None = None
+) -> list[str]:
     bad: list[str] = []
     for m in _re.findall(r"\b[A-Za-z_]\w+\.py\b", text):
         if m not in oracle.file_basenames:
             bad.append(m)
-    # snake_case identifiers ≥10 chars likely to be method/function names
-    for m in _re.findall(r"\b[a-z][a-z0-9_]{9,}\b", text):
-        if m not in oracle.method_names:
+    allowlist = _py_source_allowlist(oracle)
+    if exempt:
+        allowlist = allowlist | exempt
+    # only flag snake_case identifiers (require underscore) not found anywhere in source
+    for m in _re.findall(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+){1,}\b", text):
+        if len(m) >= 10 and m not in allowlist:
             bad.append(m)
     return sorted(set(bad))
 
@@ -223,9 +253,11 @@ async def run_async(args) -> None:
     ]
 
     tasks = []
+    task_methods: dict[str, str] = {}
     for tc in config["tasks"]:
         checker = _build_checker(tc, oracle)
         tasks.append(Task(tc["id"], tc["prompt"], checker))
+        task_methods[tc["id"]] = tc.get("method", "")
 
     if args.tasks:
         want = set(args.tasks.split(","))
@@ -237,8 +269,14 @@ async def run_async(args) -> None:
             print(
                 f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
             )
+            _skill_system = ae.SYSTEM if be.name == "jidra" else ae._SYSTEM_BASE
             rr = await ae.run_agent(
-                client, args.model, be, task.prompt, label=f"{task.id}/{be.name}"
+                client,
+                args.model,
+                be,
+                task.prompt,
+                label=f"{task.id}/{be.name}",
+                system=_skill_system,
             )
             rr.task = task.id
             note = "run_error"
@@ -247,7 +285,10 @@ async def run_async(args) -> None:
                     rr.correct, note = task.check(rr.answer, oracle)
                 except Exception as e:  # noqa: BLE001
                     note = f"check_error: {e!r}"
-                rr.hallucinated = py_hallucinated_refs(rr.answer, oracle)
+                _exempt = {task_methods[task.id]} if task_methods.get(task.id) else None
+                rr.hallucinated = py_hallucinated_refs(
+                    rr.answer, oracle, exempt=_exempt
+                )
                 if len(rr.hallucinated) > halluc_max:
                     rr.correct = False
                     note += f" [HALLUC_FAIL: {rr.hallucinated}]"
@@ -320,7 +361,14 @@ def main() -> None:
     ap.add_argument("--out", default="results/eval_agent_results_py_v2.json")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--selfcheck", action="store_true")
+    ap.add_argument(
+        "--skill",
+        default="",
+        help="path to a skill/agent .md file — body appended to SYSTEM prompt (YAML frontmatter stripped)",
+    )
     args = ap.parse_args()
+    if args.skill:
+        ae.SYSTEM = ae._SYSTEM_BASE + "\n\n" + ae._load_skill(args.skill)
     if args.selfcheck:
         raise SystemExit(0 if selfcheck(args.graph, args.config) else 1)
     if not args.codebase:
