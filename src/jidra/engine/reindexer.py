@@ -1,33 +1,126 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+import shutil
 import time
 from pathlib import Path
 
 from ..models import Graph
 
+logger = logging.getLogger(__name__)
+
 MANIFEST_FILENAME = "file_manifest.json"
+CONFIG_FILENAME = "config.json"
+
+
+def load_jidra_config(graph_dir: Path) -> dict:
+    """Load `.jidra/config.json` (per-repo user overrides), or {} if absent/invalid.
+
+    Currently supports:
+      "extra_skip_folders": [str, ...] — additional folders (relative POSIX
+      paths from the codebase root, matched as prefixes) to exclude from
+      indexing/reindexing on top of the built-in per-language defaults.
+    """
+    path = graph_dir / CONFIG_FILENAME
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def ensure_jidra_gitignore(graph_dir: Path) -> None:
+    """Write `.jidra/.gitignore` (ignore everything) if it doesn't exist yet.
+
+    `.jidra/` holds local build artifacts (graph.db can be 100MB+, plus logs,
+    manifests, and cached validation reports) that should never end up in the
+    repo's git history — this is a per-repo safety net, not something that
+    depends on the user remembering to add it to the top-level .gitignore.
+    """
+    path = graph_dir / ".gitignore"
+    if path.exists():
+        return
+    try:
+        path.write_text("*\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
 def compute_fingerprints(
-    codebase_root: Path, extensions: list[str] | None = None
+    codebase_root: Path,
+    extensions: list[str] | None = None,
+    skip_folders: set[str] | None = None,
 ) -> dict[str, dict]:
     """Compute mtime_ns + size fingerprints for all source files.
+
+    `skip_folders` (relative POSIX prefixes from codebase_root) come from
+    `.jidra/config.json`'s "extra_skip_folders", on top of the built-in
+    per-language exclusion defaults — see `apply_filters`.
 
     Returns: {abs_path_str: {"mtime_ns": int, "size": int}}
     """
     if extensions is None:
         extensions = [".java", ".py", ".ts", ".tsx", ".js", ".jsx", ".scala", ".go"]
+    ext_set = set(extensions)
+
+    # Same exclusion sets the real per-language extractors use — imported
+    # rather than re-declared, so fingerprinting (which decides what counts
+    # as "changed") never drifts out of sync with what actually gets indexed.
+    from ..filters.file_filters import COMMON_EXCLUDED_DIRS, apply_filters
+    from ..filters.filters import EXCLUDED_DIRS as java_excluded
+    from ..filters.go_filters import EXCLUDED_DIRS as go_excluded
+    from ..filters.py_filters import EXCLUDED_DIRS as py_excluded
+    from ..filters.scala_filters import EXCLUDED_DIRS as scala_excluded
+    from ..filters.ts_filters import EXCLUDED_DIRS as ts_excluded
+
+    # Directory names that are dangerous for EVERY language (safe to prune
+    # during the walk itself, before we even know what's inside). A name like
+    # Go's "bin" is only build output for Go — pruning it globally would also
+    # skip a legitimate TS file living in an unrelated "bin/" directory, so
+    # language-specific extras are checked per-file below instead, by
+    # extension, not blindly pruned for every language at once.
+    dirnames_to_prune = COMMON_EXCLUDED_DIRS
+    extra_by_ext = {
+        ".java": java_excluded - COMMON_EXCLUDED_DIRS,
+        ".go": go_excluded - COMMON_EXCLUDED_DIRS,
+        ".py": py_excluded - COMMON_EXCLUDED_DIRS,
+        ".scala": scala_excluded - COMMON_EXCLUDED_DIRS,
+        ".ts": ts_excluded - COMMON_EXCLUDED_DIRS,
+        ".tsx": ts_excluded - COMMON_EXCLUDED_DIRS,
+        ".js": ts_excluded - COMMON_EXCLUDED_DIRS,
+        ".jsx": ts_excluded - COMMON_EXCLUDED_DIRS,
+    }
+
+    candidates: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(codebase_root):
+        dirnames[:] = [
+            d for d in dirnames if d not in dirnames_to_prune and not d.startswith(".")
+        ]
+        rel_parts = Path(dirpath).relative_to(codebase_root).parts
+        for name in filenames:
+            ext = os.path.splitext(name)[1]
+            if ext not in ext_set:
+                continue
+            lang_extra = extra_by_ext.get(ext)
+            if lang_extra and (set(rel_parts) & lang_extra):
+                continue  # this file's own language excludes one of its ancestor dirs
+            candidates.append(Path(dirpath) / name)
+
+    kept = apply_filters(candidates, codebase_root, skip_folders=skip_folders)
 
     fingerprints = {}
-    for ext in extensions:
-        for file_path in codebase_root.rglob(f"*{ext}"):
-            if file_path.is_file():
-                stat = file_path.stat()
-                fingerprints[str(file_path)] = {
-                    "mtime_ns": stat.st_mtime_ns,
-                    "size": stat.st_size,
-                }
+    for file_path in kept:
+        try:
+            stat = file_path.stat()
+        except OSError:
+            continue
+        fingerprints[str(file_path)] = {
+            "mtime_ns": stat.st_mtime_ns,
+            "size": stat.st_size,
+        }
     return fingerprints
 
 
@@ -214,7 +307,10 @@ def check_staleness(codebase_root: Path, graph_path: Path) -> dict:
             "hint": "No manifest found. Run jidra_reindex() for full rebuild.",
         }
 
-    current = compute_fingerprints(codebase_root)
+    skip_folders = (
+        set(load_jidra_config(graph_dir).get("extra_skip_folders") or []) or None
+    )
+    current = compute_fingerprints(codebase_root, skip_folders=skip_folders)
     changed_files, deleted_files = diff_fingerprints(current, manifest)
 
     is_stale = bool(changed_files or deleted_files)
@@ -314,277 +410,354 @@ def incremental_reindex(
 
     graph_dir = graph_path if graph_path.is_dir() else graph_path.parent
     graph_dir.mkdir(parents=True, exist_ok=True)
+    ensure_jidra_gitignore(graph_dir)
+
+    config = load_jidra_config(graph_dir)
+    skip_folders = set(config.get("extra_skip_folders") or []) or None
 
     db_path = graph_store.resolve_graph_db_path(graph_path)
-    conn = graph_store.connect(db_path)
+    build_path = db_path.with_name("graph.building.db")
+    reindex_lock = db_path.with_name("graph.reindex.lock")
 
-    # Load manifest
-    manifest = load_manifest(graph_dir)
+    # Skip if another reindex is already running
+    if reindex_lock.exists():
+        elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
+        return {
+            "change_type": "skipped",
+            "changed_files": [],
+            "added_methods": 0,
+            "removed_methods": 0,
+            "elapsed_ms": elapsed_ms,
+            "actuator_cache_warning": None,
+        }
 
-    def _full_rebuild(changed_files: list[str]) -> dict:
-        fps = compute_fingerprints(codebase_root)
-        last_indexed_at_ns = int(time.time_ns())
-        save_manifest(graph_dir, fps, last_indexed_at_ns)
+    reindex_lock.touch()
+    try:
+        # Copy current DB to build path — all mutations go here, never to live db_path
+        if db_path.exists():
+            shutil.copy2(str(db_path), str(build_path))
 
-        # If "main" already has data (e.g. from a prior `jidra index` run that
-        # included the Rust resolver), promote it to "validated" via bean filter
-        # rather than re-running build_graph with Python-only resolution.
-        _conn = graph_store.connect(db_path)
-        main_edge_count = _conn.execute(
-            "SELECT COUNT(*) FROM resolved_call_edges WHERE variant='main'"
-        ).fetchone()[0]
+        conn = graph_store.connect(build_path)
 
-        if main_edge_count > 0:
-            main_graph = graph_store.load_graph(_conn, variant="main")
-            from ..graph.graph_validator import (
-                load_confirmed_beans_for_reindex,
-                validate_graph,
-            )
+        # Load manifest
+        manifest = load_manifest(graph_dir)
 
-            confirmed_beans, _ = load_confirmed_beans_for_reindex(graph_dir, main_graph)
-            if confirmed_beans:
-                filtered_graph, _ = validate_graph(
-                    main_graph, confirmed_beans, verbose=False
+        def _full_rebuild(changed_files: list[str]) -> dict:
+            fps = compute_fingerprints(codebase_root, skip_folders=skip_folders)
+            last_indexed_at_ns = int(time.time_ns())
+
+            # If "main" already has data (e.g. from a prior `jidra index` run that
+            # included the Rust resolver), promote it to "validated" via bean filter
+            # rather than re-running build_graph with Python-only resolution.
+            _conn = graph_store.connect(build_path)
+            main_edge_count = _conn.execute(
+                "SELECT COUNT(*) FROM resolved_call_edges WHERE variant='main'"
+            ).fetchone()[0]
+
+            if main_edge_count > 0:
+                main_graph = graph_store.load_graph(_conn, variant="main")
+                from ..graph.graph_validator import (
+                    load_confirmed_beans_for_reindex,
+                    validate_graph,
                 )
-            else:
-                filtered_graph = main_graph
-            graph_store.save_full_graph(_conn, filtered_graph, variant=_REINDEX_VARIANT)
+
+                confirmed_beans, _ = load_confirmed_beans_for_reindex(
+                    graph_dir, main_graph
+                )
+                if confirmed_beans:
+                    filtered_graph, _ = validate_graph(
+                        main_graph, confirmed_beans, verbose=False
+                    )
+                else:
+                    filtered_graph = main_graph
+                graph_store.save_full_graph(
+                    _conn, filtered_graph, variant=_REINDEX_VARIANT
+                )
+                _conn.close()
+                os.replace(str(build_path), str(db_path))
+                save_manifest(graph_dir, fps, last_indexed_at_ns)
+                elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
+                return {
+                    "change_type": "full_rebuild",
+                    "changed_files": changed_files,
+                    "added_methods": len(main_graph.methods),
+                    "removed_methods": 0,
+                    "elapsed_ms": elapsed_ms,
+                    "actuator_cache_warning": None,
+                }
+
             _conn.close()
+            full_graph = build_graph(codebase_root, skip_folders=skip_folders)
+            _conn2 = graph_store.connect(build_path)
+            graph_store.save_full_graph(_conn2, full_graph, variant=_REINDEX_VARIANT)
+            _conn2.close()
+            os.replace(str(build_path), str(db_path))
+            save_manifest(graph_dir, fps, last_indexed_at_ns)
             elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
             return {
                 "change_type": "full_rebuild",
                 "changed_files": changed_files,
-                "added_methods": len(main_graph.methods),
+                "added_methods": len(full_graph.methods),
                 "removed_methods": 0,
                 "elapsed_ms": elapsed_ms,
                 "actuator_cache_warning": None,
             }
 
-        _conn.close()
-        full_graph = build_graph(codebase_root)
-        _conn2 = graph_store.connect(db_path)
-        graph_store.save_full_graph(_conn2, full_graph, variant=_REINDEX_VARIANT)
-        _conn2.close()
-        elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
-        return {
-            "change_type": "full_rebuild",
-            "changed_files": changed_files,
-            "added_methods": len(full_graph.methods),
-            "removed_methods": 0,
-            "elapsed_ms": elapsed_ms,
-            "actuator_cache_warning": None,
-        }
+        if not manifest:
+            current_fps = compute_fingerprints(codebase_root, skip_folders=skip_folders)
+            return _full_rebuild(list(current_fps.keys()))
 
-    if not manifest:
-        current_fps = compute_fingerprints(codebase_root)
-        return _full_rebuild(list(current_fps.keys()))
+        # Fingerprint diff
+        current_fps = compute_fingerprints(codebase_root, skip_folders=skip_folders)
+        changed_files_set, deleted_files_set = diff_fingerprints(current_fps, manifest)
 
-    # Fingerprint diff
-    current_fps = compute_fingerprints(codebase_root)
-    changed_files_set, deleted_files_set = diff_fingerprints(current_fps, manifest)
+        # Union with hint — resolve relative paths to absolute against codebase_root
+        if hint_changed_files:
+            for f in hint_changed_files:
+                p = Path(f)
+                resolved = str(p if p.is_absolute() else (codebase_root / p).resolve())
+                changed_files_set.add(resolved)
 
-    # Union with hint — resolve relative paths to absolute against codebase_root
-    if hint_changed_files:
-        for f in hint_changed_files:
-            p = Path(f)
-            resolved = str(p if p.is_absolute() else (codebase_root / p).resolve())
-            changed_files_set.add(resolved)
+        if not changed_files_set and not deleted_files_set:
+            # No changes
+            return {
+                "change_type": "no_change",
+                "changed_files": [],
+                "added_methods": 0,
+                "removed_methods": 0,
+                "elapsed_ms": (time.perf_counter_ns() - start_ns) / 1_000_000,
+                "actuator_cache_warning": None,
+            }
 
-    if not changed_files_set and not deleted_files_set:
-        # No changes
-        return {
-            "change_type": "no_change",
-            "changed_files": [],
-            "added_methods": 0,
-            "removed_methods": 0,
-            "elapsed_ms": (time.perf_counter_ns() - start_ns) / 1_000_000,
-            "actuator_cache_warning": None,
-        }
+        # Load existing graph (full read is fine — it's a SQL query, not a file parse)
+        existing_graph = graph_store.load_graph(conn, variant=_REINDEX_VARIANT)
+        if not existing_graph.classes and not existing_graph.methods:
+            return _full_rebuild(list(changed_files_set))
 
-    # Load existing graph (full read is fine — it's a SQL query, not a file parse)
-    existing_graph = graph_store.load_graph(conn, variant=_REINDEX_VARIANT)
-    if not existing_graph.classes and not existing_graph.methods:
-        return _full_rebuild(list(changed_files_set))
+        # Build mini-graph for changed files
+        from ..extractors.extractor import build_graph_for_files
 
-    # Build mini-graph for changed files
-    from ..extractors.extractor import build_graph_for_files
+        changed_files_paths = {Path(f) for f in changed_files_set if Path(f).exists()}
 
-    changed_files_paths = {Path(f) for f in changed_files_set if Path(f).exists()}
-
-    if not changed_files_paths:
-        # All changed files were deleted — strip their records, no parse needed.
-        graph_store.delete_for_files(conn, deleted_files_set, variant=_REINDEX_VARIANT)
-        last_indexed_at_ns = int(time.time_ns())
-        save_manifest(graph_dir, current_fps, last_indexed_at_ns)
-        elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
-        return {
-            "change_type": "deletion_only",
-            "changed_files": list(deleted_files_set),
-            "added_methods": 0,
-            "removed_methods": len(deleted_files_set),
-            "elapsed_ms": elapsed_ms,
-            "actuator_cache_warning": None,
-        }
-
-    # Eagerly purge deleted files before diff so removed methods don't appear as
-    # "existing" and confuse diff_graph_records into a metadata_only/callsite path.
-    if deleted_files_set:
-        graph_store.delete_for_files(conn, deleted_files_set, variant=_REINDEX_VARIANT)
-        existing_graph.classes = [
-            c for c in existing_graph.classes if c.file_path not in deleted_files_set
-        ]
-        existing_graph.methods = [
-            m for m in existing_graph.methods if m.file_path not in deleted_files_set
-        ]
-        existing_graph.fields = [
-            f for f in existing_graph.fields if f.file_path not in deleted_files_set
-        ]
-        existing_graph.callsites = [
-            c for c in existing_graph.callsites if c.file_path not in deleted_files_set
-        ]
-
-    mini_graph = build_graph_for_files(changed_files_paths, codebase_root)
-
-    # Diff records
-    diff_result = diff_graph_records(mini_graph, existing_graph, changed_files_set)
-    change_type = diff_result["change_type"]
-
-    # Dispatch by change_type
-    if change_type == "no_change":
-        result_graph = existing_graph
-    elif change_type == "metadata_only":
-        # Patch start_line/end_line in-place; skip edge re-resolve
-        result_graph = _patch_metadata_only(
-            existing_graph, mini_graph, diff_result["line_shifted_methods"]
-        )
-    elif change_type == "callsite_change":
-        # Strip + re-resolve edges for affected methods only
-        result_graph = _update_callsite_edges(
-            existing_graph, mini_graph, diff_result["callsite_changed_method_ids"]
-        )
-    else:  # structural
-        # Strip all records for changed_files, merge mini_graph, full re-resolve
-        result_graph = _do_structural_reindex(
-            existing_graph, mini_graph, changed_files_set
-        )
-
-    # Bean filtering for Java (if applicable)
-    from ..graph.graph_validator import load_confirmed_beans_for_reindex
-
-    confirmed_beans, bean_source = load_confirmed_beans_for_reindex(
-        graph_dir, result_graph
-    )
-    actuator_warning = None
-    if bean_source == "static_annotation":
-        actuator_warning = (
-            "Using static bean detection fallback (no cached actuator response)"
-        )
-
-    if confirmed_beans:
-        # Filter edges
-
-        confirmed_ids = {
-            c.id for c in result_graph.classes if c.full_name in confirmed_beans
-        }
-        result_graph.resolved_call_edges = [
-            e
-            for e in result_graph.resolved_call_edges
-            if any(
-                m.class_id in confirmed_ids
-                for m in result_graph.methods
-                if m.id == e.callee_method_id
+        if not changed_files_paths:
+            # All changed files were deleted — strip their records, no parse needed.
+            graph_store.delete_for_files(
+                conn, deleted_files_set, variant=_REINDEX_VARIANT
             )
-        ]
+            last_indexed_at_ns = int(time.time_ns())
+            conn.close()
+            os.replace(str(build_path), str(db_path))
+            save_manifest(graph_dir, current_fps, last_indexed_at_ns)
+            elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
+            return {
+                "change_type": "deletion_only",
+                "changed_files": list(deleted_files_set),
+                "added_methods": 0,
+                "removed_methods": len(deleted_files_set),
+                "elapsed_ms": elapsed_ms,
+                "actuator_cache_warning": None,
+            }
 
-    # Persist via targeted SQL deletes/inserts scoped to what actually changed.
-    last_indexed_at_ns = int(time.time_ns())
-    save_manifest(graph_dir, current_fps, last_indexed_at_ns)
-
-    method_by_id = {m.id: m for m in result_graph.methods}
-
-    if change_type == "metadata_only":
-        for old_id, new_line, _delta in diff_result["line_shifted_methods"]:
-            m = method_by_id.get(old_id)
-            if m is not None:
-                graph_store.update_method_lines(
-                    conn,
-                    old_id,
-                    m.start_line,
-                    m.end_line,
-                    m.source,
-                    variant=_REINDEX_VARIANT,
-                )
-        graph_store.replace_resolved_call_edges(
-            conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
-        )
-    elif change_type == "callsite_change":
-        changed_method_ids = diff_result["callsite_changed_method_ids"]
-        graph_store.delete_callsites_by_caller(
-            conn, changed_method_ids, variant=_REINDEX_VARIANT
-        )
-        graph_store.delete_methods(conn, changed_method_ids, variant=_REINDEX_VARIANT)
-        graph_store.insert_methods(
-            conn,
-            [m for m in result_graph.methods if m.id in changed_method_ids],
-            variant=_REINDEX_VARIANT,
-        )
-        graph_store.insert_callsites(
-            conn,
-            [
+        # Eagerly purge deleted files before diff so removed methods don't appear as
+        # "existing" and confuse diff_graph_records into a metadata_only/callsite path.
+        if deleted_files_set:
+            graph_store.delete_for_files(
+                conn, deleted_files_set, variant=_REINDEX_VARIANT
+            )
+            existing_graph.classes = [
                 c
-                for c in result_graph.callsites
-                if c.caller_method_id in changed_method_ids
-            ],
-            variant=_REINDEX_VARIANT,
+                for c in existing_graph.classes
+                if c.file_path not in deleted_files_set
+            ]
+            existing_graph.methods = [
+                m
+                for m in existing_graph.methods
+                if m.file_path not in deleted_files_set
+            ]
+            existing_graph.fields = [
+                f for f in existing_graph.fields if f.file_path not in deleted_files_set
+            ]
+            existing_graph.callsites = [
+                c
+                for c in existing_graph.callsites
+                if c.file_path not in deleted_files_set
+            ]
+
+        mini_graph, failed_files = build_graph_for_files(
+            changed_files_paths, codebase_root
         )
-        graph_store.replace_resolved_call_edges(
-            conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
+        if failed_files:
+            failed_files_str = {str(p) for p in failed_files}
+            changed_files_set = changed_files_set - failed_files_str
+            changed_files_paths = {
+                p for p in changed_files_paths if p not in failed_files
+            }
+            logger.warning(
+                "incremental_reindex: skipping %d file(s) that failed to parse this cycle "
+                "(will retry next reindex): %s",
+                len(failed_files),
+                sorted(failed_files_str),
+            )
+
+        # Diff records
+        diff_result = diff_graph_records(mini_graph, existing_graph, changed_files_set)
+        change_type = diff_result["change_type"]
+
+        # Dispatch by change_type
+        if change_type == "no_change":
+            result_graph = existing_graph
+        elif change_type == "metadata_only":
+            # Patch start_line/end_line in-place; skip edge re-resolve
+            result_graph = _patch_metadata_only(
+                existing_graph, mini_graph, diff_result["line_shifted_methods"]
+            )
+        elif change_type == "callsite_change":
+            # Strip + re-resolve edges for affected methods only
+            result_graph = _update_callsite_edges(
+                existing_graph, mini_graph, diff_result["callsite_changed_method_ids"]
+            )
+        else:  # structural
+            # Strip all records for changed_files, merge mini_graph, full re-resolve
+            result_graph = _do_structural_reindex(
+                existing_graph, mini_graph, changed_files_set
+            )
+
+        # Bean filtering for Java (if applicable)
+        from ..graph.graph_validator import load_confirmed_beans_for_reindex
+
+        confirmed_beans, bean_source = load_confirmed_beans_for_reindex(
+            graph_dir, result_graph
         )
-        conn.commit()
-    elif change_type == "structural":
-        fragment = Graph(
-            classes=[
-                c for c in result_graph.classes if c.file_path in changed_files_set
-            ],
-            methods=[
-                m for m in result_graph.methods if m.file_path in changed_files_set
-            ],
-            fields=[f for f in result_graph.fields if f.file_path in changed_files_set],
-            callsites=[
-                c for c in result_graph.callsites if c.file_path in changed_files_set
-            ],
-            inheritance_edges=[
+        actuator_warning = None
+        if bean_source == "static_annotation":
+            actuator_warning = (
+                "Using static bean detection fallback (no cached actuator response)"
+            )
+
+        if confirmed_beans:
+            # Filter edges
+
+            confirmed_ids = {
+                c.id for c in result_graph.classes if c.full_name in confirmed_beans
+            }
+            result_graph.resolved_call_edges = [
                 e
-                for e in result_graph.inheritance_edges
-                if e.source_class_id
-                in {
-                    c.id
-                    for c in result_graph.classes
+                for e in result_graph.resolved_call_edges
+                if any(
+                    m.class_id in confirmed_ids
+                    for m in result_graph.methods
+                    if m.id == e.callee_method_id
+                )
+            ]
+
+        # Persist via targeted SQL deletes/inserts scoped to what actually changed.
+        last_indexed_at_ns = int(time.time_ns())
+
+        method_by_id = {m.id: m for m in result_graph.methods}
+
+        if change_type == "metadata_only":
+            for old_id, new_line, _delta in diff_result["line_shifted_methods"]:
+                m = method_by_id.get(old_id)
+                if m is not None:
+                    graph_store.update_method_lines(
+                        conn,
+                        old_id,
+                        m.start_line,
+                        m.end_line,
+                        m.source,
+                        variant=_REINDEX_VARIANT,
+                    )
+            graph_store.replace_resolved_call_edges(
+                conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
+            )
+        elif change_type == "callsite_change":
+            changed_method_ids = diff_result["callsite_changed_method_ids"]
+            graph_store.delete_callsites_by_caller(
+                conn, changed_method_ids, variant=_REINDEX_VARIANT
+            )
+            graph_store.delete_methods(
+                conn, changed_method_ids, variant=_REINDEX_VARIANT
+            )
+            graph_store.insert_methods(
+                conn,
+                [m for m in result_graph.methods if m.id in changed_method_ids],
+                variant=_REINDEX_VARIANT,
+            )
+            graph_store.insert_callsites(
+                conn,
+                [
+                    c
+                    for c in result_graph.callsites
+                    if c.caller_method_id in changed_method_ids
+                ],
+                variant=_REINDEX_VARIANT,
+            )
+            graph_store.replace_resolved_call_edges(
+                conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
+            )
+            conn.commit()
+        elif change_type == "structural":
+            fragment = Graph(
+                classes=[
+                    c for c in result_graph.classes if c.file_path in changed_files_set
+                ],
+                methods=[
+                    m for m in result_graph.methods if m.file_path in changed_files_set
+                ],
+                fields=[
+                    f for f in result_graph.fields if f.file_path in changed_files_set
+                ],
+                callsites=[
+                    c
+                    for c in result_graph.callsites
                     if c.file_path in changed_files_set
-                }
-            ],
-            resolved_call_edges=[],
-        )
-        graph_store.upsert_for_files(
-            conn, fragment, changed_files_set, variant=_REINDEX_VARIANT
-        )
-        graph_store.replace_resolved_call_edges(
-            conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
-        )
-    # no_change: nothing to persist
+                ],
+                inheritance_edges=[
+                    e
+                    for e in result_graph.inheritance_edges
+                    if e.source_class_id
+                    in {
+                        c.id
+                        for c in result_graph.classes
+                        if c.file_path in changed_files_set
+                    }
+                ],
+                resolved_call_edges=[],
+            )
+            graph_store.upsert_for_files(
+                conn, fragment, changed_files_set, variant=_REINDEX_VARIANT
+            )
+            graph_store.replace_resolved_call_edges(
+                conn, result_graph.resolved_call_edges, variant=_REINDEX_VARIANT
+            )
+        # no_change: nothing to persist
 
-    added_count = len(diff_result.get("added_method_ids", []))
-    removed_count = len(diff_result.get("removed_method_ids", []))
+        added_count = len(diff_result.get("added_method_ids", []))
+        removed_count = len(diff_result.get("removed_method_ids", []))
 
-    elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
-    return {
-        "change_type": change_type,
-        "changed_files": list(changed_files_set),
-        "added_methods": added_count,
-        "removed_methods": removed_count,
-        "elapsed_ms": elapsed_ms,
-        "actuator_cache_warning": actuator_warning,
-    }
+        conn.close()
+        os.replace(str(build_path), str(db_path))
+        save_manifest(graph_dir, current_fps, last_indexed_at_ns)
+
+        elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
+        return {
+            "change_type": change_type,
+            "changed_files": list(changed_files_set),
+            "added_methods": added_count,
+            "removed_methods": removed_count,
+            "elapsed_ms": elapsed_ms,
+            "actuator_cache_warning": actuator_warning,
+        }
+    finally:
+        try:
+            reindex_lock.unlink()
+        except OSError:
+            pass
+        try:
+            if build_path.exists():
+                build_path.unlink()
+        except OSError:
+            pass
 
 
 def _patch_metadata_only(
@@ -644,8 +817,14 @@ def _update_callsite_edges(
             if c.caller_method_id == method_id:
                 existing_graph.callsites.append(c)
 
-    # Re-resolve calls for the full graph (edges will be rebuilt)
-    _resolve_calls(existing_graph)
+    # Re-resolve calls only for callers with changed callsites; other edges are left as-is
+    _scope = set(callsite_changed_ids)
+    logger.debug(
+        "incremental_reindex: scoped resolve to %d/%d caller(s)",
+        len(_scope),
+        len(existing_graph.methods),
+    )
+    _resolve_calls(existing_graph, only_caller_ids=_scope)
     return existing_graph
 
 
@@ -686,8 +865,13 @@ def _do_structural_reindex(
     existing_graph.callsites.extend(mini_graph.callsites)
     existing_graph.inheritance_edges.extend(mini_graph.inheritance_edges)
 
-    # Clear and re-resolve all edges
-    existing_graph.resolved_call_edges = []
-    _resolve_calls(existing_graph)
+    # Re-resolve only for methods whose file changed; edges for untouched callers are left as-is
+    _scope = {m.id for m in mini_graph.methods}
+    logger.debug(
+        "incremental_reindex: scoped resolve to %d/%d caller(s)",
+        len(_scope),
+        len(existing_graph.methods),
+    )
+    _resolve_calls(existing_graph, only_caller_ids=_scope)
 
     return existing_graph

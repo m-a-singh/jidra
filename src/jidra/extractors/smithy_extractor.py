@@ -18,9 +18,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ..filters.file_filters import COMMON_EXCLUDED_DIRS
 from ..models import SmithyMemberEntry, SmithyOperationEntry, SmithyShapeEntry
 
-_EXCLUDED_DIRS = {".git", "node_modules", ".venv", "__pycache__", ".jidra"}
+_EXCLUDED_DIRS = COMMON_EXCLUDED_DIRS
 
 _NAMESPACE_RE = re.compile(r"^\s*namespace\s+([\w.]+)", re.MULTILINE)
 # Matches `[@trait(...) ...] (service|operation|structure|union) Name {`
