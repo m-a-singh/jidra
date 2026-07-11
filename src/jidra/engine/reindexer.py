@@ -865,6 +865,14 @@ def _do_structural_reindex(
     existing_graph.callsites.extend(mini_graph.callsites)
     existing_graph.inheritance_edges.extend(mini_graph.inheritance_edges)
 
+    # Prune edges from untouched callers that point to methods removed by this structural change.
+    live_method_ids = {m.id for m in existing_graph.methods}
+    existing_graph.resolved_call_edges = [
+        e
+        for e in existing_graph.resolved_call_edges
+        if e.callee_method_id in live_method_ids
+    ]
+
     # Re-resolve only for methods whose file changed; edges for untouched callers are left as-is
     _scope = {m.id for m in mini_graph.methods}
     logger.debug(
