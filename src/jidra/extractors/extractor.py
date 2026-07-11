@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import logging
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -29,6 +30,8 @@ from ..models import (
 )
 from ..engine.parallel import parallel_map
 from ..utils.parser import make_parser
+
+logger = logging.getLogger(__name__)
 
 try:
     import jidra_resolver as _jidra_resolver
@@ -2337,7 +2340,8 @@ def build_graph(
     if changed_files is not None and previous_graph is not None:
         changed_paths_str = {str(p) for p in changed_files}
 
-        mini_graph = build_graph_for_files(changed_files, codebase_root)
+        # TODO: does not yet exclude failed_files from merge
+        mini_graph, _failed = build_graph_for_files(changed_files, codebase_root)
 
         merged = Graph(
             classes=[
@@ -2455,14 +2459,23 @@ def build_graph(
     return _merge_graphs(graphs)
 
 
-def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
+def build_graph_for_files(
+    files: set[Path], codebase_root: Path
+) -> tuple[Graph, set[Path]]:
     """Build graph for specific set of files without running _resolve_calls().
 
     Used for incremental reindexing on changed files only.
     Returns unresolved graph (resolved_call_edges will be empty).
+
+    Returns a `(graph, failed_files)` tuple. `failed_files` is the union, across
+    every language, of files that raised during extraction this cycle. Callers
+    should treat those files as "not yet re-extracted" rather than "now has zero
+    methods" — a parse failure (e.g. a file mid-edit with a syntax error) must
+    not be mistaken for real deletions of that file's methods/classes.
     """
 
     graphs: list[Graph] = []
+    failed_files: set[Path] = set()
 
     # Filter files by language and extract per language
     java_files = {f for f in files if f.suffix == ".java"}
@@ -2480,7 +2493,11 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
         all_inheritance_edges: list[InheritanceEdge] = []
 
         existing_java_files = [f for f in java_files if f.exists()]
-        for result in parallel_map(_extract_file, existing_java_files):
+        for result in parallel_map(
+            _extract_file,
+            existing_java_files,
+            on_error=lambda item, exc: failed_files.add(item),
+        ):
             all_classes.extend(result.classes)
             all_methods.extend(result.methods)
             all_fields.extend(result.fields)
@@ -2503,7 +2520,11 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
         try:
             from .py_extractor import build_py_graph_for_files
 
-            py_graph = build_py_graph_for_files(py_files, codebase_root)
+            py_graph = build_py_graph_for_files(
+                py_files,
+                codebase_root,
+                on_error=lambda item, exc: failed_files.add(item),
+            )
             graphs.append(py_graph)
         except (ImportError, AttributeError):
             pass
@@ -2513,44 +2534,76 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
         try:
             from .ts_extractor import build_ts_graph_for_files
 
+            # build_ts_graph_for_files delegates to the Docker sidecar as a single
+            # batch call, so a failure can't be isolated to one file. Treat any
+            # failure of the whole call as "all requested ts_files failed this
+            # cycle" (conservative — no worse than before) instead of letting the
+            # exception propagate and abort java/py/go files already extracted in
+            # this same batch.
             ts_graph = build_ts_graph_for_files(ts_files, codebase_root)
             graphs.append(ts_graph)
         except (ImportError, AttributeError):
             pass
+        except Exception as exc:
+            logger.warning(
+                "build_graph_for_files: TS sidecar batch failed (%s), skipping %d file(s) this cycle: %s",
+                exc,
+                len(ts_files),
+                sorted(str(p) for p in ts_files),
+            )
+            failed_files.update(ts_files)
 
     # Extract Scala files
     if scala_files:
         try:
             from .scala_extractor import build_scala_graph_for_files
 
+            # build_scala_graph_for_files always returns an empty graph today
+            # (SemanticDB needs whole-project compilation) — wrapped defensively
+            # in case that changes, so a future failure can't kill the batch.
             scala_graph = build_scala_graph_for_files(scala_files, codebase_root)
             graphs.append(scala_graph)
         except (ImportError, AttributeError):
             pass
+        except Exception as exc:
+            logger.warning(
+                "build_graph_for_files: Scala extraction failed (%s), skipping %d file(s) this cycle: %s",
+                exc,
+                len(scala_files),
+                sorted(str(p) for p in scala_files),
+            )
+            failed_files.update(scala_files)
 
     # Extract Go files
     if go_files:
         try:
             from .go_extractor import build_go_graph_for_files
 
-            go_graph = build_go_graph_for_files(go_files, codebase_root)
+            go_graph = build_go_graph_for_files(
+                go_files,
+                codebase_root,
+                on_error=lambda item, exc: failed_files.add(item),
+            )
             graphs.append(go_graph)
         except (ImportError, AttributeError):
             pass
 
     if len(graphs) == 1:
-        return graphs[0]
+        return graphs[0], failed_files
     if graphs:
-        return _merge_graphs(graphs)
+        return _merge_graphs(graphs), failed_files
 
     # No files found, return empty graph
-    return Graph(
-        classes=[],
-        methods=[],
-        fields=[],
-        callsites=[],
-        inheritance_edges=[],
-        resolved_call_edges=[],
+    return (
+        Graph(
+            classes=[],
+            methods=[],
+            fields=[],
+            callsites=[],
+            inheritance_edges=[],
+            resolved_call_edges=[],
+        ),
+        failed_files,
     )
 
 
@@ -2669,8 +2722,9 @@ def build_graph_partitioned(
         _t1 = time.perf_counter()
         graph_store.save_full_graph(conn, graph)
         _t2 = time.perf_counter()
-        _is_java = any(getattr(m, "language", None) == "java" for m in graph.methods)
-        if _RUST_RESOLVER_AVAILABLE and _is_java:
+        _langs = {getattr(m, "language", None) for m in graph.methods}
+        _rust_eligible = _langs & {"java", "typescript", "python", "scala"}
+        if _RUST_RESOLVER_AVAILABLE and _rust_eligible:
             _rust_resolve_and_store(str(db_path), graph)
         _t3 = time.perf_counter()
         print(
@@ -2692,10 +2746,14 @@ def build_graph_partitioned(
         _t1 = time.perf_counter()
         graph_store.save_full_graph(conn, module_graph, module_id=module_name)
         _t2 = time.perf_counter()
-        _is_java_module = any(
-            getattr(m, "language", None) == "java" for m in module_graph.methods
-        )
-        if _RUST_RESOLVER_AVAILABLE and _is_java_module:
+        _module_langs = {getattr(m, "language", None) for m in module_graph.methods}
+        _module_rust_eligible = _module_langs & {
+            "java",
+            "typescript",
+            "python",
+            "scala",
+        }
+        if _RUST_RESOLVER_AVAILABLE and _module_rust_eligible:
             _rust_resolve_and_store(str(db_path), module_graph, module_id=module_name)
         _t3 = time.perf_counter()
         _extract_total += _t1 - _t0

@@ -214,6 +214,9 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
     callsites: list[CallSite] = []
     inheritance_edges: list[InheritanceEdge] = []
     resolved_call_edges: list[ResolvedCallEdge] = []
+    _pending_locals: list[
+        tuple[str, int, str, str]
+    ] = []  # (file_path, line, var_name, type_name)
 
     # symbol string → MethodEntry (for call resolution pass)
     symbol_to_method: dict[str, MethodEntry] = {}
@@ -402,7 +405,21 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
                 # ── Field / val / var ──
                 elif k in (kind.FIELD, kind.LOCAL):
                     if k == kind.LOCAL:
-                        continue  # skip local variables
+                        var_name = info.display_name
+                        if not var_name:
+                            continue
+                        type_name = "Any"
+                        if info.signature.HasField("value_signature"):
+                            vs = info.signature.value_signature
+                            if vs.tpe.HasField("type_ref"):
+                                type_name = vs.tpe.type_ref.symbol.split("/")[
+                                    -1
+                                ].rstrip("#.()")
+                        if type_name and type_name != "Any":
+                            _pending_locals.append(
+                                (file_path_str, line, var_name, type_name)
+                            )
+                        continue
                     field_name = info.display_name
                     if not field_name:
                         continue
@@ -438,6 +455,22 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
     # ── Pass 2: Call sites ───────────────────────────────────────────────────
     # Build a method-by-id lookup for call resolution
     _method_by_id: dict[str, MethodEntry] = {m.id: m for m in methods}
+
+    # Resolve pending local variable types into their enclosing MethodEntry
+    _methods_by_file: dict[str, list[MethodEntry]] = {}
+    for _m in methods:
+        _methods_by_file.setdefault(_m.file_path, []).append(_m)
+    for _fp, _ln, _vname, _tname in _pending_locals:
+        _best: MethodEntry | None = None
+        for _m in _methods_by_file.get(_fp, []):
+            if _m.start_line <= _ln <= _m.end_line:
+                if _best is None or _m.start_line > _best.start_line:
+                    _best = _m
+        if _best is not None:
+            _best.local_variable_types.setdefault(_vname, _tname)
+    for _m in methods:
+        if _m.class_full_name:
+            _m.local_variable_types.setdefault("this", _m.class_full_name)
 
     # We need to map each definition occ back to its enclosing method for caller_method_id.
     # Re-scan docs to find reference occurrences and correlate with enclosing method.

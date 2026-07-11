@@ -2,22 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .file_filters import apply_filters
+from .file_filters import COMMON_EXCLUDED_DIRS, apply_filters
 
-EXCLUDED_DIRS = {
+EXCLUDED_DIRS = COMMON_EXCLUDED_DIRS | {
     # Build output
-    "target",
     ".bloop",
     ".metals",
     ".scala-build",
-    # VCS
-    ".git",
     # IDE
     ".idea",
     ".vscode",
     # Dependencies / caches
     "project/target",
-    "node_modules",
 }
 
 

@@ -2,17 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .file_filters import apply_filters
+from .file_filters import COMMON_EXCLUDED_DIRS, apply_filters
 
-EXCLUDED_DIRS = {
-    "build",
-    "target",
-    ".gradle",
-    "generated",
-    "generated-sources",
-    "generated_sources",
-    "node_modules",
-}
+EXCLUDED_DIRS = COMMON_EXCLUDED_DIRS
 
 
 def should_include_dir(path: Path) -> bool:
