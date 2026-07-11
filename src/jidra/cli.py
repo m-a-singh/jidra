@@ -884,6 +884,17 @@ def _parse_args() -> argparse.Namespace:
     )
     hooks_parser.add_argument("--graph", help="Path to graph.db the hooks reindex")
 
+    hook_parser = subparsers.add_parser(
+        "hook", help="Agent hook handlers (called by Claude Code PostToolUse hook)"
+    )
+    hook_parser.add_argument(
+        "action",
+        choices=["post-tool-use", "debounced-reindex"],
+        help="Hook action to run",
+    )
+    hook_parser.add_argument("--graph", help="Path to graph.db")
+    hook_parser.add_argument("--codebase", help="Path to codebase root")
+
     flow_doc_parser = subparsers.add_parser(
         "flow-doc", help="Generate recursive deterministic flow markdown"
     )
@@ -2064,6 +2075,9 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
 
     jidra_dir = repo / ".jidra"
     jidra_dir.mkdir(exist_ok=True)
+    from .engine.reindexer import ensure_jidra_gitignore
+
+    ensure_jidra_gitignore(jidra_dir)
     graph_path = jidra_dir / "graph.db"
 
     # Detect languages
@@ -2171,6 +2185,16 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
     # Copy jidra-investigator agent into target repo
     _install_agent(repo)
 
+    try:
+        from .utils.agent_hooks import install_agent_hooks
+
+        if install_agent_hooks(repo):
+            ui.success(
+                "✓ Claude Code PostToolUse hook installed → auto-reindex on file edits"
+            )
+    except Exception:
+        pass
+
     ui.success(
         f"✓ Initialized. Graph at {graph_path.relative_to(repo)} — restart your agent."
     )
@@ -2238,6 +2262,9 @@ def _up() -> None:
 
     jidra_dir = repo / ".jidra"
     jidra_dir.mkdir(exist_ok=True)
+    from .engine.reindexer import ensure_jidra_gitignore
+
+    ensure_jidra_gitignore(jidra_dir)
     if (graph_store.resolve_graph_db_path(jidra_dir)).exists():
         ui.info(f"Found existing JIDRA output for this repo at: {jidra_dir}")
         reuse = _prompt_yn(
@@ -3701,15 +3728,31 @@ def main() -> None:
 
     if args.command == "hooks":
         from .utils.git_hooks import install_hooks, uninstall_hooks
+        from .utils.agent_hooks import install_agent_hooks, uninstall_agent_hooks
 
         repo = Path(args.repo).resolve() if args.repo else Path.cwd()
         graph_path = _resolve_graph_db_path(args.graph)
         if args.action == "install":
             written = install_hooks(repo, graph_path)
             print(f"✓ Installed JIDRA git hooks: {', '.join(written) or '(none)'}")
+            install_agent_hooks(repo)
+            print("✓ Installed Claude Code PostToolUse hook")
         else:
             removed = uninstall_hooks(repo)
             print(f"✓ Removed JIDRA blocks from: {', '.join(removed) or '(none)'}")
+            uninstall_agent_hooks(repo)
+            print("✓ Removed Claude Code PostToolUse hook")
+        return
+
+    if args.command == "hook":
+        from .utils.agent_hooks import handle_post_tool_use, run_debounced_reindex
+
+        graph_path = args.graph or str(_resolve_graph_db_path(None))
+        codebase = args.codebase or str(Path(graph_path).parent.parent)
+        if args.action == "debounced-reindex":
+            run_debounced_reindex(graph_path, codebase)
+        else:
+            handle_post_tool_use(graph_path, codebase)
         return
 
     if args.command == "flow-doc":

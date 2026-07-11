@@ -243,6 +243,26 @@ class _FileExtractor:
             for member in body.children:
                 if member.type == "method_definition":
                     self._emit_method(member, cls)
+                    nn = _child(member, "property_identifier") or _child(
+                        member, "identifier"
+                    )
+                    name = _text(nn, self.src) if nn is not None else None
+                    mbody = _child(member, "statement_block")
+                    if name == "constructor" and mbody is not None:
+                        for attr, type_name in self._collect_constructor_this_types(
+                            mbody, self.src
+                        ).items():
+                            self.fields.append(
+                                FieldEntry(
+                                    id=field_id(cls.full_name, attr, self.rel, 0),
+                                    class_id=cls.id,
+                                    name=attr,
+                                    type_name=type_name,
+                                    modifiers=[],
+                                    file_path=self.rel,
+                                    line=0,
+                                )
+                            )
                 elif member.type == "public_field_definition":
                     self._emit_field(member, cls)
         return cls
@@ -295,6 +315,45 @@ class _FileExtractor:
                     )
                     if type_node is not None:
                         result[var_name] = _text(type_node, src)
+            stack.extend(n.children)
+        return result
+
+    @staticmethod
+    def _collect_constructor_this_types(body_node, src: bytes) -> dict[str, str]:
+        """Scan constructor body for `this.attr = new Foo()` → {attr: type}."""
+        result: dict[str, str] = {}
+        stack = list(body_node.children)
+        while stack:
+            n = stack.pop()
+            if n.type == "expression_statement":
+                expr = n.children[0] if n.children else None
+                if expr and expr.type == "assignment_expression":
+                    left = expr.child_by_field_name("left")
+                    right = expr.child_by_field_name("right")
+                    if (
+                        left is not None
+                        and right is not None
+                        and left.type == "member_expression"
+                        and right.type == "new_expression"
+                    ):
+                        obj = left.child_by_field_name("object")
+                        prop = left.child_by_field_name("property")
+                        if (
+                            obj is not None
+                            and _text(obj, src) == "this"
+                            and prop is not None
+                        ):
+                            attr = _text(prop, src)
+                            type_node = next(
+                                (
+                                    c
+                                    for c in right.children
+                                    if c.type in ("identifier", "type_identifier")
+                                ),
+                                None,
+                            )
+                            if type_node is not None:
+                                result[attr] = _text(type_node, src)
             stack.extend(n.children)
         return result
 

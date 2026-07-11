@@ -9,6 +9,11 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from ...filters.filters import EXCLUDED_DIRS as _JAVA_EXCLUDED_DIRS
+from ...filters.go_filters import EXCLUDED_DIRS as _GO_EXCLUDED_DIRS
+from ...filters.py_filters import EXCLUDED_DIRS as _PY_EXCLUDED_DIRS
+from ...filters.scala_filters import EXCLUDED_DIRS as _SCALA_EXCLUDED_DIRS
+from ...filters.ts_filters import EXCLUDED_DIRS as _TS_EXCLUDED_DIRS
 from ...indexing.resources_indexer import discover_resource_files, index_resource_file
 
 
@@ -34,35 +39,15 @@ class ProcessRequest(BaseModel):
 # here only to pre-check the UI folder picker's default state. The actual
 # exclusion during indexing still goes through each language's own filter
 # plus gitignore; this list is a coarse approximation for UX purposes.
-_DEFAULT_EXCLUDED_DIRS = {
-    "node_modules",
-    ".git",
-    "dist",
-    "build",
-    "vendor",
-    ".cache",
-    "coverage",
-    "venv",
-    ".venv",
-    "__pycache__",
-    "target",
-    ".gradle",
-    "out",
-    ".next",
-    ".nuxt",
-    "public",
-    "bin",
-    ".turbo",
-    ".output",
-    ".svelte-kit",
-    "generated",
-    ".pytest_cache",
-    ".mypy_cache",
-    "site-packages",
-    ".expo",
-    "android",
-    "ios",
-}
+# Union of every language's real exclusion set, so this UI hint never drifts
+# from what actually gets skipped during indexing/reindexing.
+_DEFAULT_EXCLUDED_DIRS = (
+    _JAVA_EXCLUDED_DIRS
+    | _GO_EXCLUDED_DIRS
+    | _PY_EXCLUDED_DIRS
+    | _SCALA_EXCLUDED_DIRS
+    | _TS_EXCLUDED_DIRS
+)
 
 
 _DOC_EXTENSIONS = (".md", ".mdx", ".txt", ".pdf", ".docx")
