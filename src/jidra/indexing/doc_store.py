@@ -160,6 +160,29 @@ def list_sources(conn: sqlite3.Connection) -> list[dict]:
     ]
 
 
+def enrich_with_staleness(conn: sqlite3.Connection, chunks: list[dict]) -> list[dict]:
+    """Hard-drop chunks where ALL linked classes no longer exist. Flag partial misses."""
+    result = []
+    for chunk in chunks:
+        linked = [x for x in (chunk.get("linked_classes") or "").split(",") if x]
+        if not linked:
+            result.append(chunk)
+            continue
+        ph = ",".join("?" * len(linked))
+        existing = {
+            row[0]
+            for row in conn.execute(
+                f"SELECT name FROM classes WHERE name IN ({ph})", linked
+            ).fetchall()
+        }
+        if not existing:
+            continue  # all linked symbols gone — hard drop
+        if len(existing) < len(linked):
+            chunk = {**chunk, "potentially_stale": True}
+        result.append(chunk)
+    return result
+
+
 def _row_to_dict(row) -> dict:
     keys = [
         "id",

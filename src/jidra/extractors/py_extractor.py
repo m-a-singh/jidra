@@ -94,6 +94,8 @@ class ASTExtractor(ast.NodeVisitor):
         self.current_class: ClassEntry | None = None
         self.current_method_id: str | None = None
         self.symbol_table = SymbolTable()
+        # class_full_name -> {attr_name -> type} from self.attr = Foo() in __init__
+        self._class_self_types: dict[str, dict[str, str]] = {}
         # ids of FunctionDef/AsyncFunctionDef nodes already extracted as methods
         # by visit_ClassDef, so visit_FunctionDef/visit_AsyncFunctionDef don't
         # re-extract them as phantom module-level functions.
@@ -171,6 +173,18 @@ class ASTExtractor(ast.NodeVisitor):
         self.current_class = class_entry
         self.symbol_table.push_scope()
 
+        # Pre-pass: harvest __init__ self-field types before visiting other methods,
+        # so all methods in the class can see them regardless of source order.
+        for item in node.body:
+            if (
+                isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and item.name == "__init__"
+            ):
+                self_types = self._extract_self_field_types(item)
+                self._class_self_types.setdefault(class_entry.full_name, {}).update(
+                    self_types
+                )
+
         for item in node.body:
             if isinstance(item, ast.FunctionDef) or isinstance(
                 item, ast.AsyncFunctionDef
@@ -179,6 +193,26 @@ class ASTExtractor(ast.NodeVisitor):
                 self._extract_method(item, class_entry)
             elif isinstance(item, ast.AnnAssign):
                 self._extract_field(item, class_entry)
+
+        # Emit FieldEntry for self-attrs discovered in __init__ so Rust's
+        # fields_by_class lookup can walk self.attr chains.
+        for attr_name, attr_type in self._class_self_types.get(
+            class_entry.full_name, {}
+        ).items():
+            if attr_type and attr_type != "unknown":
+                self.fields.append(
+                    FieldEntry(
+                        id=field_id(
+                            class_entry.full_name, attr_name, self.file_path, 0
+                        ),
+                        class_id=class_entry.id,
+                        name=attr_name,
+                        type_name=attr_type,
+                        modifiers=[],
+                        file_path=self.file_path,
+                        line=0,
+                    )
+                )
 
         self.symbol_table.pop_scope()
         self.current_class = prev_class
@@ -302,13 +336,32 @@ class ASTExtractor(ast.NodeVisitor):
         for pname, ptype in zip(param_names, param_types):
             self.symbol_table.set_type(pname, ptype)
 
+        # Seed self.attr types from __init__ scan (populated on first __init__ pass)
+        if class_entry and class_entry.full_name in self._class_self_types:
+            for attr, attr_type in self._class_self_types[
+                class_entry.full_name
+            ].items():
+                self.symbol_table.set_type(f"self.{attr}", attr_type)
+
         # Visit body to extract calls and assignments
         for stmt in node.body:
             self._extract_calls_from_node(stmt, mid)
             self._track_assignments(stmt)
 
+        # Snapshot method-local scope only (last pushed) for Rust resolver.
+        # Plain names only — compound keys like "self.repo" aren't usable by Rust.
+        local_variable_types: dict[str, str] = {}
+        if self.symbol_table.scope_stack:
+            for name, typ in self.symbol_table.scope_stack[-1].items():
+                if typ and typ != "unknown" and "." not in name:
+                    local_variable_types[name] = typ
+        if class_entry:
+            local_variable_types["self"] = class_entry.full_name
+
         self.symbol_table.pop_scope()
         self.current_method_id = prev_method_id
+
+        method_entry.local_variable_types = local_variable_types
 
     def _extract_calls_from_node(self, node: ast.AST, caller_method_id: str):
         """Extract call sites from a node."""
@@ -330,9 +383,12 @@ class ASTExtractor(ast.NodeVisitor):
         arg_count = len(node.args)
 
         # Infer receiver type from symbol table
+        # Check plain name AND self.attr key (seeded from __init__ scan)
         receiver_type = None
         if receiver:
             receiver_type = self.symbol_table.get_type(receiver)
+            if receiver_type is None:
+                receiver_type = self.symbol_table.get_type(f"self.{receiver}")
 
         callsite = CallSite(
             id=callsite_id(caller_method_id, node.lineno, 1, callee_name),
@@ -354,6 +410,48 @@ class ASTExtractor(ast.NodeVisitor):
             candidate_count=0,
         )
         self.callsites.append(callsite)
+
+    def _extract_self_field_types(
+        self, init_node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> dict[str, str]:
+        """Scan __init__ body for self.attr = Foo() / self.attr: Foo = ... patterns."""
+        # Build param_type lookup from __init__ annotations so `self.x = x` resolves
+        # when x is a typed parameter (e.g. `def __init__(self, repo: Repo)`).
+        param_types: dict[str, str] = {}
+        for param in init_node.args.args:
+            if param.arg in ("self", "cls"):
+                continue
+            if param.annotation:
+                ann = self._get_annotation_name(param.annotation)
+                if ann and ann != "unknown":
+                    param_types[param.arg] = ann
+
+        result: dict[str, str] = {}
+        for stmt in ast.walk(init_node):
+            if isinstance(stmt, ast.Assign):
+                for target in stmt.targets:
+                    if (
+                        isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"
+                    ):
+                        # Try constructor call first, then param name lookup
+                        inferred = self._infer_type_from_value(stmt.value)
+                        if not inferred or inferred == "unknown":
+                            if isinstance(stmt.value, ast.Name):
+                                inferred = param_types.get(stmt.value.id)
+                        if inferred and inferred != "unknown":
+                            result[target.attr] = inferred
+            elif isinstance(stmt, ast.AnnAssign):
+                if (
+                    isinstance(stmt.target, ast.Attribute)
+                    and isinstance(stmt.target.value, ast.Name)
+                    and stmt.target.value.id == "self"
+                ):
+                    ann_type = self._get_annotation_name(stmt.annotation)
+                    if ann_type and ann_type != "unknown":
+                        result[stmt.target.attr] = ann_type
+        return result
 
     def _track_assignments(self, node: ast.AST):
         """Track variable assignments for type inference (comprehensive)."""
@@ -388,21 +486,16 @@ class ASTExtractor(ast.NodeVisitor):
     def _infer_type_from_value(self, value: ast.expr) -> str | None:
         """Infer variable type from assigned value with import resolution."""
         if isinstance(value, ast.Call):
-            # x = ClassName(...) or x = obj.method()
+            # Only infer type for direct constructor calls: x = ClassName(...)
+            # NOT for method calls: x = obj.method() — return type is unknown
             if isinstance(value.func, ast.Name):
                 type_name = value.func.id
                 # Resolve through imports if possible
                 return self.import_map.get(type_name, type_name)
-            elif isinstance(value.func, ast.Attribute):
-                return self._get_attribute_name(value.func)
 
         elif isinstance(value, ast.Name):
             # x = y (another variable)
             return self.symbol_table.get_type(value.id)
-
-        elif isinstance(value, ast.Attribute):
-            # x = obj.attr
-            return self._get_attribute_name(value)
 
         return None
 
@@ -892,11 +985,20 @@ def _resolve_calls(graph: Graph) -> None:
     graph.resolved_call_edges = sorted(edges, key=lambda e: e.id)
 
 
-def build_py_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
+def build_py_graph_for_files(
+    files: set[Path],
+    codebase_root: Path,
+    *,
+    on_error: Callable[[Path, Exception], None] | None = None,
+) -> Graph:
     """Build Graph for a specific set of Python files. Used by incremental reindex.
 
     Skips Pyright enrichment and phantom-edge filtering — those require the full
     codebase context and are not needed for the incremental fragment.
+
+    `on_error`, if provided, is called with `(file_path, exc)` for each file that
+    fails to parse/extract, so callers can avoid treating a transient failure as
+    "this file now has zero methods" (see `parallel_map`).
     """
     codebase_root = Path(codebase_root).resolve()
     worker = partial(_extract_py_file, codebase_root=codebase_root)
@@ -908,7 +1010,7 @@ def build_py_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
     all_inheritance_edges: list[InheritanceEdge] = []
 
     existing = [f for f in files if Path(f).exists()]
-    for result in parallel_map(worker, existing):
+    for result in parallel_map(worker, existing, on_error=on_error):
         if result is None:
             continue
         all_classes.extend(result.classes)

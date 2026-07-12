@@ -3,6 +3,7 @@ from pathlib import Path
 
 import jidra.cli as cli
 from jidra.engine import reindexer
+from jidra.extractors import extractor
 from jidra.graph import graph_store
 
 
@@ -357,3 +358,139 @@ public class UserService {
     fetch = method_by_sig["com.example.UserService#fetch(String)"]
     callees = {c.callee_name for c in graph.callsites if c.caller_method_id == fetch.id}
     assert callees == {"findAll"}
+
+
+def test_reindexer_signature_change_invalidates_unchanged_caller_edge(tmp_path):
+    """Same scenario as test_signature_change_invalidates_unchanged_caller_edge,
+    but through reindexer.incremental_reindex() directly rather than
+    cli._index() — that test exercises cli._index()'s own separate incremental
+    path, not the _resolve_calls(only_caller_ids=...) scoping added to
+    reindexer.py's _update_callsite_edges/_do_structural_reindex. This confirms
+    the scoping fix (limiting re-resolution to callers in the changed file) does
+    not leave dangling edges from callers in UNTOUCHED files pointing at a
+    removed overload."""
+    codebase = tmp_path / "repo"
+    files = _make_multi_file_codebase(codebase)
+    output = tmp_path / "out"
+
+    first = reindexer.incremental_reindex(codebase, output / "graph.db")
+    assert first["change_type"] == "full_rebuild"
+
+    # service.java (caller of find(String)) is left untouched; only
+    # repository.java changes, and only its signature (arity).
+    time.sleep(0.01)
+    files["repository"].write_text(
+        """package com.example;
+
+public class UserRepository {
+    public String find(String id, boolean active) {
+        return id;
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    result = reindexer.incremental_reindex(codebase, output / "graph.db")
+    assert result["change_type"] == "structural"
+
+    graph = graph_store.load_graph(
+        graph_store.connect(output / "graph.db"), variant="validated"
+    )
+    method_by_sig = {m.signature: m for m in graph.methods}
+    fetch = method_by_sig["com.example.UserService#fetch(String)"]
+    assert "com.example.UserRepository#find(String, boolean)" in method_by_sig
+    assert "com.example.UserRepository#find(String)" not in method_by_sig
+
+    live_method_ids = {m.id for m in graph.methods}
+    edges = {
+        (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
+    }
+    stale_edges = [e for e in edges if e[0] == fetch.id and e[1] not in live_method_ids]
+    assert not stale_edges, (
+        "scoped _resolve_calls left a dangling edge from an untouched caller "
+        f"to a removed overload: {stale_edges}"
+    )
+
+
+def test_parse_failure_does_not_delete_file_methods(tmp_path, monkeypatch):
+    """A file that fails to parse mid-batch must not have its existing methods
+    treated as 'removed' by diff_graph_records — that would phantom-delete real,
+    still-on-disk code just because this reindex cycle couldn't parse it (e.g. an
+    agent saved it mid-edit with a syntax error). Regression test for the bug
+    exposed by adding per-file fault isolation to parallel_map/build_graph_for_files:
+    isolating the failure (skip-and-continue) is only safe if the failed file is
+    also excluded from diff_graph_records' affected_files, otherwise "mini_graph
+    has zero methods for this file" reads as "all its methods were deleted"."""
+    codebase = tmp_path / "repo"
+    files = _make_multi_file_codebase(codebase)
+    output = tmp_path / "out"
+
+    first = reindexer.incremental_reindex(codebase, output / "graph.db")
+    assert first["change_type"] == "full_rebuild"
+
+    # _make_multi_file_codebase always produces exactly this one method in
+    # repository.java — hardcoded rather than read from graph.db between calls,
+    # since reading immediately after a fresh full_rebuild via a brand-new
+    # connection (outside incremental_reindex's own copy2+connect+load_graph
+    # flow) is a separate, unrelated timing hazard not exercised by real usage;
+    # every other test in this file only reads graph.db after the final call.
+    repo_methods_before = {"com.example.UserRepository#find(String)"}
+
+    # Touch repository.java (changes its mtime/fingerprint so it's picked up as
+    # "changed") but make _extract_file raise for it specifically, simulating a
+    # transient parse failure (e.g. mid-edit syntax error) without depending on
+    # tree-sitter actually throwing on malformed source (it error-recovers instead).
+    time.sleep(0.01)
+    files["repository"].write_text(
+        files["repository"].read_text(encoding="utf-8") + "\n// touched\n",
+        encoding="utf-8",
+    )
+    # Also make a real, valid change to a different file in the same batch, to
+    # confirm one file's failure doesn't abort the other file's update.
+    files["service"].write_text(
+        """package com.example;
+
+public class UserService {
+    private UserRepository repo;
+
+    public String fetch(String id) {
+        return repo.findAll();
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    real_extract_file = extractor._extract_file
+
+    def _flaky_extract_file(file_path, parser=None):
+        if file_path == files["repository"]:
+            raise ValueError("simulated parse failure")
+        return real_extract_file(file_path, parser=parser)
+
+    monkeypatch.setattr(extractor, "_extract_file", _flaky_extract_file)
+
+    result = reindexer.incremental_reindex(codebase, output / "graph.db")
+    assert result["change_type"] != "skipped"
+
+    after = graph_store.load_graph(
+        graph_store.connect(output / "graph.db"), variant="validated"
+    )
+    repo_methods_after = {
+        m.signature for m in after.methods if m.file_path == str(files["repository"])
+    }
+    assert repo_methods_after == repo_methods_before, (
+        "repository.java's methods must survive untouched when it fails to parse, "
+        f"got {repo_methods_after!r} instead of {repo_methods_before!r}"
+    )
+
+    service_method_by_sig = {
+        m.signature: m for m in after.methods if m.file_path == str(files["service"])
+    }
+    fetch = service_method_by_sig["com.example.UserService#fetch(String)"]
+    callees = {c.callee_name for c in after.callsites if c.caller_method_id == fetch.id}
+    assert callees == {"findAll"}, (
+        "the OTHER file's valid change should still persist even though "
+        "repository.java failed to parse in the same batch"
+    )

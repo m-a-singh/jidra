@@ -866,16 +866,32 @@ def build_go_graph(
     return graph
 
 
-def build_go_graph_for_files(files: set[Path], codebase_root: Path) -> Graph:
+def build_go_graph_for_files(
+    files: set[Path],
+    codebase_root: Path,
+    *,
+    on_error: Callable[[Path, Exception], None] | None = None,
+) -> Graph:
     """Build an unresolved Go graph for specific files (incremental reindex).
 
     Mirrors build_py_graph_for_files: resolution happens in the caller's merge step.
     Note: since resolution is deferred, the cross-file type-map fix only applies
     to full builds. Incremental builds may still miss methods whose receiver type
     lives outside the changed file set; this is acceptable for a delta update.
+
+    `on_error`, if provided, is called with `(file_path, exc)` for each file that
+    fails to parse, so a syntax error in one file doesn't get mistaken for that
+    file's methods having been deleted (see `parallel_map`/`build_graph_for_files`).
     """
     parser = make_go_parser()
-    file_metas = [_parse_file(fp, parser) for fp in files if fp.exists()]
+    existing = [fp for fp in files if fp.exists()]
+    file_metas = []
+    for fp in existing:
+        try:
+            file_metas.append(_parse_file(fp, parser))
+        except Exception as exc:
+            if on_error is not None:
+                on_error(fp, exc)
 
     if not file_metas:
         return Graph(
