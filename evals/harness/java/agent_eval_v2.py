@@ -265,7 +265,7 @@ class RunResult:
         return self.in_tokens + self.out_tokens
 
 
-SYSTEM = (
+_SYSTEM_BASE = (
     "You are a code-navigation agent answering a question about a "
     "codebase. You have ONLY the provided tools to inspect the code — you cannot "
     "read files directly. Rules:\n"
@@ -278,13 +278,30 @@ SYSTEM = (
     "as plain text (no tool call) when done."
 )
 
+SYSTEM = _SYSTEM_BASE  # may be replaced by main() when --skill is passed
+
+
+def _load_skill(path: str) -> str:
+    """Read a skill/agent .md file, strip YAML frontmatter, return body."""
+    text = Path(path).read_text(encoding="utf-8")
+    if text.startswith("---"):
+        end = text.index("---", 3)
+        text = text[end + 3 :].lstrip()
+    return text
+
 
 async def run_agent(
-    client, model: str, backend: Backend, task_prompt: str, label: str = ""
+    client,
+    model: str,
+    backend: Backend,
+    task_prompt: str,
+    label: str = "",
+    system: str | None = None,
 ) -> RunResult:
     label = label or backend.name
     rr = RunResult(backend=backend.name, task="")
     t0 = time.perf_counter()
+    _system = system if system is not None else SYSTEM
     try:
         async with stdio_client(backend.params) as (read, write):
             async with ClientSession(read, write) as session:
@@ -298,7 +315,7 @@ async def run_agent(
                     resp = await client.messages.create(
                         model=model,
                         max_tokens=AGENT_MAX_TOKENS,
-                        system=SYSTEM,
+                        system=_system,
                         tools=tools,
                         messages=messages,
                     )
@@ -657,8 +674,14 @@ async def main_async(args) -> None:
             print(
                 f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
             )
+            _skill_system = SYSTEM if be.name == "jidra" else _SYSTEM_BASE
             rr = await run_agent(
-                client, args.model, be, task.prompt, label=f"{task.id}/{be.name}"
+                client,
+                args.model,
+                be,
+                task.prompt,
+                label=f"{task.id}/{be.name}",
+                system=_skill_system,
             )
             rr.task = task.id
             if not rr.error:
@@ -1111,8 +1134,14 @@ async def run_config_async(args) -> None:
             print(
                 f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
             )
+            _skill_system = SYSTEM if be.name == "jidra" else _SYSTEM_BASE
             rr = await run_agent(
-                client, args.model, be, task.prompt, label=f"{task.id}/{be.name}"
+                client,
+                args.model,
+                be,
+                task.prompt,
+                label=f"{task.id}/{be.name}",
+                system=_skill_system,
             )
             rr.task = task.id
             note = "run_error"
@@ -1155,7 +1184,15 @@ def main() -> None:
     ap.add_argument(
         "--config", default="", help="JSON task config (enables config-driven mode)"
     )
+    ap.add_argument(
+        "--skill",
+        default="",
+        help="path to a skill/agent .md file — body appended to SYSTEM prompt (YAML frontmatter stripped)",
+    )
     args = ap.parse_args()
+    if args.skill:
+        global SYSTEM
+        SYSTEM = _SYSTEM_BASE + "\n\n" + _load_skill(args.skill)
     if args.selfcheck:
         if args.config:
             raise SystemExit(0 if selfcheck_config(args.graph, args.config) else 1)

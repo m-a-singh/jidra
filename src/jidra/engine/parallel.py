@@ -9,10 +9,13 @@ duplicate the threshold/worker-count logic.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from typing import TypeVar
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -40,6 +43,7 @@ def parallel_map(
     *,
     workers: int | None = None,
     min_items_for_pool: int = MIN_ITEMS_FOR_POOL,
+    on_error: Callable[[T, Exception], None] | None = None,
 ) -> Iterable[R]:
     """Apply `fn` to each item, in process-pool parallel when it's worth it.
 
@@ -47,13 +51,39 @@ def parallel_map(
     value must be picklable — this is the same constraint ProcessPoolExecutor
     always has. Falls back to a plain sequential map for small inputs or when
     `workers` resolves to 1, so callers don't need their own branch.
+
+    `on_error`, if provided, is called with `(item, exc)` for every item that
+    raises during `fn(item)`, in addition to the usual warning log. This lets
+    callers track which items failed (e.g. to avoid treating a transient parse
+    failure as "this file has no content anymore").
     """
     if not items:
         return []
 
     n_workers = workers if workers is not None else worker_count()
     if n_workers <= 1 or len(items) < min_items_for_pool:
-        return [fn(item) for item in items]
+        results: list[R] = []
+        for item in items:
+            try:
+                results.append(fn(item))
+            except Exception as exc:  # noqa: BLE001 - isolate per-item failure
+                logger.warning(
+                    "parallel_map: skipping item %r after error: %s", item, exc
+                )
+                if on_error is not None:
+                    on_error(item, exc)
+        return results
 
+    results = []
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
-        return list(pool.map(fn, items))
+        futures = {pool.submit(fn, item): item for item in items}
+        for fut in futures:
+            try:
+                results.append(fut.result())
+            except Exception as exc:  # noqa: BLE001 - isolate per-item failure
+                logger.warning(
+                    "parallel_map: skipping item %r after error: %s", futures[fut], exc
+                )
+                if on_error is not None:
+                    on_error(futures[fut], exc)
+    return results

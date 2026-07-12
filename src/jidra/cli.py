@@ -884,6 +884,17 @@ def _parse_args() -> argparse.Namespace:
     )
     hooks_parser.add_argument("--graph", help="Path to graph.db the hooks reindex")
 
+    hook_parser = subparsers.add_parser(
+        "hook", help="Agent hook handlers (called by Claude Code PostToolUse hook)"
+    )
+    hook_parser.add_argument(
+        "action",
+        choices=["post-tool-use", "debounced-reindex"],
+        help="Hook action to run",
+    )
+    hook_parser.add_argument("--graph", help="Path to graph.db")
+    hook_parser.add_argument("--codebase", help="Path to codebase root")
+
     flow_doc_parser = subparsers.add_parser(
         "flow-doc", help="Generate recursive deterministic flow markdown"
     )
@@ -1788,13 +1799,20 @@ def _write_claude_md(repo: Path, langs: list[str]) -> None:
         )
 
     jidra_section = f"""{_JIDRA_CLAUDE_MD_MARKER}
-## JIDRA — Code Graph Tools (MANDATORY)
+## JIDRA — Code Navigation (MANDATORY)
 
-ALWAYS call a JIDRA tool first before reading any file, running grep, or using
-glob — for any question about code structure, call flows, or method implementations.{lang_note}
+For ANY question about code structure, call flows, callers, implementations, or method source — delegate to a JIDRA skill. Do NOT call JIDRA MCP tools directly in the main session.{lang_note}
 
-- If a JIDRA tool returns suggestions, pick the best match and retry immediately.
-- Only fall back to file reads if JIDRA explicitly returns no data.
+| Question type | Skill to invoke |
+|---|---|
+| Who calls X / what calls X / find callers | `/jidra-navigate` |
+| What does X call / call tree / flow from X | `/jidra-flow` |
+| Blast radius / impact of changing X / safe to change | `/jidra-blast-radius` |
+| Stack trace / exception / why did X fail | `/jidra-error-investigate` |
+
+- Invoke the matching skill first. Only call JIDRA tools yourself if no skill matches.
+- If a skill returns suggestions, pick the best match and retry immediately.
+- Only fall back to file reads if the skill explicitly returns no data.
 <!-- /jidra-managed -->"""
 
     claude_md = repo / "CLAUDE.md"
@@ -1913,6 +1931,7 @@ def _install_agent(repo: Path) -> None:
         "jidra-navigate",
         "jidra-blast-radius",
         "jidra-error-investigate",
+        "jidra-flow",
     ):
         skill_text = _read_bundled_text(f"skills/{skill_name}/SKILL.md")
         if skill_text is None:
@@ -1962,6 +1981,10 @@ def _uninit(codebase_arg: str | None = None, yes: bool = False) -> None:
         (
             ".claude/skills/jidra-error-investigate",
             repo / ".claude" / "skills" / "jidra-error-investigate",
+        ),
+        (
+            ".claude/skills/jidra-flow",
+            repo / ".claude" / "skills" / "jidra-flow",
         ),
     ]
 
@@ -2052,6 +2075,9 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
 
     jidra_dir = repo / ".jidra"
     jidra_dir.mkdir(exist_ok=True)
+    from .engine.reindexer import ensure_jidra_gitignore
+
+    ensure_jidra_gitignore(jidra_dir)
     graph_path = jidra_dir / "graph.db"
 
     # Detect languages
@@ -2159,6 +2185,16 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
     # Copy jidra-investigator agent into target repo
     _install_agent(repo)
 
+    try:
+        from .utils.agent_hooks import install_agent_hooks
+
+        if install_agent_hooks(repo):
+            ui.success(
+                "✓ Claude Code PostToolUse hook installed → auto-reindex on file edits"
+            )
+    except Exception:
+        pass
+
     ui.success(
         f"✓ Initialized. Graph at {graph_path.relative_to(repo)} — restart your agent."
     )
@@ -2226,6 +2262,9 @@ def _up() -> None:
 
     jidra_dir = repo / ".jidra"
     jidra_dir.mkdir(exist_ok=True)
+    from .engine.reindexer import ensure_jidra_gitignore
+
+    ensure_jidra_gitignore(jidra_dir)
     if (graph_store.resolve_graph_db_path(jidra_dir)).exists():
         ui.info(f"Found existing JIDRA output for this repo at: {jidra_dir}")
         reuse = _prompt_yn(
@@ -2545,9 +2584,6 @@ def _up() -> None:
     else:
         ui.kv_panel("JIDRA is ready", ready_rows)
         _print_manual_mcp(manual_mcp_lines)
-
-    if write_config:
-        _write_claude_md(repo, langs)
 
 
 def _write_doc_graph(output_dir: Path, db_path: Path) -> Path | None:
@@ -3249,20 +3285,12 @@ def main() -> None:
         except ImportError:
             raise SystemExit("UI dependencies missing. Run: pip install 'jidra[ui]'")
 
-        # Auto-start daemon for cwd repo if already initialized, so the
-        # watcher is live for the duration of the UI session.
-        _ui_jidra_dir = Path.cwd() / ".jidra"
-        _ui_graph = _ui_jidra_dir / "graph.db"
-        if _ui_graph.exists():
-            from .engine.daemon import JidraDaemon
-
-            JidraDaemon(str(_ui_graph), str(Path.cwd())).start(daemonize=True)
-
         uvicorn.run(
             _ui_app,
             host=args.host,
             port=args.port,
             reload=args.reload,
+            log_level="warning",
         )
         return
 
@@ -3700,15 +3728,31 @@ def main() -> None:
 
     if args.command == "hooks":
         from .utils.git_hooks import install_hooks, uninstall_hooks
+        from .utils.agent_hooks import install_agent_hooks, uninstall_agent_hooks
 
         repo = Path(args.repo).resolve() if args.repo else Path.cwd()
         graph_path = _resolve_graph_db_path(args.graph)
         if args.action == "install":
             written = install_hooks(repo, graph_path)
             print(f"✓ Installed JIDRA git hooks: {', '.join(written) or '(none)'}")
+            install_agent_hooks(repo)
+            print("✓ Installed Claude Code PostToolUse hook")
         else:
             removed = uninstall_hooks(repo)
             print(f"✓ Removed JIDRA blocks from: {', '.join(removed) or '(none)'}")
+            uninstall_agent_hooks(repo)
+            print("✓ Removed Claude Code PostToolUse hook")
+        return
+
+    if args.command == "hook":
+        from .utils.agent_hooks import handle_post_tool_use, run_debounced_reindex
+
+        graph_path = args.graph or str(_resolve_graph_db_path(None))
+        codebase = args.codebase or str(Path(graph_path).parent.parent)
+        if args.action == "debounced-reindex":
+            run_debounced_reindex(graph_path, codebase)
+        else:
+            handle_post_tool_use(graph_path, codebase)
         return
 
     if args.command == "flow-doc":

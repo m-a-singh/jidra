@@ -2,15 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .file_filters import apply_filters
+from .file_filters import COMMON_EXCLUDED_DIRS, apply_filters
 
-EXCLUDED_DIRS = {
+EXCLUDED_DIRS = COMMON_EXCLUDED_DIRS | {
     # Package managers / dependencies
-    "node_modules",
     "vendor",
     # Compiled / build output
-    "dist",
-    "build",
     "out",
     ".next",
     ".nuxt",
@@ -20,12 +17,7 @@ EXCLUDED_DIRS = {
     # CI / deployment artifacts
     ".vercel",
     ".turbo",
-    ".cache",
-    "coverage",
-    # VCS
-    ".git",
     # Generated code
-    "generated",
     "__generated__",
     # Static assets — never source code
     "public",

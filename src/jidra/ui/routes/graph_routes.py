@@ -85,17 +85,8 @@ def _get_engine(repo_path: str, output_path: str | None = None):
     from .util_routes import resolve_out_dir
 
     out_dir = resolve_out_dir(repo_path, output_path)
-    import sqlite3 as _sq
-
     db = resolve_graph_db_path(out_dir)
-    # prefer validated if it has records, else fall back to main
-    conn = _sq.connect(str(db))
-    validated_count = conn.execute(
-        "SELECT COUNT(*) FROM methods WHERE variant='validated'"
-    ).fetchone()[0]
-    conn.close()
-    variant = "validated" if validated_count > 0 else "main"
-    return get_engine(str(db), variant=variant)
+    return get_engine(str(db), variant="main")
 
 
 @router.get("/nodes")

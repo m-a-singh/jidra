@@ -2,16 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .file_filters import apply_filters
+from .file_filters import COMMON_EXCLUDED_DIRS, apply_filters
 
-EXCLUDED_DIRS = {
+EXCLUDED_DIRS = COMMON_EXCLUDED_DIRS | {
     "vendor",
-    "node_modules",
-    ".git",
-    "dist",
-    "build",
     "bin",
-    ".cache",
 }
 
 

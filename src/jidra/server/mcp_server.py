@@ -284,6 +284,7 @@ def _dispatch_get_docs(
         seen = {c["id"] for c in chunks}
         chunks += [c for c in fts_chunks if c["id"] not in seen]
     chunks = chunks[:limit]
+    chunks = doc_store.enrich_with_staleness(conn, chunks)
     if not chunks:
         return {
             "docs_found": False,
@@ -299,6 +300,7 @@ def _dispatch_get_docs(
                 "title": c["title"],
                 "content": c["content"],
                 "linked_classes": [x for x in c["linked_classes"].split(",") if x],
+                **({"potentially_stale": True} if c.get("potentially_stale") else {}),
             }
             for c in chunks
         ],
