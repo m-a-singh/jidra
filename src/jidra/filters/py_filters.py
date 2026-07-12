@@ -2,26 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .file_filters import apply_filters
+from .file_filters import COMMON_EXCLUDED_DIRS, apply_filters
 
-EXCLUDED_DIRS = {
-    "__pycache__",
-    "venv",
-    ".venv",
+EXCLUDED_DIRS = COMMON_EXCLUDED_DIRS | {
     "env",
     ".env",
-    "dist",
-    "build",
     ".tox",
     ".eggs",
-    ".pytest_cache",
-    ".mypy_cache",
     ".coverage",
     "htmlcov",
     ".venv-build",
     "site-packages",
-    ".git",
-    "node_modules",
 }
 
 

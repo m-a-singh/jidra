@@ -101,8 +101,8 @@ class JidraDaemon:
         self._active = 0
         self._active_lock = threading.Lock()
         self._last_active = time.time()
+        self._start_time = time.time()
         self._stop = threading.Event()
-        self._watcher = None
 
     # ── lifecycle ────────────────────────────────────────────────────────────
 
@@ -128,13 +128,23 @@ class JidraDaemon:
             os.setsid()
             if os.fork() > 0:
                 os._exit(0)  # first child exits; grandchild is the daemon
-            # Detach std streams so the daemon outlives the launching shell.
-            devnull = os.open(os.devnull, os.O_RDWR)
-            for fd in (0, 1, 2):
+            # Redirect stdin to /dev/null; stdout+stderr to daemon.log so
+            # startup crashes are visible instead of silently lost.
+            devnull = os.open(os.devnull, os.O_RDONLY)
+            try:
+                os.dup2(devnull, 0)
+            except OSError:
+                pass
+            log_path = _jidra_dir(self.graph_path) / "daemon.log"
+            log_fd = os.open(
+                str(log_path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644
+            )
+            for fd in (1, 2):
                 try:
-                    os.dup2(devnull, fd)
+                    os.dup2(log_fd, fd)
                 except OSError:
                     pass
+            os.close(log_fd)
 
         if not self._acquire_lock():
             os._exit(0) if daemonize else None
@@ -155,6 +165,27 @@ class JidraDaemon:
         except Exception:
             pass
 
+        # Integrity check: if DB is corrupt, force a full reindex before serving.
+        if self.graph_path:
+            try:
+                from ..graph import graph_store as _gs
+
+                _db = _gs.resolve_graph_db_path(Path(self.graph_path))
+                if _db.exists():
+                    _c = _gs.connect(_db)
+                    _ok = _c.execute("PRAGMA integrity_check(1)").fetchone()
+                    _c.close()
+                    if _ok and _ok[0] != "ok":
+                        import logging
+
+                        logging.getLogger(__name__).warning(
+                            "graph.db integrity check failed (%s) — triggering full reindex",
+                            _ok[0],
+                        )
+                        self.reload()
+            except Exception:
+                pass
+
         # Reconcile any changes made while the daemon was down (e.g. a `git
         # pull` with no editor open) before serving the first client. Only
         # when codebase_path is known — reload() guesses a path otherwise,
@@ -162,7 +193,6 @@ class JidraDaemon:
         if self.codebase_path:
             self.reload()
 
-        self._start_watcher()
         threading.Thread(target=self._watchdog, daemon=True).start()
         try:
             self.serve_forever()
@@ -171,30 +201,9 @@ class JidraDaemon:
             if daemonize:
                 os._exit(0)
 
-    def _start_watcher(self) -> None:
-        """Best-effort: run a filesystem watcher (Phase 6) inside the daemon so
-        edits trigger a debounced incremental reindex and hot-swap. Silently
-        no-ops if watchdog is unavailable or the graph/codebase is unknown."""
-        if not self.graph_path:
-            return
-        try:
-            from .watcher import JidraWatcher
-
-            codebase = self.codebase_path or str(Path(self.graph_path).parent.parent)
-            self._watcher = JidraWatcher(Path(codebase), Path(self.graph_path))
-            self._watcher.start()
-        except Exception:
-            self._watcher = None
-
     def stop(self) -> None:
         """Signal the serve loop to exit (used by tests / SIGTERM)."""
         self._stop.set()
-        watcher = getattr(self, "_watcher", None)
-        if watcher is not None:
-            try:
-                watcher.stop()
-            except Exception:
-                pass
 
     def _cleanup(self) -> None:
         for path in (self.sock_path, self.pid_file):
@@ -208,10 +217,9 @@ class JidraDaemon:
         stop. Prevents orphaned daemons after all editors close."""
         while not self._stop.is_set():
             time.sleep(self.POLL_INTERVAL)
-            with self._active_lock:
-                idle = self._active == 0 and (
-                    time.time() - self._last_active > self.IDLE_TIMEOUT
-                )
+            idle = self._active == 0 and (
+                time.time() - self._last_active > self.IDLE_TIMEOUT
+            )
             if idle:
                 self._stop.set()
                 try:  # nudge the accept() loop awake
@@ -275,6 +283,20 @@ class JidraDaemon:
         try:
             if method == "ping":
                 return {"id": rid, "result": "pong"}
+            if method == "jidra/status":
+                with self._active_lock:
+                    active = self._active
+                return {
+                    "id": rid,
+                    "result": {
+                        "pid": os.getpid(),
+                        "graph_path": self.graph_path,
+                        "codebase_path": self.codebase_path,
+                        "watcher_running": False,
+                        "active_connections": active,
+                        "uptime_s": int(time.time() - self._start_time),
+                    },
+                }
             if method == "tools/list":
                 return {"id": rid, "result": mcp_server.visible_tool_names()}
             if method == "jidra/reload":

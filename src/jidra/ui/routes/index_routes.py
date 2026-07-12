@@ -9,6 +9,11 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from ...filters.filters import EXCLUDED_DIRS as _JAVA_EXCLUDED_DIRS
+from ...filters.go_filters import EXCLUDED_DIRS as _GO_EXCLUDED_DIRS
+from ...filters.py_filters import EXCLUDED_DIRS as _PY_EXCLUDED_DIRS
+from ...filters.scala_filters import EXCLUDED_DIRS as _SCALA_EXCLUDED_DIRS
+from ...filters.ts_filters import EXCLUDED_DIRS as _TS_EXCLUDED_DIRS
 from ...indexing.resources_indexer import discover_resource_files, index_resource_file
 
 
@@ -34,35 +39,15 @@ class ProcessRequest(BaseModel):
 # here only to pre-check the UI folder picker's default state. The actual
 # exclusion during indexing still goes through each language's own filter
 # plus gitignore; this list is a coarse approximation for UX purposes.
-_DEFAULT_EXCLUDED_DIRS = {
-    "node_modules",
-    ".git",
-    "dist",
-    "build",
-    "vendor",
-    ".cache",
-    "coverage",
-    "venv",
-    ".venv",
-    "__pycache__",
-    "target",
-    ".gradle",
-    "out",
-    ".next",
-    ".nuxt",
-    "public",
-    "bin",
-    ".turbo",
-    ".output",
-    ".svelte-kit",
-    "generated",
-    ".pytest_cache",
-    ".mypy_cache",
-    "site-packages",
-    ".expo",
-    "android",
-    "ios",
-}
+# Union of every language's real exclusion set, so this UI hint never drifts
+# from what actually gets skipped during indexing/reindexing.
+_DEFAULT_EXCLUDED_DIRS = (
+    _JAVA_EXCLUDED_DIRS
+    | _GO_EXCLUDED_DIRS
+    | _PY_EXCLUDED_DIRS
+    | _SCALA_EXCLUDED_DIRS
+    | _TS_EXCLUDED_DIRS
+)
 
 
 _DOC_EXTENSIONS = (".md", ".mdx", ".txt", ".pdf", ".docx")
@@ -473,6 +458,15 @@ async def daemon_status(repo_path: str, output_path: str | None = None) -> dict:
             manifest["last_indexed_at_ns"] / 1_000_000_000, tz=timezone.utc
         )
         last_indexed_at = dt.isoformat()
+    else:
+        # Fall back to graph.db mtime — set by initial full index pipeline
+        # even when incremental reindexer manifest is absent.
+        graph_db = out_dir / "graph.db"
+        if graph_db.exists():
+            from datetime import datetime, timezone
+
+            dt = datetime.fromtimestamp(graph_db.stat().st_mtime, tz=timezone.utc)
+            last_indexed_at = dt.isoformat()
 
     return {"running": running, "pid": pid, "last_indexed_at": last_indexed_at}
 
@@ -523,6 +517,24 @@ async def daemon_stop(req: DaemonRequest) -> dict:
         return {"stopped": False, "reason": "permission denied"}
 
 
+@router.get("/daemon/startup-log")
+async def daemon_startup_log(
+    repo_path: str, output_path: str | None = None, lines: int = 50
+) -> dict:
+    from ...engine.daemon import _jidra_dir
+
+    out_dir = _out_dir(repo_path, output_path)
+    graph_db = out_dir / "graph.db"
+    log_path = _jidra_dir(str(graph_db)) / "daemon.log"
+    if not log_path.exists():
+        return {"lines": []}
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+        return {"lines": text.splitlines()[-lines:]}
+    except OSError:
+        return {"lines": []}
+
+
 @router.get("/daemon/log")
 async def daemon_log(
     repo_path: str, output_path: str | None = None, limit: int = 50
@@ -548,13 +560,70 @@ async def daemon_log(
         return {"entries": []}
 
 
+@router.get("/daemons")
+async def list_daemons() -> dict:
+    """Scan the runtime dir for all running JIDRA daemon sockets and return their status."""
+    import socket as _socket
+    from ...engine.daemon import _runtime_dir
+
+    rt = _runtime_dir()
+    socks = list(rt.glob("*.sock"))
+    daemons = []
+    for sock_path in socks:
+        entry: dict = {"sock": str(sock_path), "alive": False}
+        try:
+            with _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM) as s:
+                s.settimeout(1.0)
+                s.connect(str(sock_path))
+                # send status request
+                s.sendall(b'{"id":1,"method":"jidra/status"}\n')
+                data = b""
+                while True:
+                    chunk = s.recv(4096)
+                    if not chunk:
+                        break
+                    data += chunk
+                    if b"\n" in data:
+                        break
+            raw = data.split(b"\n")[0]
+            if not raw:
+                raise OSError("empty response from daemon")
+            resp = json.loads(raw)
+            result = resp.get("result", {})
+            entry = {
+                "sock": str(sock_path),
+                "alive": True,
+                "pid": result.get("pid"),
+                "graph_path": result.get("graph_path"),
+                "codebase_path": result.get("codebase_path"),
+                "watcher_running": result.get("watcher_running", False),
+                "active_connections": result.get("active_connections", 0),
+                "uptime_s": result.get("uptime_s", 0),
+            }
+        except OSError:
+            entry["alive"] = False
+        daemons.append(entry)
+    return {"daemons": [d for d in daemons if d["alive"]]}
+
+
 @router.get("/daemon/stale")
-async def daemon_stale(repo_path: str, output_path: str | None = None) -> dict:
-    from ...engine.reindexer import check_staleness
+async def daemon_stale(
+    repo_path: str, output_path: str | None = None, full: bool = False
+) -> dict:
+    from ...engine.reindexer import check_staleness, quick_stale_check
 
     out_dir = _out_dir(repo_path, output_path)
     graph_db = out_dir / "graph.db"
     if not graph_db.exists():
         return {"stale": False, "reason": "not indexed"}
+
+    if not full:
+        # O(1) spot-check — safe to poll every 5s
+        stale = quick_stale_check(out_dir)
+        return {
+            "stale": stale,
+            "hint": "Call with ?full=true for changed file details.",
+        }
+
     codebase = Path(repo_path).resolve()
     return check_staleness(codebase, out_dir)

@@ -323,8 +323,9 @@ def connect(path: Path) -> sqlite3.Connection:
     # search) can be queried from the daemon's per-connection handler threads.
     # The engine serializes those queries with its own lock; reindex uses a
     # separate connection.
-    conn = sqlite3.connect(str(path), check_same_thread=False)
+    conn = sqlite3.connect(str(path), check_same_thread=False, timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.executescript(_SCHEMA_SQL)
     conn.commit()
     _run_migrations(conn)
@@ -1329,6 +1330,7 @@ def search_methods(
     limit: int = 20,
     language: str | None = None,
     variant: str = "main",
+    context_node_id: str | None = None,
 ) -> list[dict]:
     """FTS5 keyword search over method name/signature/class/source.
 
@@ -1406,6 +1408,21 @@ def search_methods(
     else:
         combined = method_combined
 
+    # Reachability re-rank: results reachable from calling context float up.
+    if context_node_id:
+        reachable = fetch_reachable_ids(conn, context_node_id)
+        for r in combined:
+            if r.get("id") in reachable:
+                r["score"] = (r.get("score") or 0) - 500.0
+
+    # Caller-count tie-breaker: among equal-score results, prefer heavily-called methods.
+    method_ids = [r["id"] for r in combined if r.get("node_type") != "class"]
+    if method_ids:
+        caller_counts = fetch_caller_counts(conn, method_ids)
+        for r in combined:
+            r["_caller_count"] = caller_counts.get(r["id"], 0)
+        combined.sort(key=lambda r: (r.get("score") or 0, -r.get("_caller_count", 0)))
+
     return combined[:limit]
 
 
@@ -1423,6 +1440,30 @@ def fetch_caller_counts(
         method_ids,
     )
     return {row[0]: row[1] for row in cur.fetchall()}
+
+
+def fetch_reachable_ids(
+    conn: sqlite3.Connection,
+    context_id: str,
+    depth: int = 2,
+) -> set[str]:
+    """Return method IDs reachable from context_id within depth hops (callers + callees)."""
+    reachable: set[str] = set()
+    frontier = {context_id}
+    for _ in range(depth):
+        if not frontier:
+            break
+        ph = ",".join("?" * len(frontier))
+        args = list(frontier)
+        cur = conn.execute(
+            f"SELECT callee_method_id FROM resolved_call_edges WHERE caller_method_id IN ({ph})"
+            f" UNION SELECT caller_method_id FROM resolved_call_edges WHERE callee_method_id IN ({ph})",
+            args + args,
+        )
+        new_ids = {row[0] for row in cur.fetchall()} - reachable - {context_id}
+        reachable |= new_ids
+        frontier = new_ids
+    return reachable
 
 
 def fetch_methods_by_ids(
