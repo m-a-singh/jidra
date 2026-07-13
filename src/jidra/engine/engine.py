@@ -152,7 +152,10 @@ def _embed_rerank(
     log = logging.getLogger(__name__)
 
     try:
-        from ..indexing.method_embeddings import rerank_by_embedding, detect_indexed_model
+        from ..indexing.method_embeddings import (
+            rerank_by_embedding,
+            detect_indexed_model,
+        )
     except ImportError:
         return rows
 
@@ -169,18 +172,19 @@ def _embed_rerank(
     max_s = max(scores) if scores else 1.0
     min_s = min(scores) if scores else 0.0
     rng = max_s - min_s or 1.0
-    enriched = [
-        {**r, "bm25_norm": (s - min_s) / rng}
-        for r, s in zip(rows, scores)
-    ]
+    enriched = [{**r, "bm25_norm": (s - min_s) / rng} for r, s in zip(rows, scores)]
 
     try:
         t0 = time.perf_counter()
-        result = rerank_by_embedding(conn, query, enriched, model_name=model_name, top_k=top_k)
+        result = rerank_by_embedding(
+            conn, query, enriched, model_name=model_name, top_k=top_k
+        )
         elapsed_ms = (time.perf_counter() - t0) * 1000
         log.debug(
             "embed_rerank query=%r candidates=%d elapsed_ms=%.1f",
-            query, len(rows), elapsed_ms,
+            query,
+            len(rows),
+            elapsed_ms,
         )
         return result
     except Exception:
@@ -263,7 +267,7 @@ class JidraEngine:
         self._variant = variant
 
         # Embedding index — loaded lazily on first search/explore call.
-        self._embed_matrix = None   # np.ndarray (N, D) or None
+        self._embed_matrix = None  # np.ndarray (N, D) or None
         self._embed_ids: list[str] = []
         self._embed_model: str | None = None
 
@@ -337,7 +341,10 @@ class JidraEngine:
         if self._embed_matrix is not None:
             return
         try:
-            from ..indexing.method_embeddings import detect_indexed_model, load_embedding_index
+            from ..indexing.method_embeddings import (
+                detect_indexed_model,
+                load_embedding_index,
+            )
         except ImportError:
             return
         with self._conn_lock:
@@ -359,8 +366,11 @@ class JidraEngine:
             return []
         try:
             from ..indexing.method_embeddings import _get_model
+
             model = _get_model(self._embed_model)
-            q_vec = model.encode([query], normalize_embeddings=True)[0].astype("float32")
+            q_vec = model.encode([query], normalize_embeddings=True)[0].astype(
+                "float32"
+            )
         except Exception:
             return []
         scores = self._embed_matrix @ q_vec  # cosine (embeddings are normalised)
@@ -1265,7 +1275,9 @@ class JidraEngine:
                 new_ids = [mid for mid in dense_ids if mid not in existing_ids]
                 if new_ids:
                     with self._conn_lock:
-                        dense_rows = graph_store.fetch_methods_by_ids(self.conn, new_ids)
+                        dense_rows = graph_store.fetch_methods_by_ids(
+                            self.conn, new_ids
+                        )
                     rows = rows + dense_rows
             rows = _embed_rerank(self.conn, query, rows)
 

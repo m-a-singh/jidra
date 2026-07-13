@@ -375,8 +375,12 @@ _REINDEX_VARIANT = "validated"
 def auto_embed_after_reindex(db_path: Path) -> None:
     """Run embed-index with the default model after a successful reindex."""
     try:
-        from ..indexing.method_embeddings import build_method_embeddings, DEFAULT_EMBED_MODEL
+        from ..indexing.method_embeddings import (
+            build_method_embeddings,
+            DEFAULT_EMBED_MODEL,
+        )
         from ..graph import graph_store
+
         conn = graph_store.connect(db_path)
         try:
             build_method_embeddings(conn, model_name=DEFAULT_EMBED_MODEL)
@@ -466,6 +470,7 @@ def incremental_reindex(
         # Copy current DB to build path using SQLite online backup API (WAL-safe).
         if db_path.exists():
             import sqlite3 as _sqlite3
+
             _src_conn = _sqlite3.connect(str(db_path), timeout=30)
             _dst_conn = _sqlite3.connect(str(build_path), timeout=30)
             try:

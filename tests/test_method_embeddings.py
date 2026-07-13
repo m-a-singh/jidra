@@ -1,4 +1,5 @@
 """Tests for method_embeddings: payload builder, hash stability, schema."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -94,7 +95,12 @@ def test_ensure_embeddings_table_idempotent():
     conn = sqlite3.connect(":memory:")
     ensure_embeddings_table(conn)
     ensure_embeddings_table(conn)  # second call must not raise
-    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    tables = {
+        r[0]
+        for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
     assert "method_embeddings" in tables
     conn.close()
 
@@ -102,6 +108,15 @@ def test_ensure_embeddings_table_idempotent():
 def test_schema_columns():
     conn = sqlite3.connect(":memory:")
     ensure_embeddings_table(conn)
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(method_embeddings)").fetchall()}
-    assert {"method_id", "variant", "module_id", "model", "embedding", "text_hash"}.issubset(cols)
+    cols = {
+        r[1] for r in conn.execute("PRAGMA table_info(method_embeddings)").fetchall()
+    }
+    assert {
+        "method_id",
+        "variant",
+        "module_id",
+        "model",
+        "embedding",
+        "text_hash",
+    }.issubset(cols)
     conn.close()
