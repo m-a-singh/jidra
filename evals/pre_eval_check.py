@@ -93,7 +93,7 @@ def check(db_path: Path) -> bool:
                 )
             else:
                 fail(f"{fts} integrity FAILED: {e}")
-                fail(f"  → re-index required (do not run eval)")
+                fail("  → re-index required (do not run eval)")
                 passed = False
         except Exception as e:
             warn(f"{fts} integrity check error (non-corruption): {e}")
