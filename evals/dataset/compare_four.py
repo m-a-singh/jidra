@@ -25,10 +25,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from datetime import date
 from pathlib import Path
+
+# Use venv python if available, so eval subprocesses have yaml/jidra deps
+_venv_py = Path(__file__).resolve().parents[2] / ".venv" / "bin" / "python"
+_PYTHON = str(_venv_py) if _venv_py.exists() else sys.executable
 
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
@@ -404,7 +409,7 @@ def run_pipeline(args: argparse.Namespace, work: Path) -> tuple[Path, Path, Path
     cg_e = work / "results_cg_explore.json"
 
     base_jidra = [
-        "python",
+        _PYTHON,
         str(script_dir / "swebench_retrieval_eval.py"),
         "--cases",
         *cases,
@@ -412,7 +417,7 @@ def run_pipeline(args: argparse.Namespace, work: Path) -> tuple[Path, Path, Path
         args.jidra_db,
     ]
     base_cg = [
-        "python",
+        _PYTHON,
         str(script_dir / "codegraph_retrieval_eval.py"),
         "--cases",
         *cases,

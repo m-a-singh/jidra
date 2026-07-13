@@ -42,8 +42,13 @@ def _jidra_dir(graph_path: str | None) -> Path:
     agrees, regardless of each client's CWD.
     """
     if graph_path:
-        base = Path(graph_path)
-        base = base if base.is_dir() else base.parent
+        base = Path(graph_path).resolve()
+        if not base.is_dir():
+            base = base.parent
+        # If handed the .jidra dir itself (or a file inside it), step up to repo root
+        # so we never nest .jidra/.jidra/.
+        if base.name == ".jidra":
+            base = base.parent
     else:
         base = Path.cwd()
     d = base / ".jidra"

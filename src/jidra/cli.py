@@ -1175,6 +1175,37 @@ def _parse_args() -> argparse.Namespace:
         help="Skip confirmation prompt",
     )
 
+    embed_index_parser = subparsers.add_parser(
+        "embed-index",
+        help="Build/refresh dense embeddings for all non-generated methods",
+    )
+    embed_index_parser.add_argument(
+        "--graph",
+        default=None,
+        help="Path to graph.db (default: .jidra/graph.db in cwd)",
+    )
+    embed_index_parser.add_argument(
+        "--model",
+        default="all-MiniLM-L6-v2",
+        help="sentence-transformers model name (default: all-MiniLM-L6-v2)",
+    )
+    embed_index_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        help="Embedding batch size (default: 64)",
+    )
+    embed_index_parser.add_argument(
+        "--language",
+        default=None,
+        help="Only embed methods for this language (e.g. java, python)",
+    )
+    embed_index_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-embed even if text_hash unchanged",
+    )
+
     ui_parser = subparsers.add_parser("ui", help="Launch the JIDRA web UI")
     ui_parser.add_argument(
         "--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)"
@@ -1542,6 +1573,7 @@ def _process(
     repo_root: str | None = None,
     use_docker: bool = False,
     skip_folders: set[str] | None = None,
+    force: bool = False,
 ) -> None:
     ui.banner("JIDRA Processing Pipeline")
     _pipeline_start = time.time()
@@ -1582,6 +1614,7 @@ def _process(
                 on_progress=on_class_parsed,
                 _quiet=True,
                 skip_folders=skip_folders,
+                force=force,
             )
         conn = graph_store.connect(db_path)
         graph = graph_store.load_graph(conn, variant="main")
@@ -2119,7 +2152,7 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
     # Index: incremental if graph exists, full rebuild if --force or no graph
     _init_index_start = time.time()
     if graph_path.exists() and not force:
-        ui.section(1, 3, "Incremental reindex")
+        ui.section(1, 4, "Incremental reindex")
         from .engine.reindexer import incremental_reindex
 
         result = incremental_reindex(repo, graph_path)
@@ -2129,7 +2162,7 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
     else:
         if force and graph_path.exists():
             graph_path.unlink()
-        ui.section(1, 3, "Indexing codebase")
+        ui.section(1, 4, "Indexing codebase")
         if actuator_url or use_docker:
             _process(
                 codebase=str(repo),
@@ -2163,6 +2196,24 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
                     _quiet=True,
                 )
 
+    # Embed-index with default model
+    try:
+        from .indexing.method_embeddings import build_method_embeddings, DEFAULT_EMBED_MODEL, ensure_model_downloaded
+        from . import graph_store
+        ui.section(2, 4, "Embedding methods")
+        with ui.spinner("Checking embedding model...") as handle:
+            ensure_model_downloaded(DEFAULT_EMBED_MODEL, on_status=handle.update)
+        with ui.spinner(f"Embedding with {DEFAULT_EMBED_MODEL}...") as handle:
+            _econn = graph_store.connect(graph_store.resolve_graph_db_path(jidra_dir))
+            try:
+                _estats = build_method_embeddings(_econn, model_name=DEFAULT_EMBED_MODEL)
+                handle.update(f"Embedded {_estats.get('embedded', 0)} methods")
+            finally:
+                _econn.close()
+        ui.success(f"✓ Embeddings built ({DEFAULT_EMBED_MODEL})")
+    except Exception as _e:
+        ui.warn(f"Embedding skipped: {_e}")
+
     try:
         from .llm.telemetry import record_index_event
 
@@ -2170,16 +2221,17 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
         _conn = graph_store.connect(graph_store.resolve_graph_db_path(jidra_dir))
         _telem_graph = graph_store.load_graph(_conn, variant="main")
         record_index_event(str(repo), langs, _telem_graph, _init_elapsed)
+        _conn.close()
     except Exception:
         pass
 
     # CLAUDE.md — disabled: injecting JIDRA instructions forces main session to use
     # tools directly, preventing jidra-investigator agent from being spawned via skill.
-    # ui.section(2, 3, "Updating CLAUDE.md")
+    # ui.section(3, 4, "Updating CLAUDE.md")
     # _write_claude_md(repo, langs)
 
     # MCP config — write .mcp.json into repo with explicit paths
-    ui.section(3, 3, "MCP configuration")
+    ui.section(4, 4, "MCP configuration")
     _write_mcp_json(repo, graph_path)
 
     # Copy jidra-investigator agent into target repo
@@ -3291,6 +3343,7 @@ def main() -> None:
             port=args.port,
             reload=args.reload,
             log_level="warning",
+            timeout_graceful_shutdown=5,
         )
         return
 
@@ -4002,6 +4055,33 @@ def main() -> None:
                 indent=2,
             )
         )
+        return
+
+    if args.command == "embed-index":
+        from .indexing.method_embeddings import build_method_embeddings, detect_indexed_model
+
+        db_path = _resolve_graph_db_path(getattr(args, "graph", None))
+        if not db_path.exists():
+            raise SystemExit(f"graph.db not found: {db_path}")
+        conn = graph_store.connect(db_path)
+        print(f"[embed-index] DB: {db_path}")
+        print(f"[embed-index] model: {args.model}")
+        try:
+            stats = build_method_embeddings(
+                conn,
+                model_name=args.model,
+                batch_size=args.batch_size,
+                language=getattr(args, "language", None),
+                force=getattr(args, "force", False),
+            )
+            active = detect_indexed_model(conn)
+        finally:
+            conn.close()
+        print(
+            f"[embed-index] done — total={stats['total']} embedded={stats['embedded']} "
+            f"skipped={stats['skipped']} failed={stats['failed']}"
+        )
+        print(f"[embed-index] active model in DB: {active}")
         return
 
     graph, graph_path = _load_graph_by_type(args.graph, args.graph_type)
