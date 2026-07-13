@@ -443,7 +443,9 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                 )
                 conn.commit()
                 try:
-                    conn.execute("INSERT INTO classes_fts(classes_fts) VALUES('optimize')")
+                    conn.execute(
+                        "INSERT INTO classes_fts(classes_fts) VALUES('optimize')"
+                    )
                     conn.commit()
                 except Exception:
                     pass

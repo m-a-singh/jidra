@@ -2198,15 +2198,22 @@ def _init(codebase_arg: str | None = None, force: bool = False) -> None:
 
     # Embed-index with default model
     try:
-        from .indexing.method_embeddings import build_method_embeddings, DEFAULT_EMBED_MODEL, ensure_model_downloaded
+        from .indexing.method_embeddings import (
+            build_method_embeddings,
+            DEFAULT_EMBED_MODEL,
+            ensure_model_downloaded,
+        )
         from . import graph_store
+
         ui.section(2, 4, "Embedding methods")
         with ui.spinner("Checking embedding model...") as handle:
             ensure_model_downloaded(DEFAULT_EMBED_MODEL, on_status=handle.update)
         with ui.spinner(f"Embedding with {DEFAULT_EMBED_MODEL}...") as handle:
             _econn = graph_store.connect(graph_store.resolve_graph_db_path(jidra_dir))
             try:
-                _estats = build_method_embeddings(_econn, model_name=DEFAULT_EMBED_MODEL)
+                _estats = build_method_embeddings(
+                    _econn, model_name=DEFAULT_EMBED_MODEL
+                )
                 handle.update(f"Embedded {_estats.get('embedded', 0)} methods")
             finally:
                 _econn.close()
@@ -4058,7 +4065,10 @@ def main() -> None:
         return
 
     if args.command == "embed-index":
-        from .indexing.method_embeddings import build_method_embeddings, detect_indexed_model
+        from .indexing.method_embeddings import (
+            build_method_embeddings,
+            detect_indexed_model,
+        )
 
         db_path = _resolve_graph_db_path(getattr(args, "graph", None))
         if not db_path.exists():
