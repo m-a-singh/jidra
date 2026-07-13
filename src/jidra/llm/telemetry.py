@@ -8,21 +8,6 @@ _TELEMETRY_DIR = Path(__file__).resolve().parents[3] / "output" / "telemetry"
 _TELEMETRY_DB = _TELEMETRY_DIR / "telemetry.db"
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS doc_index_events (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts              INTEGER NOT NULL,
-    source_path     TEXT NOT NULL,
-    source_type     TEXT NOT NULL,
-    chunks          INTEGER NOT NULL DEFAULT 0,
-    linked_classes  INTEGER NOT NULL DEFAULT 0,
-    file_size_bytes INTEGER NOT NULL DEFAULT 0,
-    elapsed_ms      INTEGER NOT NULL,
-    status          TEXT NOT NULL DEFAULT 'ok',
-    error           TEXT
-);
-"""
-
-_SCHEMA = """
 CREATE TABLE IF NOT EXISTS index_events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     ts          INTEGER NOT NULL,
@@ -50,6 +35,19 @@ CREATE TABLE IF NOT EXISTS reindex_events (
     lines_added         INTEGER NOT NULL DEFAULT 0,
     lines_deleted       INTEGER NOT NULL DEFAULT 0,
     elapsed_ms          INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS doc_index_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts              INTEGER NOT NULL,
+    source_path     TEXT NOT NULL,
+    source_type     TEXT NOT NULL,
+    chunks          INTEGER NOT NULL DEFAULT 0,
+    linked_classes  INTEGER NOT NULL DEFAULT 0,
+    file_size_bytes INTEGER NOT NULL DEFAULT 0,
+    elapsed_ms      INTEGER NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'ok',
+    error           TEXT
 );
 """
 
@@ -161,6 +159,21 @@ def record_reindex_event(
         conn.commit()
         conn.close()
         refresh_html()
+    except Exception:
+        pass
+
+
+def update_last_index_elapsed(repo: str, extra_ms: int) -> None:
+    """Add extra_ms to the most recent index_event for repo (e.g. embed time)."""
+    try:
+        conn = _connect()
+        conn.execute(
+            "UPDATE index_events SET elapsed_ms = elapsed_ms + ? "
+            "WHERE id = (SELECT id FROM index_events WHERE repo = ? ORDER BY ts DESC LIMIT 1)",
+            (extra_ms, repo),
+        )
+        conn.commit()
+        conn.close()
     except Exception:
         pass
 

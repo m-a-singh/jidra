@@ -44,9 +44,14 @@ async def run_query(req: QueryRequest) -> dict:
     except sqlite3.Error as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    def _safe(v):
+        if isinstance(v, (bytes, bytearray)):
+            return f"<blob {len(v)} bytes>"
+        return v
+
     return {
         "columns": columns,
-        "rows": [list(r) for r in rows],
+        "rows": [[_safe(v) for v in r] for r in rows],
         "truncated": len(rows) == _MAX_ROWS,
     }
 
