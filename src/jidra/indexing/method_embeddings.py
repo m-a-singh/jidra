@@ -187,7 +187,7 @@ def ensure_model_downloaded(model_name: str, on_status=None) -> None:
     model = SentenceTransformer(model_name, trust_remote_code=trust)
     _model_cache[model_name] = model
     if on_status:
-        on_status(f"download complete")
+        on_status("download complete")
 
 
 def _get_model(model_name: str):
@@ -223,7 +223,6 @@ def build_method_embeddings(
     Returns stats dict: {total, embedded, skipped, failed, elapsed_s, methods_per_s}.
     """
     import time
-    import numpy as np
 
     t_start = time.perf_counter()
 
