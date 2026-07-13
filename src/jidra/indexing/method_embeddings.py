@@ -51,6 +51,7 @@ def ensure_embeddings_table(conn: sqlite3.Connection) -> None:
 
 # --- Payload builder ---
 
+
 def _norm(text: str | None) -> str:
     if not text:
         return ""
@@ -65,7 +66,14 @@ def _parse_class_context(raw: str | None) -> str:
     except (json.JSONDecodeError, TypeError):
         return ""
     parts: list[str] = []
-    for field in ("name", "full_name", "imports", "stereotypes", "extends", "implements"):
+    for field in (
+        "name",
+        "full_name",
+        "imports",
+        "stereotypes",
+        "extends",
+        "implements",
+    ):
         val = ctx.get(field)
         if not val:
             continue
@@ -108,7 +116,11 @@ def build_payload(row: dict) -> str:
         lines.append(f"framework_role: {fw}")
 
     if row.get("is_endpoint"):
-        ep_parts = [p for p in [row.get("http_method"), row.get("full_route") or row.get("route")] if p]
+        ep_parts = [
+            p
+            for p in [row.get("http_method"), row.get("full_route") or row.get("route")]
+            if p
+        ]
         if ep_parts:
             lines.append(f"endpoint: {' '.join(ep_parts)}")
 
@@ -138,13 +150,17 @@ def payload_hash(text: str) -> str:
 _model_cache: dict[str, object] = {}
 
 # Models that require trust_remote_code=True
-_TRUST_REMOTE_CODE_MODELS = {"nomic-ai/nomic-embed-text-v1", "nomic-ai/nomic-embed-text-v1.5"}
+_TRUST_REMOTE_CODE_MODELS = {
+    "nomic-ai/nomic-embed-text-v1",
+    "nomic-ai/nomic-embed-text-v1.5",
+}
 
 
 def is_model_cached(model_name: str) -> bool:
     """Return True if model files already exist in the HF cache."""
     try:
         from huggingface_hub import try_to_load_from_cache
+
         # Any single file present means the model was downloaded
         result = try_to_load_from_cache(model_name, "config.json")
         return result is not None and result != "not_in_cache"
@@ -193,6 +209,7 @@ def _get_model(model_name: str):
 
 DEFAULT_EMBED_MODEL = "sentence-transformers/multi-qa-MiniLM-L6-cos-v1"
 
+
 def build_method_embeddings(
     conn: sqlite3.Connection,
     *,
@@ -230,9 +247,22 @@ def build_method_embeddings(
     print(f"[embed] fetched {len(rows)} methods in {time.perf_counter() - t0:.2f}s")
 
     col_names = [
-        "id", "variant", "module_id", "method_name", "signature", "file_path",
-        "source", "class_full_name", "class_context_json", "annotations_json",
-        "is_endpoint", "http_method", "route", "full_route", "language", "framework_role",
+        "id",
+        "variant",
+        "module_id",
+        "method_name",
+        "signature",
+        "file_path",
+        "source",
+        "class_full_name",
+        "class_context_json",
+        "annotations_json",
+        "is_endpoint",
+        "http_method",
+        "route",
+        "full_route",
+        "language",
+        "framework_role",
     ]
 
     total = len(rows)
@@ -255,7 +285,9 @@ def build_method_embeddings(
             (model_name,),
         ).fetchall()
         existing = {(r[0], r[1], r[2]): r[3] for r in pk_rows}
-        print(f"[embed] loaded {len(existing)} existing hashes in {time.perf_counter() - t0:.2f}s")
+        print(
+            f"[embed] loaded {len(existing)} existing hashes in {time.perf_counter() - t0:.2f}s"
+        )
 
     to_embed: list[tuple[dict, str, str]] = []
     for row, payload, h in triples:
@@ -275,10 +307,12 @@ def build_method_embeddings(
         payloads = [t[1] for t in batch]
         try:
             t0 = time.perf_counter()
-            vectors = model.encode(payloads, show_progress_bar=False, normalize_embeddings=True)
+            vectors = model.encode(
+                payloads, show_progress_bar=False, normalize_embeddings=True
+            )
             t_encode_total += time.perf_counter() - t0
         except Exception as exc:
-            print(f"[embed] batch {i//batch_size} encode failed: {exc}")
+            print(f"[embed] batch {i // batch_size} encode failed: {exc}")
             failed += len(batch)
             continue
 
@@ -302,7 +336,11 @@ def build_method_embeddings(
         done = min(i + batch_size, len(to_embed))
         elapsed = time.perf_counter() - t_start
         rate = embedded / elapsed if elapsed > 0 else 0
-        print(f"[embed] {done}/{len(to_embed)}  {rate:.0f} methods/s", end="\r", flush=True)
+        print(
+            f"[embed] {done}/{len(to_embed)}  {rate:.0f} methods/s",
+            end="\r",
+            flush=True,
+        )
 
     if to_embed:
         print()
@@ -326,6 +364,7 @@ def build_method_embeddings(
 
 
 # --- In-memory index ---
+
 
 def load_embedding_index(
     conn: sqlite3.Connection,
@@ -352,6 +391,7 @@ def load_embedding_index(
 
 
 # --- Reranker ---
+
 
 def detect_indexed_model(conn: sqlite3.Connection) -> str | None:
     """Return the model name that has the most rows in method_embeddings, or None."""
@@ -431,7 +471,9 @@ def rerank_by_embedding(
         heuristic = float(c.get("heuristic_score") or 0.0)
         if key in vec_map:
             sim = float(np.dot(q_vec, vec_map[key]))
-            blend = bm25_weight * bm25 + embed_weight * sim + heuristic_weight * heuristic
+            blend = (
+                bm25_weight * bm25 + embed_weight * sim + heuristic_weight * heuristic
+            )
         else:
             # No vector: use bm25 + heuristic only, scaled to preserve relative order
             blend = (bm25_weight + embed_weight) * bm25 + heuristic_weight * heuristic

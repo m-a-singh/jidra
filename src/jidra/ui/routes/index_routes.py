@@ -127,6 +127,7 @@ async def _stream_process(req: ProcessRequest):
     loop = asyncio.get_event_loop()
     if req.force:
         from ...graph import graph_store as _gs_force
+
         _force_db = _gs_force.resolve_graph_db_path(out_dir)
         if _force_db.exists():
             _force_db.unlink()
@@ -189,7 +190,9 @@ async def _stream_process(req: ProcessRequest):
                 _resolved = sum(
                     v for k, v in _res.items() if not k.startswith("unresolved")
                 )
-                _unresolved = sum(v for k, v in _res.items() if k.startswith("unresolved"))
+                _unresolved = sum(
+                    v for k, v in _res.items() if k.startswith("unresolved")
+                )
                 yield _sse(
                     "status",
                     {
@@ -218,25 +221,41 @@ async def _stream_process(req: ProcessRequest):
         # Auto-embed with default model after indexing
         _emb_start = asyncio.get_event_loop().time()
         try:
-            from ...indexing.method_embeddings import build_method_embeddings, DEFAULT_EMBED_MODEL
+            from ...indexing.method_embeddings import (
+                build_method_embeddings,
+                DEFAULT_EMBED_MODEL,
+            )
             from ...graph import graph_store as _emb_gs
-            yield _sse("status", {"msg": f"Embedding methods ({DEFAULT_EMBED_MODEL})…", "phase": "embedding"})
+
+            yield _sse(
+                "status",
+                {
+                    "msg": f"Embedding methods ({DEFAULT_EMBED_MODEL})…",
+                    "phase": "embedding",
+                },
+            )
             _emb_db = _emb_gs.resolve_graph_db_path(out_dir)
             _emb_conn = _emb_gs.connect(_emb_db)
             try:
                 _emb_stats = await loop.run_in_executor(
                     _bg_executor,
-                    lambda: build_method_embeddings(_emb_conn, model_name=DEFAULT_EMBED_MODEL),
+                    lambda: build_method_embeddings(
+                        _emb_conn, model_name=DEFAULT_EMBED_MODEL
+                    ),
                 )
             finally:
                 _emb_conn.close()
             _emb_ms = int((asyncio.get_event_loop().time() - _emb_start) * 1000)
-            yield _sse("status", {
-                "msg": f"Embedded {_emb_stats.get('embedded', 0)} methods ({DEFAULT_EMBED_MODEL})",
-                "phase": "embedding",
-            })
+            yield _sse(
+                "status",
+                {
+                    "msg": f"Embedded {_emb_stats.get('embedded', 0)} methods ({DEFAULT_EMBED_MODEL})",
+                    "phase": "embedding",
+                },
+            )
             try:
                 from ...llm.telemetry import update_last_index_elapsed
+
                 update_last_index_elapsed(req.repo_path, _emb_ms)
             except Exception:
                 pass
@@ -271,6 +290,7 @@ async def _stream_process(req: ProcessRequest):
                     total_chunks = 0
                     from ...llm.telemetry import record_doc_index_event as _rec_doc
                     import time as _time
+
                     for f in doc_files:
                         _doc_t0 = _time.time()
                         try:

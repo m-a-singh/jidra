@@ -173,7 +173,7 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
       <FolderTreePicker repoPath={repoPath} skipFolders={skipFolders} onChange={setSkipFolders} />
 
       <div className="flex gap-4 items-center mb-4">
-        <Button variant="primary" size="lg" disabled={running || !repoPath} onClick={() => run(true)} className="px-8 py-3">
+        <Button variant="primary" size="lg" disabled={running || !repoPath} onClick={() => run()} className="px-8 py-3">
           <span className="inline-flex items-center gap-2">
             <span className="inline-block text-sm origin-[50%_52%]" style={running ? { animation: "spin 1.1s linear infinite" } : undefined}>
               {running ? "◐" : "▶"}
