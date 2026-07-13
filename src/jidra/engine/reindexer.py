@@ -372,6 +372,20 @@ def quick_stale_check(graph_dir: Path) -> bool:
 _REINDEX_VARIANT = "validated"
 
 
+def auto_embed_after_reindex(db_path: Path) -> None:
+    """Run embed-index with the default model after a successful reindex."""
+    try:
+        from ..indexing.method_embeddings import build_method_embeddings, DEFAULT_EMBED_MODEL
+        from ..graph import graph_store
+        conn = graph_store.connect(db_path)
+        try:
+            build_method_embeddings(conn, model_name=DEFAULT_EMBED_MODEL)
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+
 def incremental_reindex(
     codebase_root: Path,
     graph_path: Path,
@@ -417,6 +431,22 @@ def incremental_reindex(
 
     db_path = graph_store.resolve_graph_db_path(graph_path)
     build_path = db_path.with_name("graph.building.db")
+
+    def _checkpoint_close_and_replace(conn) -> None:
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.commit()
+        except Exception:
+            pass
+        conn.close()
+        os.replace(str(build_path), str(db_path))
+        for suffix in ("-wal", "-shm"):
+            stale = build_path.with_name(build_path.name + suffix)
+            try:
+                stale.unlink()
+            except OSError:
+                pass
+
     reindex_lock = db_path.with_name("graph.reindex.lock")
 
     # Skip if another reindex is already running
@@ -433,9 +463,16 @@ def incremental_reindex(
 
     reindex_lock.touch()
     try:
-        # Copy current DB to build path — all mutations go here, never to live db_path
+        # Copy current DB to build path using SQLite online backup API (WAL-safe).
         if db_path.exists():
-            shutil.copy2(str(db_path), str(build_path))
+            import sqlite3 as _sqlite3
+            _src_conn = _sqlite3.connect(str(db_path), timeout=30)
+            _dst_conn = _sqlite3.connect(str(build_path), timeout=30)
+            try:
+                _src_conn.backup(_dst_conn)
+            finally:
+                _dst_conn.close()
+                _src_conn.close()
 
         conn = graph_store.connect(build_path)
 
@@ -473,9 +510,9 @@ def incremental_reindex(
                 graph_store.save_full_graph(
                     _conn, filtered_graph, variant=_REINDEX_VARIANT
                 )
-                _conn.close()
-                os.replace(str(build_path), str(db_path))
+                _checkpoint_close_and_replace(_conn)
                 save_manifest(graph_dir, fps, last_indexed_at_ns)
+                auto_embed_after_reindex(db_path)
                 elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
                 return {
                     "change_type": "full_rebuild",
@@ -490,9 +527,9 @@ def incremental_reindex(
             full_graph = build_graph(codebase_root, skip_folders=skip_folders)
             _conn2 = graph_store.connect(build_path)
             graph_store.save_full_graph(_conn2, full_graph, variant=_REINDEX_VARIANT)
-            _conn2.close()
-            os.replace(str(build_path), str(db_path))
+            _checkpoint_close_and_replace(_conn2)
             save_manifest(graph_dir, fps, last_indexed_at_ns)
+            auto_embed_after_reindex(db_path)
             elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
             return {
                 "change_type": "full_rebuild",
@@ -545,9 +582,9 @@ def incremental_reindex(
                 conn, deleted_files_set, variant=_REINDEX_VARIANT
             )
             last_indexed_at_ns = int(time.time_ns())
-            conn.close()
-            os.replace(str(build_path), str(db_path))
+            _checkpoint_close_and_replace(conn)
             save_manifest(graph_dir, current_fps, last_indexed_at_ns)
+            auto_embed_after_reindex(db_path)
             elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
             return {
                 "change_type": "deletion_only",
@@ -735,9 +772,9 @@ def incremental_reindex(
         added_count = len(diff_result.get("added_method_ids", []))
         removed_count = len(diff_result.get("removed_method_ids", []))
 
-        conn.close()
-        os.replace(str(build_path), str(db_path))
+        _checkpoint_close_and_replace(conn)
         save_manifest(graph_dir, current_fps, last_indexed_at_ns)
+        auto_embed_after_reindex(db_path)
 
         elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
         return {

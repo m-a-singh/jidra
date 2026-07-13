@@ -133,6 +133,60 @@ def _score_hit(
     return _rank_score_hit(row, tokens, cfg)
 
 
+def _embed_rerank(
+    conn,
+    query: str,
+    rows: list[dict],
+    *,
+    model_name: str = "nomic-ai/nomic-embed-text-v1.5",
+    top_k: int = 100,
+) -> list[dict]:
+    """Rerank rows by dense embedding similarity. No-op if embeddings unavailable.
+
+    Normalises BM25 scores within the candidate set before blending.
+    Rows must have 'id', 'variant', 'module_id', and 'score' (raw BM25, negative).
+    """
+    import logging
+    import time
+
+    log = logging.getLogger(__name__)
+
+    try:
+        from ..indexing.method_embeddings import rerank_by_embedding, detect_indexed_model
+    except ImportError:
+        return rows
+
+    # Auto-detect whichever model was used during embed-index
+    detected = detect_indexed_model(conn)
+    if detected:
+        model_name = detected
+        log.debug("embed_rerank auto-detected model=%r", model_name)
+    elif model_name == "nomic-ai/nomic-embed-text-v1.5":
+        # No vectors indexed yet — skip entirely
+        return rows
+
+    scores = [-float(r.get("score") or 0.0) for r in rows]
+    max_s = max(scores) if scores else 1.0
+    min_s = min(scores) if scores else 0.0
+    rng = max_s - min_s or 1.0
+    enriched = [
+        {**r, "bm25_norm": (s - min_s) / rng}
+        for r, s in zip(rows, scores)
+    ]
+
+    try:
+        t0 = time.perf_counter()
+        result = rerank_by_embedding(conn, query, enriched, model_name=model_name, top_k=top_k)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        log.debug(
+            "embed_rerank query=%r candidates=%d elapsed_ms=%.1f",
+            query, len(rows), elapsed_ms,
+        )
+        return result
+    except Exception:
+        return rows
+
+
 def _summarize_uncertain_edges(edges: list[dict], limit: int = 8) -> dict:
     grouped: dict[tuple[str, str], int] = {}
     total = 0
@@ -208,6 +262,11 @@ class JidraEngine:
         self.graph = graph_store.load_graph(self.conn, variant=variant)
         self._variant = variant
 
+        # Embedding index — loaded lazily on first search/explore call.
+        self._embed_matrix = None   # np.ndarray (N, D) or None
+        self._embed_ids: list[str] = []
+        self._embed_model: str | None = None
+
         # Resolve repo root: read from meta if available, else compute from class paths
         codebase_root = graph_store.get_meta(self.conn, "codebase_root")
         if codebase_root:
@@ -272,6 +331,43 @@ class JidraEngine:
         except (IndexError, ValueError, AttributeError):
             pass
         return None
+
+    def _init_embed_index(self) -> None:
+        """Lazy-load the full embedding matrix into RAM on first call."""
+        if self._embed_matrix is not None:
+            return
+        try:
+            from ..indexing.method_embeddings import detect_indexed_model, load_embedding_index
+        except ImportError:
+            return
+        with self._conn_lock:
+            model = detect_indexed_model(self.conn)
+            if not model:
+                return
+            matrix, ids = load_embedding_index(self.conn, model)
+        if ids:
+            self._embed_matrix = matrix
+            self._embed_ids = ids
+            self._embed_model = model
+
+    def _dense_fetch(self, query: str, top_k: int = 40) -> list[str]:
+        """Return top_k method_ids by cosine similarity to query embedding."""
+        import numpy as np
+
+        self._init_embed_index()
+        if self._embed_matrix is None or not self._embed_ids:
+            return []
+        try:
+            from ..indexing.method_embeddings import _get_model
+            model = _get_model(self._embed_model)
+            q_vec = model.encode([query], normalize_embeddings=True)[0].astype("float32")
+        except Exception:
+            return []
+        scores = self._embed_matrix @ q_vec  # cosine (embeddings are normalised)
+        k = min(top_k, len(scores))
+        top_idx = np.argpartition(scores, -k)[-k:]
+        top_idx = top_idx[np.argsort(scores[top_idx])[::-1]]
+        return [self._embed_ids[i] for i in top_idx]
 
     def _resolve_single_method(self, selector: str) -> dict:
         candidates = _resolve_method_selector(self.graph, selector)
@@ -1161,6 +1257,18 @@ class JidraEngine:
                 )
             rows = sorted(extended, key=_fts_sort_key)
 
+        # Dense fetch + merge (non-exact only): expand BM25 seeds with embedding hits.
+        if not exact:
+            dense_ids = self._dense_fetch(query, top_k=fetch_limit * 2)
+            if dense_ids:
+                existing_ids = {r["id"] for r in rows}
+                new_ids = [mid for mid in dense_ids if mid not in existing_ids]
+                if new_ids:
+                    with self._conn_lock:
+                        dense_rows = graph_store.fetch_methods_by_ids(self.conn, new_ids)
+                    rows = rows + dense_rows
+            rows = _embed_rerank(self.conn, query, rows)
+
         if exact:
             results = [
                 {
@@ -1283,6 +1391,26 @@ class JidraEngine:
             key=lambda pair: pair[0],
             reverse=True,
         )
+
+        # Dense fetch + merge: expand BM25 candidates with embedding hits before reranking.
+        dense_ids = self._dense_fetch(query, top_k=fetch * 2)
+        if dense_ids:
+            existing_ids = {r["id"] for r in candidates}
+            new_ids = [mid for mid in dense_ids if mid not in existing_ids]
+            if new_ids:
+                with self._conn_lock:
+                    dense_rows = graph_store.fetch_methods_by_ids(self.conn, new_ids)
+                candidates = candidates + dense_rows
+                scored = sorted(
+                    ((_score_hit(r, tokens), r) for r in candidates),
+                    key=lambda pair: pair[0],
+                    reverse=True,
+                )
+
+        # Rerank merged set by embedding similarity, then slice to top_n.
+        reranked_rows = _embed_rerank(self.conn, query, [r for _, r in scored])
+        # Rebuild scored list preserving updated order; scores become positional proxies
+        scored = [(_score_hit(r, tokens), r) for r in reranked_rows]
 
         # top_n seeds — these are the primary results
         top_seeds = scored[:top_n]

@@ -316,6 +316,31 @@ def resolve_graph_db_path(output: Path) -> Path:
     return output.parent / "graph.db"
 
 
+def _recover_fts_if_corrupt(conn: sqlite3.Connection) -> None:
+    """Detect and auto-repair a corrupt FTS5 index.
+
+    FTS5 corruption ("fts5: corruption found reading blob ...") can occur on
+    large repos where 100K+ methods are inserted via triggers in a single
+    transaction — too many small segments accumulate and some cross-segment
+    references point to non-existent blocks. A rebuild fixes it.
+    """
+    for fts in ("methods_fts", "classes_fts"):
+        try:
+            conn.execute(f"INSERT INTO {fts}({fts}) VALUES('integrity-check')")
+        except sqlite3.DatabaseError:
+            # Corrupted — rebuild from stored content and re-optimize
+            try:
+                conn.execute(f"INSERT INTO {fts}({fts}) VALUES('rebuild')")
+                conn.commit()
+                conn.execute(f"INSERT INTO {fts}({fts}) VALUES('optimize')")
+                conn.commit()
+                print(f"[jidra] rebuilt corrupted {fts} index", flush=True)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+
 def connect(path: Path) -> sqlite3.Connection:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -360,6 +385,16 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     IF NOT EXISTS) and before `_check_schema_version`. Safe to run on both fresh
     and pre-existing databases. Keep every step guarded so re-running is a no-op.
     """
+    # Embedding side-table (additive, no FK constraints).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS method_embeddings ("
+        "method_id TEXT NOT NULL, variant TEXT NOT NULL, module_id TEXT, "
+        "model TEXT NOT NULL, embedding BLOB NOT NULL, text_hash TEXT NOT NULL, "
+        "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+        "PRIMARY KEY (method_id, variant, module_id, model))"
+    )
+    conn.commit()
+
     # Phase 4: framework_role column on methods. Appended last to match where a
     # fresh `_SCHEMA_SQL` build also places it, so the positional INSERT lines up.
     if not _column_exists(conn, "methods", "framework_role"):
@@ -388,6 +423,11 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                 "source, language, variant FROM methods"
             )
             conn.commit()
+            try:
+                conn.execute("INSERT INTO methods_fts(methods_fts) VALUES('optimize')")
+                conn.commit()
+            except Exception:
+                pass
 
     # Backfill classes_fts for existing DBs.
     try:
@@ -402,6 +442,11 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                     "FROM classes"
                 )
                 conn.commit()
+                try:
+                    conn.execute("INSERT INTO classes_fts(classes_fts) VALUES('optimize')")
+                    conn.commit()
+                except Exception:
+                    pass
     except sqlite3.OperationalError:
         pass  # classes_fts not yet created on very old DBs — triggers will catch up
 
@@ -876,6 +921,15 @@ def save_full_graph(
             )
         _insert_graph(conn, graph, variant_of=infer_variant_split, module_id=module_id)
     conn.commit()
+
+
+def _optimize_fts(conn: sqlite3.Connection) -> None:
+    for fts in ("methods_fts", "classes_fts"):
+        try:
+            conn.execute(f"INSERT INTO {fts}({fts}) VALUES('optimize')")
+            conn.commit()
+        except Exception:
+            pass
 
 
 def _row_to_class(row: sqlite3.Row) -> ClassEntry:
