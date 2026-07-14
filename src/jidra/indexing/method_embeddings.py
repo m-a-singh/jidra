@@ -413,6 +413,7 @@ def rerank_by_embedding(
     bm25_weight: float = 0.60,
     embed_weight: float = 0.20,
     heuristic_weight: float = 0.20,
+    min_sim: float = 0.0,
 ) -> list[dict]:
     """Rerank BM25 candidates using cosine similarity against query embedding.
 
@@ -470,6 +471,8 @@ def rerank_by_embedding(
         heuristic = float(c.get("heuristic_score") or 0.0)
         if key in vec_map:
             sim = float(np.dot(q_vec, vec_map[key]))
+            if min_sim > 0.0 and sim < min_sim:
+                continue
             blend = (
                 bm25_weight * bm25 + embed_weight * sim + heuristic_weight * heuristic
             )

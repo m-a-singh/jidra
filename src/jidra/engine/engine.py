@@ -140,6 +140,7 @@ def _embed_rerank(
     *,
     model_name: str = "nomic-ai/nomic-embed-text-v1.5",
     top_k: int = 100,
+    min_sim: float = 0.0,
 ) -> list[dict]:
     """Rerank rows by dense embedding similarity. No-op if embeddings unavailable.
 
@@ -177,7 +178,7 @@ def _embed_rerank(
     try:
         t0 = time.perf_counter()
         result = rerank_by_embedding(
-            conn, query, enriched, model_name=model_name, top_k=top_k
+            conn, query, enriched, model_name=model_name, top_k=top_k, min_sim=min_sim
         )
         elapsed_ms = (time.perf_counter() - t0) * 1000
         log.debug(
@@ -357,8 +358,8 @@ class JidraEngine:
             self._embed_ids = ids
             self._embed_model = model
 
-    def _dense_fetch(self, query: str, top_k: int = 40) -> list[str]:
-        """Return top_k method_ids by cosine similarity to query embedding."""
+    def _dense_fetch(self, query: str, top_k: int = 40) -> list[tuple[str, float]]:
+        """Return top_k (method_id, cosine_score) pairs ranked by similarity."""
         import numpy as np
 
         self._init_embed_index()
@@ -377,7 +378,7 @@ class JidraEngine:
         k = min(top_k, len(scores))
         top_idx = np.argpartition(scores, -k)[-k:]
         top_idx = top_idx[np.argsort(scores[top_idx])[::-1]]
-        return [self._embed_ids[i] for i in top_idx]
+        return [(self._embed_ids[i], float(scores[i])) for i in top_idx]
 
     def _resolve_single_method(self, selector: str) -> dict:
         candidates = _resolve_method_selector(self.graph, selector)
@@ -1269,17 +1270,21 @@ class JidraEngine:
 
         # Dense fetch + merge (non-exact only): expand BM25 seeds with embedding hits.
         if not exact:
-            dense_ids = self._dense_fetch(query, top_k=fetch_limit * 2)
-            if dense_ids:
+            dense_hits = self._dense_fetch(query, top_k=fetch_limit * 2)
+            if dense_hits:
                 existing_ids = {r["id"] for r in rows}
-                new_ids = [mid for mid in dense_ids if mid not in existing_ids]
+                new_ids = [
+                    mid
+                    for mid, sim in dense_hits
+                    if sim > 0.25 and mid not in existing_ids
+                ]
                 if new_ids:
                     with self._conn_lock:
                         dense_rows = graph_store.fetch_methods_by_ids(
                             self.conn, new_ids
                         )
                     rows = rows + dense_rows
-            rows = _embed_rerank(self.conn, query, rows)
+            rows = _embed_rerank(self.conn, query, rows, min_sim=0.25)
 
         if exact:
             results = [
@@ -1405,10 +1410,12 @@ class JidraEngine:
         )
 
         # Dense fetch + merge: expand BM25 candidates with embedding hits before reranking.
-        dense_ids = self._dense_fetch(query, top_k=fetch * 2)
-        if dense_ids:
+        dense_hits = self._dense_fetch(query, top_k=fetch * 2)
+        if dense_hits:
             existing_ids = {r["id"] for r in candidates}
-            new_ids = [mid for mid in dense_ids if mid not in existing_ids]
+            new_ids = [
+                mid for mid, sim in dense_hits if sim > 0.25 and mid not in existing_ids
+            ]
             if new_ids:
                 with self._conn_lock:
                     dense_rows = graph_store.fetch_methods_by_ids(self.conn, new_ids)
@@ -1420,7 +1427,9 @@ class JidraEngine:
                 )
 
         # Rerank merged set by embedding similarity, then slice to top_n.
-        reranked_rows = _embed_rerank(self.conn, query, [r for _, r in scored])
+        reranked_rows = _embed_rerank(
+            self.conn, query, [r for _, r in scored], min_sim=0.25
+        )
         # Rebuild scored list preserving updated order; scores become positional proxies
         scored = [(_score_hit(r, tokens), r) for r in reranked_rows]
 
