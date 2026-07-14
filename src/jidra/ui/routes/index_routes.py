@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import threading
+import concurrent.futures
+import concurrent.futures.thread as _cft
+import weakref
 import asyncio
 import json
 import os
 import signal
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -22,13 +24,10 @@ from ...indexing.resources_indexer import discover_resource_files, index_resourc
 router = APIRouter()
 
 
-class _DaemonThreadPoolExecutor(ThreadPoolExecutor):
+class _DaemonThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
     """ThreadPoolExecutor whose threads are daemon — won't block process exit."""
 
     def _adjust_thread_count(self):
-        import weakref
-        import concurrent.futures.thread as _cft
-
         if self._idle_semaphore.acquire(timeout=0):
             return
 
@@ -38,14 +37,31 @@ class _DaemonThreadPoolExecutor(ThreadPoolExecutor):
         num_threads = len(self._threads)
         if num_threads < self._max_workers:
             thread_name = "%s_%d" % (self._thread_name_prefix or self, num_threads)
-            t = threading.Thread(
-                name=thread_name,
-                target=_cft._worker,
-                args=(
+
+            # --- Python 3.14+ vs 3.13 Compatibility Branching ---
+            if hasattr(self, "_create_worker_context"):
+                # Python 3.14+ uses the worker context manager
+                worker_args = (
                     weakref.ref(self, weakref_cb),
                     self._create_worker_context(),
                     self._work_queue,
-                ),
+                )
+            else:
+                # Python <= 3.13 fallback
+                initializer = getattr(self, "_initializer", None)
+                initargs = getattr(self, "_initargs", ())
+                worker_args = (
+                    weakref.ref(self, weakref_cb),
+                    self._work_queue,
+                    initializer,
+                    initargs,
+                )
+            # ----------------------------------------------------
+
+            t = threading.Thread(
+                name=thread_name,
+                target=_cft._worker,
+                args=worker_args,
             )
             t.daemon = True
             t.start()
@@ -385,7 +401,7 @@ async def _stream_process(req: ProcessRequest):
                                 "-m",
                                 "jidra.server.mcp_server",
                                 "--mode",
-                                "proxy",
+                                "direct",
                                 "--graph",
                                 str(graph_path),
                                 "--codebase",

@@ -20,7 +20,7 @@ from ..engine import daemon as _daemon
 
 
 class JidraProxy:
-    STARTUP_TIMEOUT = 6.0  # seconds to wait for the daemon socket to appear
+    STARTUP_TIMEOUT = 30.0  # seconds to wait for the daemon socket to appear
     POLL_INTERVAL = 0.2
 
     def __init__(self, graph_path: str | None, codebase_path: str | None):
@@ -65,7 +65,7 @@ class JidraProxy:
         )
 
     def _spawn_daemon(self) -> None:
-        cmd = [sys.executable, "-m", "jidra.daemon"]
+        cmd = [sys.executable, "-m", "jidra.engine.daemon"]
         if self.graph_path:
             cmd += ["--graph", self.graph_path]
         if self.codebase_path:

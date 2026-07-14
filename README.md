@@ -1,7 +1,7 @@
 # JIDRA: Just Indexing Dependencies, Repositories, & Agents
 
 [![CI](https://github.com/akhilsinghcodes/jidra/actions/workflows/ci.yml/badge.svg)](https://github.com/akhilsinghcodes/jidra/actions/workflows/ci.yml)
-![Clones](https://img.shields.io/static/v1?label=clones&message=8100%2B&color=blue)
+![Clones](https://img.shields.io/static/v1?label=clones&message=8500%2B&color=blue)
 
 JIDRA is a structured context backend that reduces LLM input tokens by **68-95%** for code-native queries by giving Claude a pre-analyzed call graph instead of raw source files. Multi-language support: **Scala** (~90% resolution), **Java** (~85% resolution), **TypeScript** (~80% resolution), **Python** (~68.5% resolution), **Go** (tree-sitter-based, best-effort resolution).
 
@@ -122,7 +122,16 @@ Every index, reindex, and doc-index run is recorded to a local telemetry dashboa
 
 JIDRA was evaluated against the [CodeGraph](https://github.com/colbymchenry/codegraph) MCP server using a real coding agent (Haiku 4.5): the same LLM was given a navigation task and **exactly one backend's tools**, then scored on correctness, tool calls, tokens, and hallucinations. Three languages evaluated.
 
-### Java (Spring Boot monorepo, ~1,200 methods, 8 tasks)
+### Enterprise Java (Spring Boot monorepo, ~18,700 methods, 8 tasks) — v25
+
+| Backend | correct | avg tool calls | avg tokens | total cost | halluc. |
+|---|---|---|---|---|---|
+| **JIDRA** (+ tool selection skill) | **8/8** | **1.4** | **12.7k** | **$0.091** | 0/8 |
+| CodeGraph | 7/8 | 2.2 | 32.3k | $0.220 | 3/8 |
+
+**2.5× token ratio.** JIDRA 8/8, zero hallucinations. CodeGraph permanently fails T1 (can't count implementations exactly — blast-radius design gap) and produces 3 hallucinated symbols. Ghost-method task T4: JIDRA 1c/7.8k vs CG 4c/77.6k (10×) — `get_method_source` returns a typed `method_not_found_on_class` error in one call; CG burns 4 calls before concluding absent. Tool selection skill routes existence checks → `get_implementations`, method existence → `get_method_source`, behavioral search → `jidra_explore`.
+
+### Public Java (Spring Boot monorepo, ~1,200 methods, 8 tasks)
 
 | Backend | correct | avg tool calls | avg tokens | total cost | halluc. |
 |---|---|---|---|---|---|
@@ -131,34 +140,37 @@ JIDRA was evaluated against the [CodeGraph](https://github.com/colbymchenry/code
 
 **2.0× token ratio.** JIDRA 8/8; CodeGraph permanently fails T1 (can't produce exact implementation counts — blast-radius design gap). T4 standout: JIDRA 2c/8k vs CG 5c/108k (13×). T1/T3 avg pulled up by stochastic `limit=100`/`depth=10` parameter over-reach; stripping those two outliers: ~12.8k avg, ~4–5× ratio. Tool selection skill (decision table + few-shot ✓/✗ examples) routes existence checks → `get_implementations`, method existence → `get_method_source`, behavioral search → `jidra_explore`. Full per-task data: [docs/archive/FINDINGS_jidra_vs_codegraph_v18.md](docs/archive/FINDINGS_jidra_vs_codegraph_v18.md).
 
-### Python (~891–1,100 methods, 5 tasks)
+### Python (jidra repo, ~2,100 methods, 6 tasks) — v13
 
-| version | JIDRA correct | CG correct | JIDRA avg tok | CG avg tok | tok ratio | JIDRA cost | CG cost |
+| Backend | correct | avg tool calls | avg tokens | total cost | halluc. |
+|---|---|---|---|---|---|
+| **JIDRA** (+ tool selection skill) | **6/6** | **1.8** | **18.8k** | **$0.100** | 0/6 |
+| CodeGraph | 3/6 | 4.5 | 152.2k | $0.748 | 7/6 |
+
+**8.1× token ratio.** JIDRA 6/6, zero hallucinations. CodeGraph fails 3 tasks outright and hallucinates symbols in 7 of 6 runs (multiple per run). PY4 (definition lookup in a 1,200-line file): CG hit max iters at 14 calls / 617k tokens without answering; JIDRA: 2 calls / 14.6k. Ghost-function PY3: JIDRA 3c/32k (returns absent in final call); CG 3c/51k with 1 hallucinated symbol.
+
+### TypeScript (MTKruto, ~630 methods, 5 tasks) — v10
+
+| Backend | correct | avg tool calls | avg tokens | total cost | halluc. |
+|---|---|---|---|---|---|
+| **JIDRA** (+ tool selection skill) | **5/5** | **2.0** | **15.0k** | **$0.069** | 0/5 |
+| CodeGraph | 3/5 | 8.4 | 276.9k | $1.128 | 1/5 |
+
+**18.4× token ratio.** JIDRA 5/5, zero hallucinations. CodeGraph fails 2 tasks (TS4/TS5: hits 14 max-iters without answering — can't fetch a single method from a large file by name). TS2 call-graph trace: JIDRA 3c/17.5k vs CG 9c/308.8k (17.6×).
+
+### Cross-language summary (latest runs)
+
+| language | JIDRA | CG | token ratio | JIDRA halluc | CG halluc | JIDRA cost | CG cost |
 |---|---|---|---|---|---|---|---|
-| v2 | **5/5** | 4/5 | 11,444 | 139,716 | **12.2×** | **$0.054** | $0.573 |
-
-CG fails PY1 (caller enumeration — same reverse-edge design gap as Java T3). PY4 (definition lookup in a 1,200-line file): CG used 13 calls / 533k tokens; JIDRA: 2 calls / 12k.
-
-### TypeScript (~630 methods, 6 tasks)
-
-| Backend | correct | avg tool calls | avg tokens | total cost | tok ratio |
-|---|---|---|---|---|---|
-| **JIDRA** (+ tool selection skill + examples) | **6/6** | **1.5** | **11.6k** | **$0.065** | — |
-| CodeGraph | 6/6 | 4.7 | 87.9k | $0.444 | **7.6×** |
-
-**7.6× token ratio.** Both 6/6 correct. CG TS2 stochastic spiral drove avg to 87.9k (12c/310k for a call-graph traversal); JIDRA TS2: 3c/16.9k. JIDRA TS3 (absence check): 1c/7.6k via `jidra_search(exact=True)` → 0 results → done. Full delta across 8 TypeScript runs.
-
-### Cross-language summary
-
-| language | JIDRA | CG | token ratio | JIDRA cost | CG cost |
-|---|---|---|---|---|---|
-| Java | 8/8 | 7/8 | **2.0×** | $0.131 | $0.248 |
-| Python | 5/5 | 4/5 | **12.2×** | $0.054 | $0.573 |
-| TypeScript | **6/6** | 6/6 | **7.6×** | $0.065 | $0.444 |
-
-Java ratio is lower because Java tasks include T1/T3 stochastic bloat; ex-outliers ~4–5×. Python/TypeScript tasks are traversal-heavy where CG's lack of scalpel tools is fatal. Root cause in all three languages: `codegraph_explore` cannot walk reverse call edges, extract a single method from a large file by name, or count implementations with precision. JIDRA's tools answer each in 1 call. Tool selection skill (decision table + few-shot examples) is required for full JIDRA efficiency — without it, behavioral queries waste calls.
+| Java (v25) | **8/8** | 7/8 | **2.5×** | 0 | 3 | $0.091 | $0.220 |
+| Python (v13) | **6/6** | 3/6 | **8.1×** | 0 | 7 | $0.100 | $0.748 |
+| TypeScript (v10) | **5/5** | 3/5 | **18.4×** | 0 | 1 | $0.069 | $1.128 |
 
 Full methodology and per-task data: [FINDINGS_jidra_vs_codegraph.md](FINDINGS_jidra_vs_codegraph.md).
+
+Root cause in all three languages: `codegraph_explore` cannot walk reverse call edges, extract a single named method from a large file, or count implementations with precision — so it spirals into many calls and hallucinates when it can't find the answer. JIDRA's tools answer each in 1–2 calls with typed error responses for absent symbols. JIDRA hallucination rate: 0/19 runs across all three suites. CodeGraph: 11/19 runs with at least one hallucinated symbol.
+
+Full methodology and per-task data: [docs/archive/FINDINGS_jidra_vs_codegraph_v18.md](docs/archive/FINDINGS_jidra_vs_codegraph_v18.md).
 
 ## Benchmarked vs CodeGraph (method-level retrieval)
 
