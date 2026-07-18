@@ -51,7 +51,7 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
     api.index.status(repoPath, outputPath || undefined).then(setStatus).catch(() => setStatus({ indexed: false }));
   }
 
-  function run() {
+  function run(force = false) {
     if (!repoPath) { push("set a repo path first", "err"); return; }
     setLog([]);
     setRunning(true);
@@ -67,6 +67,7 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
         write_mcp_config: writeMcp,
         index_docs: indexDocs,
         skip_folders: skipFolders.length ? skipFolders : undefined,
+        force,
       },
       (event, data) => {
         const d = data as { msg?: string; phase?: string };
@@ -100,7 +101,7 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
           <Button variant="primary" size="sm" onClick={() => onNavigate?.("graph")}>
             use existing index
           </Button>
-          <Button variant="default" size="sm" disabled={running} onClick={run}>
+          <Button variant="default" size="sm" disabled={running} onClick={() => run(true)}>
             rebuild from scratch
           </Button>
         </div>
@@ -172,7 +173,7 @@ export function IndexPanel({ repoPath, outputPath, onNavigate }: RepoState & { o
       <FolderTreePicker repoPath={repoPath} skipFolders={skipFolders} onChange={setSkipFolders} />
 
       <div className="flex gap-4 items-center mb-4">
-        <Button variant="primary" size="lg" disabled={running || !repoPath} onClick={run} className="px-8 py-3">
+        <Button variant="primary" size="lg" disabled={running || !repoPath} onClick={() => run()} className="px-8 py-3">
           <span className="inline-flex items-center gap-2">
             <span className="inline-block text-sm origin-[50%_52%]" style={running ? { animation: "spin 1.1s linear infinite" } : undefined}>
               {running ? "◐" : "▶"}

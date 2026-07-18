@@ -66,7 +66,7 @@ export const api = {
       repo_path: string; output_path?: string; actuator_url?: string;
       port?: number; timeout?: number; skip_build?: boolean;
       build_dir?: string; use_docker?: boolean; write_mcp_config?: boolean;
-      index_docs?: boolean; skip_folders?: string[];
+      index_docs?: boolean; skip_folders?: string[]; force?: boolean;
     }, cb: (e: string, d: unknown) => void) => sse("/index/run", body, cb),
     reindex: (body: { repo_path: string; output_path?: string; changed_files?: string[] }) =>
       post<{ summary: Record<string, unknown> }>("/index/reindex", body),
