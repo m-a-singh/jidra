@@ -1,7 +1,7 @@
 [
   {
-    "case_id": "sympy__sympy-11400",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-10914",
+    "repo": "django/django",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -10,14 +10,94 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sympy/printing/ccode.py"
+      "django/conf/global_settings.py"
     ],
-    "latency_ms": 170.31941696768627,
-    "n_results": 12
+    "latency_ms": 3.5537920048227534,
+    "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-11870",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-10924",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.1111111111111111,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/models/fields/__init__.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 1.5255420003086329,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-11001",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/sql/compiler.py"
+    ],
+    "latency_ms": 7.081500007188879,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-11019",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.5,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/forms/widgets.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 1.1330420093145221,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-11039",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/core/management/commands/sqlmigrate.py"
+    ],
+    "latency_ms": 14.769916000659578,
+    "n_results": 15
+  },
+  {
+    "case_id": "django__django-11049",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.0625,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/models/fields/__init__.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.9513330005574971,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-11099",
+    "repo": "django/django",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 1.0,
@@ -25,15 +105,15 @@
     "explore_recall": 0.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sympy/functions/elementary/trigonometric.py"
+      "django/contrib/auth/validators.py"
     ],
     "missed_files": [],
-    "latency_ms": 2.3952090414240956,
+    "latency_ms": 8.07695799448993,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-11897",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11133",
+    "repo": "django/django",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -42,14 +122,14 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sympy/printing/latex.py"
+      "django/http/response.py"
     ],
-    "latency_ms": 0.9614579612389207,
+    "latency_ms": 0.780916991061531,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-12171",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11179",
+    "repo": "django/django",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -58,14 +138,14 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sympy/printing/mathematica.py"
+      "django/db/models/deletion.py"
     ],
-    "latency_ms": 0.7394999847747386,
+    "latency_ms": 0.7418330060318112,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-12236",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11283",
+    "repo": "django/django",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -74,670 +154,14 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sympy/polys/domains/polynomialring.py"
+      "django/contrib/auth/migrations/0011_update_proxy_permissions.py"
     ],
-    "latency_ms": 1.5188750112429261,
+    "latency_ms": 0.13437500456348062,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-12419",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/matrices/expressions/matexpr.py"
-    ],
-    "latency_ms": 0.4397500306367874,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-12454",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/matrices/matrices.py"
-    ],
-    "latency_ms": 0.291750009637326,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-12481",
-    "repo": "sympy/sympy",
-    "passed": true,
-    "file_recall": 1.0,
-    "mrr": 0.07142857142857142,
-    "search_recall": 1.0,
-    "explore_recall": 0.0,
-    "combined_recall": 1.0,
-    "found_files": [
-      "sympy/combinatorics/permutations.py"
-    ],
-    "missed_files": [],
-    "latency_ms": 1.4720839681103826,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-13031",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/matrices/sparse.py"
-    ],
-    "latency_ms": 0.45191700337454677,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-13043",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/integrals/intpoly.py"
-    ],
-    "latency_ms": 0.19008299568668008,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-13146",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/operations.py"
-    ],
-    "latency_ms": 2.0231249509379268,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-13177",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/mod.py"
-    ],
-    "latency_ms": 1.0234580258838832,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-13437",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/functions/combinatorial/numbers.py"
-    ],
-    "latency_ms": 11.003041989170015,
-    "n_results": 19
-  },
-  {
-    "case_id": "sympy__sympy-13471",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/numbers.py"
-    ],
-    "latency_ms": 1.2724999687634408,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-13480",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/functions/elementary/hyperbolic.py"
-    ],
-    "latency_ms": 0.3921670140698552,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-13647",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/matrices/common.py"
-    ],
-    "latency_ms": 9.957000031135976,
-    "n_results": 12
-  },
-  {
-    "case_id": "sympy__sympy-13773",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/matrices/common.py"
-    ],
-    "latency_ms": 0.7361670141108334,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-13895",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/numbers.py"
-    ],
-    "latency_ms": 2.1393329952843487,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-13915",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/mul.py"
-    ],
-    "latency_ms": 1.3899579644203186,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-13971",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/latex.py"
-    ],
-    "latency_ms": 1.258250034879893,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-14024",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/numbers.py"
-    ],
-    "latency_ms": 11.210791009943932,
-    "n_results": 2
-  },
-  {
-    "case_id": "sympy__sympy-14308",
-    "repo": "sympy/sympy",
-    "passed": true,
-    "file_recall": 1.0,
-    "mrr": 0.16666666666666666,
-    "search_recall": 1.0,
-    "explore_recall": 0.0,
-    "combined_recall": 1.0,
-    "found_files": [
-      "sympy/printing/pretty/pretty.py"
-    ],
-    "missed_files": [],
-    "latency_ms": 3.0434170039370656,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-14317",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/latex.py"
-    ],
-    "latency_ms": 0.744916032999754,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-14396",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/polys/polyoptions.py"
-    ],
-    "latency_ms": 9.610374982003123,
-    "n_results": 12
-  },
-  {
-    "case_id": "sympy__sympy-14774",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/latex.py"
-    ],
-    "latency_ms": 0.8054579957388341,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-14817",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/pretty/pretty.py"
-    ],
-    "latency_ms": 0.4497910267673433,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-15011",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/utilities/lambdify.py"
-    ],
-    "latency_ms": 0.6503749755211174,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-15308",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/latex.py"
-    ],
-    "latency_ms": 0.3857080009765923,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-15345",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/mathematica.py"
-    ],
-    "latency_ms": 1.3528750278055668,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-15346",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/simplify/trigsimp.py"
-    ],
-    "latency_ms": 1.568333012983203,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-15609",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/latex.py"
-    ],
-    "latency_ms": 0.7539159851148725,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-15678",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/geometry/util.py"
-    ],
-    "latency_ms": 1.8910839571617544,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-16106",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/mathml.py"
-    ],
-    "latency_ms": 0.4300419823266566,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-16281",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/pretty/pretty.py"
-    ],
-    "latency_ms": 0.6519579910673201,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-16503",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/pretty/pretty.py"
-    ],
-    "latency_ms": 0.4166250000707805,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-16792",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/utilities/codegen.py"
-    ],
-    "latency_ms": 1.448625000193715,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-16988",
-    "repo": "sympy/sympy",
-    "passed": true,
-    "file_recall": 1.0,
-    "mrr": 0.3333333333333333,
-    "search_recall": 1.0,
-    "explore_recall": 0.0,
-    "combined_recall": 1.0,
-    "found_files": [
-      "sympy/sets/sets.py"
-    ],
-    "missed_files": [],
-    "latency_ms": 2.9555000364780426,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-17022",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/pycode.py"
-    ],
-    "latency_ms": 0.4141660174354911,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-17139",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/simplify/fu.py"
-    ],
-    "latency_ms": 1.2942920438945293,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-17630",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/matrices/expressions/matexpr.py"
-    ],
-    "latency_ms": 2.6866249972954392,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-17655",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/geometry/point.py"
-    ],
-    "latency_ms": 3.2190000056289136,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-18057",
-    "repo": "sympy/sympy",
-    "passed": true,
-    "file_recall": 1.0,
-    "mrr": 0.2,
-    "search_recall": 1.0,
-    "explore_recall": 0.0,
-    "combined_recall": 1.0,
-    "found_files": [
-      "sympy/core/expr.py"
-    ],
-    "missed_files": [],
-    "latency_ms": 1.1772910365834832,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-18087",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/exprtools.py"
-    ],
-    "latency_ms": 1.6058750334195793,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-18189",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/solvers/diophantine.py"
-    ],
-    "latency_ms": 6.971250055357814,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-18199",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/ntheory/residue_ntheory.py"
-    ],
-    "latency_ms": 0.23941596737131476,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-18532",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/basic.py"
-    ],
-    "latency_ms": 1.7628750065341592,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-18621",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11422",
+    "repo": "django/django",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 0.05,
@@ -745,15 +169,15 @@
     "explore_recall": 0.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sympy/matrices/expressions/blockmatrix.py"
+      "django/utils/autoreload.py"
     ],
     "missed_files": [],
-    "latency_ms": 0.4908330156467855,
+    "latency_ms": 0.8862499962560833,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-18698",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11564",
+    "repo": "django/django",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -762,270 +186,30 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sympy/polys/polytools.py"
+      "django/conf/__init__.py"
     ],
-    "latency_ms": 0.39116700645536184,
+    "latency_ms": 0.15245900431182235,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-18835",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/utilities/iterables.py"
-    ],
-    "latency_ms": 1.094917010050267,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-19007",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/matrices/expressions/blockmatrix.py"
-    ],
-    "latency_ms": 0.496957974974066,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-19254",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/polys/factortools.py"
-    ],
-    "latency_ms": 1.2861660216003656,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-19487",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/functions/elementary/complexes.py"
-    ],
-    "latency_ms": 0.22329099010676146,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-20049",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/physics/vector/point.py"
-    ],
-    "latency_ms": 1.4912920305505395,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-20154",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/utilities/iterables.py"
-    ],
-    "latency_ms": 1.5657090116292238,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-20212",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/power.py"
-    ],
-    "latency_ms": 2.3764169891364872,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-20322",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/mul.py"
-    ],
-    "latency_ms": 0.3877920098602772,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-20442",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/physics/units/util.py"
-    ],
-    "latency_ms": 1.9214579951949418,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-20590",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/_print_helpers.py"
-    ],
-    "latency_ms": 1.0181249817833304,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-20639",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/pretty/pretty.py"
-    ],
-    "latency_ms": 11.504458030685782,
-    "n_results": 8
-  },
-  {
-    "case_id": "sympy__sympy-21055",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/assumptions/refine.py"
-    ],
-    "latency_ms": 1.5197920147329569,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-21171",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/latex.py"
-    ],
-    "latency_ms": 2.495250024367124,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-21379",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/core/mod.py"
-    ],
-    "latency_ms": 2.7595830033533275,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-21612",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/str.py"
-    ],
-    "latency_ms": 2.9650420183315873,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-21614",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11583",
+    "repo": "django/django",
     "passed": true,
     "file_recall": 1.0,
-    "mrr": 0.25,
+    "mrr": 0.05,
     "search_recall": 1.0,
     "explore_recall": 0.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sympy/core/function.py"
+      "django/utils/autoreload.py"
     ],
     "missed_files": [],
-    "latency_ms": 1.006999984383583,
+    "latency_ms": 0.7877500029280782,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-21627",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11620",
+    "repo": "django/django",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -1034,46 +218,46 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sympy/functions/elementary/complexes.py"
+      "django/views/debug.py"
     ],
-    "latency_ms": 0.41504198452457786,
+    "latency_ms": 1.6842920013004914,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-21847",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11630",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/core/checks/model_checks.py"
+    ],
+    "latency_ms": 0.5510000046342611,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-11742",
+    "repo": "django/django",
     "passed": true,
     "file_recall": 1.0,
-    "mrr": 0.2,
+    "mrr": 0.0625,
     "search_recall": 1.0,
     "explore_recall": 0.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sympy/polys/monomials.py"
+      "django/db/models/fields/__init__.py"
     ],
     "missed_files": [],
-    "latency_ms": 10.45316702220589,
-    "n_results": 13
-  },
-  {
-    "case_id": "sympy__sympy-22005",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/solvers/polysys.py"
-    ],
-    "latency_ms": 3.2320410246029496,
+    "latency_ms": 0.5289160035317764,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-22714",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11797",
+    "repo": "django/django",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -1082,110 +266,46 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sympy/geometry/point.py"
+      "django/db/models/lookups.py"
     ],
-    "latency_ms": 1.1102500138804317,
+    "latency_ms": 0.44270799844525754,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-22840",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/simplify/cse_main.py"
-    ],
-    "latency_ms": 0.478541012853384,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-23117",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/tensor/array/ndim_array.py"
-    ],
-    "latency_ms": 10.479249991476536,
-    "n_results": 10
-  },
-  {
-    "case_id": "sympy__sympy-23191",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/printing/pretty/pretty.py"
-    ],
-    "latency_ms": 2.077499986626208,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-23262",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/utilities/lambdify.py"
-    ],
-    "latency_ms": 0.49879198195412755,
-    "n_results": 20
-  },
-  {
-    "case_id": "sympy__sympy-24066",
-    "repo": "sympy/sympy",
-    "passed": false,
-    "file_recall": 0.0,
-    "mrr": 0.0,
-    "search_recall": 0.0,
-    "explore_recall": 0.0,
-    "combined_recall": 0.0,
-    "found_files": [],
-    "missed_files": [
-      "sympy/physics/units/unitsystem.py"
-    ],
-    "latency_ms": 10.35345799755305,
-    "n_results": 12
-  },
-  {
-    "case_id": "sympy__sympy-24102",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11815",
+    "repo": "django/django",
     "passed": true,
     "file_recall": 1.0,
-    "mrr": 0.125,
+    "mrr": 0.058823529411764705,
     "search_recall": 1.0,
     "explore_recall": 0.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sympy/parsing/mathematica.py"
+      "django/db/migrations/serializer.py"
     ],
     "missed_files": [],
-    "latency_ms": 2.8078340110369027,
+    "latency_ms": 0.6451669905800372,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-24152",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11848",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/utils/http.py"
+    ],
+    "latency_ms": 0.5484580033225939,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-11905",
+    "repo": "django/django",
     "passed": true,
     "file_recall": 1.0,
     "mrr": 0.16666666666666666,
@@ -1193,15 +313,15 @@
     "explore_recall": 0.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sympy/physics/quantum/tensorproduct.py"
+      "django/db/models/lookups.py"
     ],
     "missed_files": [],
-    "latency_ms": 1.6162500251084566,
+    "latency_ms": 0.15216699102893472,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-24213",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11910",
+    "repo": "django/django",
     "passed": false,
     "file_recall": 0.0,
     "mrr": 0.0,
@@ -1210,25 +330,1497 @@
     "combined_recall": 0.0,
     "found_files": [],
     "missed_files": [
-      "sympy/physics/units/unitsystem.py"
+      "django/db/migrations/autodetector.py"
     ],
-    "latency_ms": 1.1284590000286698,
+    "latency_ms": 0.8707079978194088,
     "n_results": 20
   },
   {
-    "case_id": "sympy__sympy-24909",
-    "repo": "sympy/sympy",
+    "case_id": "django__django-11964",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/enums.py"
+    ],
+    "latency_ms": 0.1086249976651743,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-11999",
+    "repo": "django/django",
     "passed": true,
     "file_recall": 1.0,
-    "mrr": 0.25,
+    "mrr": 0.07142857142857142,
     "search_recall": 1.0,
     "explore_recall": 0.0,
     "combined_recall": 1.0,
     "found_files": [
-      "sympy/physics/units/prefixes.py"
+      "django/db/models/fields/__init__.py"
     ],
     "missed_files": [],
-    "latency_ms": 1.5319590456783772,
+    "latency_ms": 1.1517909879330546,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12113",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/backends/sqlite3/creation.py"
+    ],
+    "latency_ms": 0.7550419977633283,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12125",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/migrations/serializer.py"
+    ],
+    "latency_ms": 0.09458299609832466,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12184",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.125,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/urls/resolvers.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.9801249980228022,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12284",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.05263157894736842,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/models/fields/__init__.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.6758340023225173,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12286",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/core/checks/translation.py"
+    ],
+    "latency_ms": 8.672500000102445,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12308",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.5,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/contrib/admin/utils.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.3789999900618568,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12453",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.07142857142857142,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/backends/base/creation.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 5.403041999670677,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12470",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/sql/compiler.py"
+    ],
+    "latency_ms": 0.3972919948864728,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12497",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/fields/related.py"
+    ],
+    "latency_ms": 8.321082990732975,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12589",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/sql/query.py"
+    ],
+    "latency_ms": 2.2301670105662197,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12700",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/views/debug.py"
+    ],
+    "latency_ms": 0.4322500026319176,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12708",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/backends/base/schema.py"
+    ],
+    "latency_ms": 0.25499999173916876,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12747",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/deletion.py"
+    ],
+    "latency_ms": 2.6870419969782233,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12856",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/base.py"
+    ],
+    "latency_ms": 0.12499999138526618,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12908",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.2,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/models/query.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 1.6568749997531995,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12915",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/contrib/staticfiles/handlers.py"
+    ],
+    "latency_ms": 0.15712500317022204,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-12983",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/utils/text.py"
+    ],
+    "latency_ms": 0.3510830138111487,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13028",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.3333333333333333,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/models/sql/query.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 1.5714170003775507,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13033",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/sql/compiler.py"
+    ],
+    "latency_ms": 0.6451249937526882,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13158",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/sql/query.py"
+    ],
+    "latency_ms": 0.5272499984130263,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13220",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/core/exceptions.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 1.081583002815023,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13230",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/contrib/syndication/views.py"
+    ],
+    "latency_ms": 0.14254100096877664,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13265",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/migrations/autodetector.py"
+    ],
+    "latency_ms": 0.7472920115105808,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13315",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.1111111111111111,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/forms/models.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 1.2072919926140457,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13321",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/contrib/sessions/backends/base.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.36712500150315464,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13401",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/fields/__init__.py"
+    ],
+    "latency_ms": 0.07504200038965791,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13447",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/contrib/admin/sites.py"
+    ],
+    "latency_ms": 0.10949998977594078,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13448",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/backends/base/creation.py"
+    ],
+    "latency_ms": 0.5612090026261285,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13551",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/contrib/auth/tokens.py"
+    ],
+    "latency_ms": 1.1529589974088594,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13590",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.5,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/models/sql/query.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 3.7239590019453317,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13658",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/core/management/__init__.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 2.320875006262213,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13660",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/core/management/commands/shell.py"
+    ],
+    "latency_ms": 0.5067089950898662,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13710",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.05555555555555555,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/contrib/admin/options.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.09699999645818025,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13757",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/fields/json.py"
+    ],
+    "latency_ms": 0.41408299875911325,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13768",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/dispatch/dispatcher.py"
+    ],
+    "latency_ms": 1.2544999917736277,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13925",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/base.py"
+    ],
+    "latency_ms": 7.969915997819044,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13933",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/forms/models.py"
+    ],
+    "latency_ms": 0.5033750057918951,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-13964",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.08333333333333333,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/models/base.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.7506670081056654,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14016",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/query_utils.py"
+    ],
+    "latency_ms": 7.742417001281865,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14017",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/query_utils.py"
+    ],
+    "latency_ms": 6.117833007010631,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14155",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/urls/resolvers.py"
+    ],
+    "latency_ms": 0.8783750090515241,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14238",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/fields/__init__.py"
+    ],
+    "latency_ms": 0.1524580002296716,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14382",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/core/management/templates.py"
+    ],
+    "latency_ms": 0.9854160016402602,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14411",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/contrib/auth/forms.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.10025000665336847,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14534",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/forms/boundfield.py"
+    ],
+    "latency_ms": 0.30141600291244686,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14580",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/migrations/serializer.py"
+    ],
+    "latency_ms": 0.2589999930933118,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14608",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/forms/formsets.py"
+    ],
+    "latency_ms": 0.09091700485441834,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14667",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/sql/query.py"
+    ],
+    "latency_ms": 0.06487499922513962,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14672",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/fields/reverse_related.py"
+    ],
+    "latency_ms": 1.6347920027328655,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14730",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/fields/related.py"
+    ],
+    "latency_ms": 4.501624993281439,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14752",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.3333333333333333,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/contrib/admin/views/autocomplete.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.8669999951962382,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14787",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/utils/decorators.py"
+    ],
+    "latency_ms": 0.34220800444018096,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14855",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.3333333333333333,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/contrib/admin/helpers.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.08495799556840211,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14915",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/forms/models.py"
+    ],
+    "latency_ms": 0.46587499673478305,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14997",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.09090909090909091,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/backends/ddl_references.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.5764169909525663,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-14999",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.16666666666666666,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/migrations/operations/models.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.5932920030318201,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15061",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/forms/widgets.py"
+    ],
+    "latency_ms": 1.5431249921675771,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15202",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/core/validators.py"
+    ],
+    "latency_ms": 10.68995799869299,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15213",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/fields/__init__.py"
+    ],
+    "latency_ms": 0.22658301168121397,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15252",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/migrations/executor.py"
+    ],
+    "latency_ms": 0.6602909998036921,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15320",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/expressions.py"
+    ],
+    "latency_ms": 0.9489999938523397,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15347",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.5,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/contrib/messages/storage/cookie.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 4.082375002326444,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15388",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/template/autoreload.py"
+    ],
+    "latency_ms": 1.383833005093038,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15400",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/utils/functional.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 6.97754199791234,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15498",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/views/static.py"
+    ],
+    "latency_ms": 0.14358300541061908,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15695",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.05,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/migrations/operations/models.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.46858399582561105,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15738",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/migrations/autodetector.py"
+    ],
+    "latency_ms": 0.08366699330508709,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15781",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.09090909090909091,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/core/management/base.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.27070799842476845,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15789",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/utils/html.py"
+    ],
+    "latency_ms": 0.8906659932108596,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15790",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/core/checks/templates.py"
+    ],
+    "latency_ms": 0.7035419985186309,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15814",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/sql/query.py"
+    ],
+    "latency_ms": 1.3633749913424253,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15819",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/core/management/commands/inspectdb.py"
+    ],
+    "latency_ms": 3.082875002291985,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15851",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/backends/postgresql/client.py"
+    ],
+    "latency_ms": 5.885040998691693,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15902",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/forms/formsets.py"
+    ],
+    "latency_ms": 0.1684580056462437,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-15996",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/migrations/serializer.py"
+    ],
+    "latency_ms": 0.10791700333356857,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16041",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.16666666666666666,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/forms/formsets.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 8.780333009781316,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16046",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/utils/numberformat.py"
+    ],
+    "latency_ms": 0.4088339919690043,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16139",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/contrib/auth/forms.py"
+    ],
+    "latency_ms": 3.0888750043231994,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16229",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/forms/boundfield.py"
+    ],
+    "latency_ms": 0.7924170058686286,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16255",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/contrib/sitemaps/__init__.py"
+    ],
+    "latency_ms": 2.0534169889288023,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16379",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 1.0,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/core/cache/backends/filebased.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 6.318416999420151,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16400",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/contrib/auth/management/__init__.py"
+    ],
+    "latency_ms": 0.33108299248851836,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16408",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/sql/compiler.py"
+    ],
+    "latency_ms": 0.6817079993197694,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16527",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/contrib/admin/templatetags/admin_modify.py"
+    ],
+    "latency_ms": 0.08270800753962249,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16595",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/migrations/operations/fields.py"
+    ],
+    "latency_ms": 0.14462500985246152,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16816",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/contrib/admin/checks.py"
+    ],
+    "latency_ms": 0.4042920045321807,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16820",
+    "repo": "django/django",
+    "passed": true,
+    "file_recall": 1.0,
+    "mrr": 0.14285714285714285,
+    "search_recall": 1.0,
+    "explore_recall": 0.0,
+    "combined_recall": 1.0,
+    "found_files": [
+      "django/db/migrations/operations/models.py"
+    ],
+    "missed_files": [],
+    "latency_ms": 0.6273750041145831,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16873",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/template/defaultfilters.py"
+    ],
+    "latency_ms": 0.32337500306311995,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-16910",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/sql/query.py"
+    ],
+    "latency_ms": 0.7928330014692619,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-17051",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/models/query.py"
+    ],
+    "latency_ms": 1.0887090029427782,
+    "n_results": 20
+  },
+  {
+    "case_id": "django__django-17087",
+    "repo": "django/django",
+    "passed": false,
+    "file_recall": 0.0,
+    "mrr": 0.0,
+    "search_recall": 0.0,
+    "explore_recall": 0.0,
+    "combined_recall": 0.0,
+    "found_files": [],
+    "missed_files": [
+      "django/db/migrations/serializer.py"
+    ],
+    "latency_ms": 0.912292001885362,
     "n_results": 20
   }
 ]
