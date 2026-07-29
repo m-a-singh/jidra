@@ -122,9 +122,7 @@ class TestStitchFlow:
         assert "supporting" in result or "supporting_flow" in result
         assert "low_priority" in result or "utility_flow" in result
 
-    def test_stitch_flow_backward_compat_aliases(
-        self, loaded_test_graph, simple_test_graph
-    ):
+    def test_stitch_flow_backward_compat_aliases(self, loaded_test_graph, simple_test_graph):
         """Test backward-compatible aliases."""
         entry_method = simple_test_graph.methods[0]
         result = stitch_flow(loaded_test_graph, entry_method, detail="full")

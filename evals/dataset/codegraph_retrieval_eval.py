@@ -32,7 +32,7 @@ import json
 import sqlite3
 import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import yaml
@@ -73,9 +73,7 @@ class Result:
 # ── Yaml loading ───────────────────────────────────────────────────────────────
 
 
-def load_cases(
-    yaml_paths: list[Path], repo_filter: str | None, limit: int | None
-) -> list[Case]:
+def load_cases(yaml_paths: list[Path], repo_filter: str | None, limit: int | None) -> list[Case]:
     cases: list[Case] = []
     for p in yaml_paths:
         raw: list[dict] = yaml.safe_load(p.read_text())
@@ -360,15 +358,9 @@ def main() -> None:
         metavar="PATH",
         help="Path to CodeGraph db (e.g. <repo>/.codegraph/codegraph.db)",
     )
-    parser.add_argument(
-        "--repo", default=None, metavar="ORG/REPO", help="Filter to one repo slug"
-    )
-    parser.add_argument(
-        "--limit", type=int, default=None, metavar="N", help="Max cases to run"
-    )
-    parser.add_argument(
-        "--out", default=None, metavar="JSON", help="Write results JSON"
-    )
+    parser.add_argument("--repo", default=None, metavar="ORG/REPO", help="Filter to one repo slug")
+    parser.add_argument("--limit", type=int, default=None, metavar="N", help="Max cases to run")
+    parser.add_argument("--out", default=None, metavar="JSON", help="Write results JSON")
     parser.add_argument(
         "--search-only", action="store_true", help="Run FTS search only, skip explore"
     )
@@ -412,9 +404,7 @@ def main() -> None:
     repos_seen: dict[str, list[Result]] = {}
 
     for case in cases:
-        r = run_case(
-            case, conn, search_only=args.search_only, explore_only=args.explore_only
-        )
+        r = run_case(case, conn, search_only=args.search_only, explore_only=args.explore_only)
         _print_result(r)
         results.append(r)
         repos_seen.setdefault(case.repo, []).append(r)
@@ -430,9 +420,7 @@ def main() -> None:
     if args.out:
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(
-            json.dumps([asdict(r) for r in results], indent=2), encoding="utf-8"
-        )
+        out_path.write_text(json.dumps([asdict(r) for r in results], indent=2), encoding="utf-8")
         print(f"\nReport written to {args.out}")
 
 

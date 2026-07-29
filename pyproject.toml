@@ -32,6 +32,20 @@ mcp = ["mcp"]
 ui = ["fastapi>=0.111.0", "uvicorn[standard]>=0.29.0"]
 test = ["pytest>=8.0.0", "ruff>=0.13.0", "numpy>=1.24.0"]
 
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+ignore = [
+  "BLE001",   # broad except Exception — intentional in CLI/eval error handlers
+  "S110",     # try-except-pass — intentional silencing of non-critical paths
+  "S112",     # try-except-continue — intentional
+  "EXE001",   # shebang-not-executable — scripts run via python, not chmod
+  "DTZ005",   # datetime.now without tz — local time fine for this tool
+  "DTZ006",   # datetime.fromtimestamp without tz
+  "DTZ011",   # date.today without tz
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["jidra", "jidra.*"]

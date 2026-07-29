@@ -38,7 +38,7 @@ import argparse
 import json
 import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import yaml
@@ -85,9 +85,7 @@ class Result:
 # ── Yaml loading ───────────────────────────────────────────────────────────────
 
 
-def load_cases(
-    yaml_paths: list[Path], repo_filter: str | None, limit: int | None
-) -> list[Case]:
+def load_cases(yaml_paths: list[Path], repo_filter: str | None, limit: int | None) -> list[Case]:
     cases: list[Case] = []
     for p in yaml_paths:
         raw: list[dict] = yaml.safe_load(p.read_text())
@@ -114,13 +112,7 @@ def load_cases(
 
 def _file_from_result(r: dict) -> str | None:
     """Extract file path from a JIDRA result dict."""
-    return (
-        r.get("file_path")
-        or r.get("file")
-        or r.get("source_file")
-        or r.get("path")
-        or None
-    )
+    return r.get("file_path") or r.get("file") or r.get("source_file") or r.get("path") or None
 
 
 def _normalise(path: str) -> str:
@@ -211,20 +203,16 @@ def run_case(case: Case, engine: JidraEngine, explore_only: bool = False) -> Res
 
     if explore_only:
         search_hits = []
-        explore_hits = engine.explore(case.query, top_n=EXPLORE_TOP_N).get(
-            "results", []
-        )
+        explore_hits = engine.explore(case.query, top_n=EXPLORE_TOP_N).get("results", [])
         flow_hits = []
     else:
         search_hits = engine.search(case.query, limit=SEARCH_LIMIT).get("results", [])
-        explore_hits = engine.explore(case.query, top_n=EXPLORE_TOP_N).get(
-            "results", []
-        )
+        explore_hits = engine.explore(case.query, top_n=EXPLORE_TOP_N).get("results", [])
         flow_hits = _run_flow_from_explore(engine, case.query)
 
     latency_ms = (time.perf_counter() - t0) * 1000
 
-    s_recall, s_found, s_missed, s_mrr = _score_files(case.expected_files, search_hits)
+    s_recall, _s_found, _s_missed, s_mrr = _score_files(case.expected_files, search_hits)
     e_recall, e_found, _, e_mrr = _score_files(case.expected_files, explore_hits)
     combined = search_hits + explore_hits + flow_hits
     c_recall, c_found, c_missed, _ = _score_files(case.expected_files, combined)
@@ -390,9 +378,7 @@ def main() -> None:
     if args.out:
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(
-            json.dumps([asdict(r) for r in results], indent=2), encoding="utf-8"
-        )
+        out_path.write_text(json.dumps([asdict(r) for r in results], indent=2), encoding="utf-8")
         print(f"\nReport written to {args.out}")
 
 

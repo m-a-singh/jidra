@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from jidra.graph import graph_store
 from jidra.engine.engine import JidraEngine
+from jidra.graph import graph_store
 from jidra.models import Graph, MethodEntry
 
 
@@ -24,15 +24,11 @@ class TestFtsSync:
         conn = graph_store.connect(Path(test_graph_file))
         # Fixture methods carry the default language ("unknown").
         assert (
-            graph_store.search_methods(
-                conn, "process", language="python", variant="validated"
-            )
+            graph_store.search_methods(conn, "process", language="python", variant="validated")
             == []
         )
         assert graph_store.search_methods(conn, "process", variant="validated")
-        assert graph_store.search_methods(
-            conn, "process", language="unknown", variant="validated"
-        )
+        assert graph_store.search_methods(conn, "process", language="unknown", variant="validated")
 
     def test_fts_stays_in_sync_after_rewrite(self, simple_test_graph, tmp_path):
         db = tmp_path / "graph.db"

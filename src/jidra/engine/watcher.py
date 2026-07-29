@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from ..filters.file_filters import gitignored_paths, is_too_large
 from ..filters.ts_filters import EXCLUDED_DIRS as IGNORE_DIRS
@@ -71,9 +71,7 @@ class JidraWatcher:
             def on_any_event(self, event):
                 if event.is_directory:
                     return
-                watcher._on_change(
-                    str(getattr(event, "dest_path", "") or event.src_path)
-                )
+                watcher._on_change(str(getattr(event, "dest_path", "") or event.src_path))
 
         # FSEvents (default on macOS) cannot start after fork() — CoreFoundation
         # restriction. Fall back to KqueueObserver, then PollingObserver.
@@ -83,7 +81,9 @@ class JidraWatcher:
             observer = KqueueObserver()
         except Exception:
             try:
-                from watchdog.observers.polling import PollingObserver  # type: ignore[import]
+                from watchdog.observers.polling import (
+                    PollingObserver,  # type: ignore[import]
+                )
 
                 observer = PollingObserver()
             except Exception:
@@ -115,9 +115,7 @@ class JidraWatcher:
             return False
         if is_too_large(p):
             return False
-        if gitignored_paths(self.codebase_root, [p]):
-            return False
-        return True
+        return not gitignored_paths(self.codebase_root, [p])
 
     def _on_change(self, path: str) -> None:
         if not path or not self._is_relevant(path):
@@ -161,9 +159,7 @@ def watch_forever(codebase_root: Path, graph_path: Path) -> None:  # pragma: no 
     """Blocking standalone watch loop (Ctrl-C to stop)."""
     w = JidraWatcher(codebase_root, graph_path)
     if not w.start():
-        raise SystemExit(
-            "Watcher unavailable (install `watchdog`, or use git hooks on WSL2/mnt)."
-        )
+        raise SystemExit("Watcher unavailable (install `watchdog`, or use git hooks on WSL2/mnt).")
     try:
         while True:
             time.sleep(1)

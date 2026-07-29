@@ -1,10 +1,10 @@
+from jidra.models import CallSite, ClassEntry, Graph, MethodEntry
 from jidra.utils.context_builder import build_method_context
-from jidra.models import Graph, MethodEntry, ClassEntry, CallSite
 
 
 def _long_method_source(n_lines: int = 300) -> str:
     body_lines = [f"    int x{i} = {i};" for i in range(n_lines - 2)]
-    lines = ["public void longMethod() {"] + body_lines + ["    return;", "}"]
+    lines = ["public void longMethod() {", *body_lines, "    return;", "}"]
     return "\n".join(lines)
 
 
@@ -124,16 +124,12 @@ def test_typescript_console_calls_filtered():
 
 
 def test_java_business_call_not_filtered():
-    graph = _graph_with_callsite(
-        "src/main/java/com/example/Thing.java", "logging", "getLogger"
-    )
+    graph = _graph_with_callsite("src/main/java/com/example/Thing.java", "logging", "getLogger")
     ctx = build_method_context(graph, "m_1")
     assert len(ctx["unresolved_calls"]) == 1
 
 
 def test_java_slf4j_still_filtered():
-    graph = _graph_with_callsite(
-        "src/main/java/com/example/Thing.java", "logger", "info"
-    )
+    graph = _graph_with_callsite("src/main/java/com/example/Thing.java", "logger", "info")
     ctx = build_method_context(graph, "m_1")
     assert ctx["unresolved_calls"] == []

@@ -23,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from jidra.graph.graph_store import load_graph
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -49,7 +48,7 @@ def _color(pct: float) -> str:
 
 
 def _bar(pct: float, width: int = 20) -> str:
-    filled = int(round(pct / 100 * width))
+    filled = round(pct / 100 * width)
     c = _color(pct)
     return f"{c}{'█' * filled}{'░' * (width - filled)}{RESET}"
 
@@ -82,9 +81,7 @@ def _ok(msg: str) -> None:
 def _sample(items: list[Any], label: str, n: int = 3) -> None:
     if not items:
         return
-    print(
-        f"    {BOLD}Sample {label} (first {min(n, len(items))} of {len(items)}):{RESET}"
-    )
+    print(f"    {BOLD}Sample {label} (first {min(n, len(items))} of {len(items)}):{RESET}")
     for item in items[:n]:
         print(f"      {item!r}")
 
@@ -122,9 +119,7 @@ def validate_methods(methods: list) -> None:
 
     # Specific issue tracking
     return_type_none: list[str] = []
-    param_len_mismatch: list[
-        tuple[str, int, int]
-    ] = []  # (method id, len(types), len(names))
+    param_len_mismatch: list[tuple[str, int, int]] = []  # (method id, len(types), len(names))
     lvt_bad_values: list[str] = []  # method ids where lvt has non-str values
     sparse_return: list[str] = []
     sparse_param_types: list[str] = []
@@ -223,9 +218,7 @@ def validate_methods(methods: list) -> None:
             print(f"      id={mid!r}  types={nt}  names={nn}")
 
     if lvt_bad_values:
-        _error(
-            f"local_variable_types has non-str values on {len(lvt_bad_values)} method(s)"
-        )
+        _error(f"local_variable_types has non-str values on {len(lvt_bad_values)} method(s)")
         _sample(lvt_bad_values, "method ids")
 
     # Samples for sparse (<50%) fields
@@ -451,9 +444,7 @@ def validate_callsites(callsites: list) -> None:
 
     print()
     if arg_count_mismatch:
-        _error(
-            f"argument_types length != argument_count on {len(arg_count_mismatch)} call site(s)"
-        )
+        _error(f"argument_types length != argument_count on {len(arg_count_mismatch)} call site(s)")
         _sample(arg_count_mismatch, "callsite ids with arg mismatch")
 
     pct_receiver = _pct(counts["receiver"], total)

@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from typing import Any
-
+import functools
 import logging
+import operator
+import re
 import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-import re
+from typing import Any
 
 from tree_sitter import Node
 
+from ..engine.parallel import parallel_map
 from ..filters.filters import iter_java_files
 from ..models import (
     CallSite,
@@ -28,7 +30,6 @@ from ..models import (
     method_signature,
     resolved_call_edge_id,
 )
-from ..engine.parallel import parallel_map
 from ..utils.parser import make_parser
 
 logger = logging.getLogger(__name__)
@@ -241,9 +242,9 @@ def _class_stereotypes(
         out.append("configuration")
     if "Entity" in names:
         out.append("entity")
-    if class_name.endswith("Dto") or class_name.endswith("DTO"):
+    if class_name.endswith(("Dto", "DTO")):
         out.append("dto")
-    if class_name.endswith("Test") or class_name.endswith("Tests"):
+    if class_name.endswith(("Test", "Tests")):
         out.append("test")
     if not out:
         out.append("unknown")
@@ -285,8 +286,7 @@ def _is_spring_data_repository(cls: ClassEntry) -> bool:
     if cls.extends:
         supertypes.add(cls.extends)
     return any(
-        _strip_generic(t).split(".")[-1] in SPRING_DATA_REPOSITORY_MARKERS
-        for t in supertypes
+        _strip_generic(t).split(".")[-1] in SPRING_DATA_REPOSITORY_MARKERS for t in supertypes
     )
 
 
@@ -618,9 +618,7 @@ def detect_frameworks(codebase_root: Path) -> set[str]:
     return frameworks
 
 
-def _java_framework_role(
-    method_annotations: list[str], is_endpoint: bool
-) -> str | None:
+def _java_framework_role(method_annotations: list[str], is_endpoint: bool) -> str | None:
     """Map Spring method-level annotations to a semantic framework role."""
     if is_endpoint:
         return "http_handler"
@@ -634,9 +632,7 @@ def _java_framework_role(
     return None
 
 
-def _extract_extends_implements(
-    class_node: Node, source: bytes
-) -> tuple[str | None, list[str]]:
+def _extract_extends_implements(class_node: Node, source: bytes) -> tuple[str | None, list[str]]:
     extends_value: str | None = None
     implements_values: list[str] = []
     for child in class_node.children:
@@ -672,9 +668,7 @@ def _get_body_node(class_node: Node) -> Node | None:
     return _find_child(class_node, "class_body")
 
 
-def _extract_fields(
-    class_node: Node, source: bytes, cls: ClassEntry
-) -> list[FieldEntry]:
+def _extract_fields(class_node: Node, source: bytes, cls: ClassEntry) -> list[FieldEntry]:
     out: list[FieldEntry] = []
     body = _get_body_node(class_node)
     if not body:
@@ -724,9 +718,7 @@ def _extract_local_variable_types(body_node: Node, source: bytes) -> dict[str, s
     out: dict[str, str] = {}
     for node in _walk(body_node):
         if node.type == "local_variable_declaration":
-            type_name = _strip_generic(
-                _first_type_text(node, source, default="unknown")
-            )
+            type_name = _strip_generic(_first_type_text(node, source, default="unknown"))
             for decl in _children_by_type(node, "variable_declarator"):
                 ident = _find_child(decl, "identifier")
                 if ident:
@@ -734,27 +726,21 @@ def _extract_local_variable_types(body_node: Node, source: bytes) -> dict[str, s
 
         elif node.type == "resource":
             # try-with-resources: try (Type var = expr) { ... }
-            type_name = _strip_generic(
-                _first_type_text(node, source, default="unknown")
-            )
+            type_name = _strip_generic(_first_type_text(node, source, default="unknown"))
             ident = _find_child(node, "identifier")
             if ident:
                 out[_text(ident, source)] = type_name
 
         elif node.type == "catch_formal_parameter":
             # catch (ExceptionType e)
-            type_name = _strip_generic(
-                _first_type_text(node, source, default="unknown")
-            )
+            type_name = _strip_generic(_first_type_text(node, source, default="unknown"))
             ident = _find_child(node, "identifier")
             if ident:
                 out[_text(ident, source)] = type_name
 
         elif node.type == "enhanced_for_statement":
             # for (Type item : collection)
-            type_name = _strip_generic(
-                _first_type_text(node, source, default="unknown")
-            )
+            type_name = _strip_generic(_first_type_text(node, source, default="unknown"))
             ident = _find_child(node, "identifier")
             if ident:
                 out[_text(ident, source)] = type_name
@@ -874,9 +860,7 @@ LITERAL_NODE_TYPES = {
 }
 
 
-def _infer_argument_type(
-    arg_node: Node, source: bytes, symbols: SymbolTable
-) -> str | None:
+def _infer_argument_type(arg_node: Node, source: bytes, symbols: SymbolTable) -> str | None:
     if arg_node.type == "identifier":
         arg_type, _ = symbols.lookup(_text(arg_node, source))
         return arg_type
@@ -925,9 +909,7 @@ def _extract_callsite(
         if arguments:
             arg_nodes = [c for c in arguments.children if c.type not in {",", "(", ")"}]
             args_count = len(arg_nodes)
-            argument_types = [
-                _infer_argument_type(a, source, symbols) for a in arg_nodes
-            ]
+            argument_types = [_infer_argument_type(a, source, symbols) for a in arg_nodes]
     else:
         name_node = invocation.child_by_field_name("name")
         if name_node:
@@ -941,9 +923,7 @@ def _extract_callsite(
         if arguments:
             arg_nodes = [c for c in arguments.children if c.type not in {",", "(", ")"}]
             args_count = len(arg_nodes)
-            argument_types = [
-                _infer_argument_type(a, source, symbols) for a in arg_nodes
-            ]
+            argument_types = [_infer_argument_type(a, source, symbols) for a in arg_nodes]
 
     line = invocation.start_point[0] + 1
     column = invocation.start_point[1] + 1
@@ -985,8 +965,7 @@ def _extract_methods(
         "extends": cls.extends,
         "implements": cls.implements,
         "fields": [
-            {"name": f.name, "type": f.type_name, "modifiers": f.modifiers}
-            for f in class_fields
+            {"name": f.name, "type": f.type_name, "modifiers": f.modifiers} for f in class_fields
         ],
     }
 
@@ -1018,9 +997,7 @@ def _extract_methods(
                 default=cls.name if node.type == "constructor_declaration" else "void",
             )
             parameter_types, parameter_names = _extract_parameters(node, source)
-            body_node = _find_child(node, "block") or _find_child(
-                node, "constructor_body"
-            )
+            body_node = _find_child(node, "block") or _find_child(node, "constructor_body")
             method_annotations = _extract_annotations(node, source)
 
         signature = method_signature(cls.full_name, method_name, parameter_types)
@@ -1028,10 +1005,8 @@ def _extract_methods(
         end_line = node.end_point[0] + 1
         mid = method_id(signature, cls.file_path, start_line)
 
-        local_types = (
-            _extract_local_variable_types(body_node, source) if body_node else {}
-        )
-        params_map = dict(zip(parameter_names, parameter_types))
+        local_types = _extract_local_variable_types(body_node, source) if body_node else {}
+        params_map = dict(zip(parameter_names, parameter_types, strict=False))
         field_reads, field_writes = (
             _extract_field_accesses(
                 body_node,
@@ -1093,9 +1068,7 @@ def _extract_methods(
                     )
                 else:
                     receiver_node = invocation.child_by_field_name("object")
-                    receiver_text = (
-                        _text(receiver_node, source) if receiver_node else None
-                    )
+                    receiver_text = _text(receiver_node, source) if receiver_node else None
                     receiver_type_raw, receiver_source = _infer_receiver_type_raw(
                         receiver_text, cls, symbols
                     )
@@ -1159,9 +1132,7 @@ def _extract_file(file_path: Path, parser=None) -> Graph:
             extends=extends_name,
             implements=implements_names,
             imports=imports,
-            stereotypes=_class_stereotypes(
-                cls_name, class_annotations, class_node.type
-            ),
+            stereotypes=_class_stereotypes(cls_name, class_annotations, class_node.type),
         )
         classes.append(cls)
 
@@ -1192,15 +1163,11 @@ def _extract_file(file_path: Path, parser=None) -> Graph:
             class_fields.append(logger_field)
         fields.extend(class_fields)
 
-        class_methods, class_calls = _extract_methods(
-            class_node, source, cls, class_fields
-        )
+        class_methods, class_calls = _extract_methods(class_node, source, cls, class_fields)
         methods.extend(class_methods)
         calls.extend(class_calls)
 
-        synthetic_classes, synthetic_methods = _synthesize_lombok_artifacts(
-            cls, class_fields
-        )
+        synthetic_classes, synthetic_methods = _synthesize_lombok_artifacts(cls, class_fields)
         classes.extend(synthetic_classes)
         methods.extend(synthetic_methods)
         methods.extend(_synthesize_spring_repository_methods(cls))
@@ -1246,9 +1213,7 @@ def _normalize_type(
             owner = ".".join(parts[:-1])
             return owner, "static_import", [owner]
 
-    same_pkg = (
-        f"{caller_class.package_name}.{short}" if caller_class.package_name else short
-    )
+    same_pkg = f"{caller_class.package_name}.{short}" if caller_class.package_name else short
     if same_pkg in all_class_full_names:
         return same_pkg, "same_package", [same_pkg]
 
@@ -1305,9 +1270,7 @@ def _find_method_in_hierarchy(
                 if candidate not in all_class_full_names:
                     # Try import-based normalization when methods_by_full_class is available
                     if methods_by_full_class is not None:
-                        normalized, _, _ = _normalize_type(
-                            raw_parent, cls, all_class_full_names
-                        )
+                        normalized, _, _ = _normalize_type(raw_parent, cls, all_class_full_names)
                         candidate = normalized or raw_parent
                     else:
                         candidate = raw_parent
@@ -1336,7 +1299,9 @@ def _resolve_dotted_receiver(
         return None, None
 
     first = parts[0]
-    params_map = dict(zip(caller_method.parameter_names, caller_method.parameter_types))
+    params_map = dict(
+        zip(caller_method.parameter_names, caller_method.parameter_types, strict=False)
+    )
     local_types = caller_method.local_variable_types or {}
 
     if first == "this":
@@ -1366,9 +1331,7 @@ def _resolve_dotted_receiver(
             raw_field_type = fields_by_class.get(walk_type, {}).get(part)
             if not raw_field_type:
                 walk_class = class_by_full_name.get(walk_type)
-                walk_type = (
-                    walk_class.extends if walk_class and walk_class.extends else None
-                )
+                walk_type = walk_class.extends if walk_class and walk_class.extends else None
                 if walk_type and walk_class:
                     walk_type_norm, _, _ = _normalize_type(
                         walk_type, walk_class, all_class_full_names
@@ -1376,9 +1339,7 @@ def _resolve_dotted_receiver(
                     walk_type = walk_type_norm
         if not raw_field_type:
             return None, None
-        current_type, _, _ = _normalize_type(
-            raw_field_type, owner, all_class_full_names
-        )
+        current_type, _, _ = _normalize_type(raw_field_type, owner, all_class_full_names)
         if current_type is None:
             return None, None
 
@@ -1413,15 +1374,11 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
             fields_by_class.setdefault(owner.full_name, {})[f.name] = f.type_name
 
     for m in graph.methods:
-        methods_by_full_class_and_name.setdefault(
-            (m.class_full_name, m.method_name), []
-        ).append(m)
+        methods_by_full_class_and_name.setdefault((m.class_full_name, m.method_name), []).append(m)
         methods_by_short_class_and_name.setdefault(
             (m.class_full_name.split(".")[-1], m.method_name), []
         ).append(m)
-        methods_by_name_arity.setdefault(
-            (m.method_name, len(m.parameter_types)), []
-        ).append(m)
+        methods_by_name_arity.setdefault((m.method_name, len(m.parameter_types)), []).append(m)
         methods_by_name.setdefault(m.method_name, []).append(m)
         methods_by_full_class.setdefault(m.class_full_name, []).append(m)
 
@@ -1435,9 +1392,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         for key in bucket:
             bucket[key] = sorted(bucket[key], key=lambda x: x.id)  # type: ignore[index]
 
-    all_class_full_names = set(methods_by_full_class.keys()) | {
-        c.full_name for c in graph.classes
-    }
+    all_class_full_names = set(methods_by_full_class.keys()) | {c.full_name for c in graph.classes}
 
     # Interface/abstract-class -> concrete implementing class(es), keyed by the
     # short name as captured on the `implements` clause (rarely an FQCN in source).
@@ -1470,13 +1425,9 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         for impl_class_fqn in {
             fqn for impls in implementers_by_target_short.values() for fqn in impls
         }:
-            matches = methods_by_full_class_and_name.get(
-                (impl_class_fqn, call.callee_name), []
-            )
+            matches = methods_by_full_class_and_name.get((impl_class_fqn, call.callee_name), [])
             if call.argument_count >= 0:
-                matches = [
-                    m for m in matches if len(m.parameter_types) == call.argument_count
-                ]
+                matches = [m for m in matches if len(m.parameter_types) == call.argument_count]
             all_impls.extend(matches)
         if len(all_impls) == 1:
             return (
@@ -1521,18 +1472,14 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
             if call.argument_count < 0:
                 return ms
             if _is_ts:
-                arity_matches = [
-                    m for m in ms if call.argument_count <= len(m.parameter_types)
-                ]
+                arity_matches = [m for m in ms if call.argument_count <= len(m.parameter_types)]
                 if not arity_matches:
                     # rest-params: method declared with fewer params can accept more args
                     arity_matches = [
                         m for m in ms if len(m.parameter_types) <= call.argument_count + 1
                     ]
             else:
-                arity_matches = [
-                    m for m in ms if len(m.parameter_types) == call.argument_count
-                ]
+                arity_matches = [m for m in ms if len(m.parameter_types) == call.argument_count]
             return _type_filter(arity_matches)
 
         # Narrows arity-matched candidates further using call.argument_types,
@@ -1615,18 +1562,14 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                 reason = "receiver type matches multiple wildcard imports"
                 candidates = []
             elif normalized:
-                sole_implementers = implementers_by_target_short.get(
-                    normalized.split(".")[-1], []
-                )
+                sole_implementers = implementers_by_target_short.get(normalized.split(".")[-1], [])
                 sole_impl_matches: list[MethodEntry] = []
                 sole_implementer = None
                 if len(sole_implementers) == 1:
                     impl_candidates = methods_by_full_class_and_name.get(
                         (sole_implementers[0], call.callee_name), []
                     )
-                    sole_impl_matches = (
-                        _arity_filter(impl_candidates) or impl_candidates
-                    )
+                    sole_impl_matches = _arity_filter(impl_candidates) or impl_candidates
                     if len(sole_impl_matches) == 1:
                         sole_implementer = sole_implementers[0]
 
@@ -1687,10 +1630,12 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                             suffix_dollar = "$".join(parts[-2:])
                             suffix_dot = ".".join(parts[-2:])
                             for fqn in all_class_full_names:
-                                if (
-                                    fqn.endswith("$" + suffix_dollar)
-                                    or fqn.endswith("." + suffix_dot)
-                                    or fqn.endswith("$" + suffix_dot.replace(".", "$"))
+                                if fqn.endswith(
+                                    (
+                                        "$" + suffix_dollar,
+                                        "." + suffix_dot,
+                                        "$" + suffix_dot.replace(".", "$"),
+                                    )
                                 ):
                                     inner_fqn = fqn
                                     break
@@ -1700,9 +1645,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                             )
                             if inner_matches:
                                 arity_matches = _arity_filter(inner_matches)
-                                candidates = (
-                                    arity_matches if arity_matches else inner_matches
-                                )
+                                candidates = arity_matches if arity_matches else inner_matches
                                 if len(candidates) == 1:
                                     status = "resolved_exact"
                                     reason = f"resolved inner class via FQN {inner_fqn}"
@@ -1710,9 +1653,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                                     status = "ambiguous_overload"
                                     reason = "multiple inner class overload candidates"
                                 # skip the short_matches fallback
-                                call.resolved_candidates = sorted(
-                                    m.id for m in candidates
-                                )
+                                call.resolved_candidates = sorted(m.id for m in candidates)
                                 call.candidate_count = len(call.resolved_candidates)
                                 call.resolution_status = status
                                 call.resolution_reason = reason
@@ -1722,9 +1663,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                         )
                         if short_matches:
                             arity_matches = _arity_filter(short_matches)
-                            candidates = (
-                                arity_matches if arity_matches else short_matches
-                            )
+                            candidates = arity_matches if arity_matches else short_matches
                             status = "ambiguous_type"
                             reason = "fallback short-class match only"
                         elif normalized in all_class_full_names:
@@ -1741,9 +1680,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                 _resolve_one(call, _seen)
                 return
             elif (
-                call.receiver
-                and "." in call.receiver
-                and not call.receiver.rstrip().endswith(")")
+                call.receiver and "." in call.receiver and not call.receiver.rstrip().endswith(")")
             ):
                 # Dotted field chain: `this.service.repo`, `svc.helper`, etc.
                 dotted_type, dotted_source = _resolve_dotted_receiver(
@@ -1930,9 +1867,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
             matches = methods_by_full_class_and_name.get((current, callee_name), [])
             if matches:
                 if argument_count >= 0:
-                    arity = [
-                        m for m in matches if len(m.parameter_types) == argument_count
-                    ]
+                    arity = [m for m in matches if len(m.parameter_types) == argument_count]
                     return (arity or matches), current
                 return matches, current
             cls = class_by_full_name.get(current)
@@ -1949,9 +1884,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                 elif cls.package_name:
                     candidate = f"{cls.package_name}.{raw_parent}"
                     if candidate not in all_class_full_names:
-                        normalized, _, _ = _normalize_type(
-                            raw_parent, cls, all_class_full_names
-                        )
+                        normalized, _, _ = _normalize_type(raw_parent, cls, all_class_full_names)
                         candidate = normalized or raw_parent
                 else:
                     candidate = raw_parent
@@ -1960,16 +1893,10 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                     continue
                 # Fallback: short-name match — parent FQN unknown, but methods indexed
                 short = raw_parent.split(".")[-1].split("<")[0]
-                short_hits = methods_by_short_class_and_name.get(
-                    (short, callee_name), []
-                )
+                short_hits = methods_by_short_class_and_name.get((short, callee_name), [])
                 if short_hits:
                     if argument_count >= 0:
-                        arity = [
-                            m
-                            for m in short_hits
-                            if len(m.parameter_types) == argument_count
-                        ]
+                        arity = [m for m in short_hits if len(m.parameter_types) == argument_count]
                         return (arity or short_hits), f"~{short}"
                     return short_hits, f"~{short}"
         return [], None
@@ -1999,9 +1926,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
     # Only fires when exactly one class with that Impl name exists (safe).
     class_by_short_name: dict[str, list[str]] = {}
     for c in graph.classes:
-        class_by_short_name.setdefault(c.full_name.split(".")[-1], []).append(
-            c.full_name
-        )
+        class_by_short_name.setdefault(c.full_name.split(".")[-1], []).append(c.full_name)
 
     for call in callsites_in_scope:
         if call.resolution_status != "unresolved_receiver":
@@ -2013,9 +1938,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         caller_method = method_by_id.get(call.caller_method_id)
         if not caller_method:
             continue
-        field_type = fields_by_class.get(caller_method.class_full_name, {}).get(
-            receiver
-        )
+        field_type = fields_by_class.get(caller_method.class_full_name, {}).get(receiver)
         if not field_type:
             continue
         short_type = field_type.split(".")[-1].split("<")[0]
@@ -2024,15 +1947,11 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         if len(impl_fqns) != 1:
             continue
         impl_fqn = impl_fqns[0]
-        impl_matches = methods_by_full_class_and_name.get(
-            (impl_fqn, call.callee_name), []
-        )
+        impl_matches = methods_by_full_class_and_name.get((impl_fqn, call.callee_name), [])
         if not impl_matches:
             continue
         if call.argument_count >= 0:
-            arity = [
-                m for m in impl_matches if len(m.parameter_types) == call.argument_count
-            ]
+            arity = [m for m in impl_matches if len(m.parameter_types) == call.argument_count]
         else:
             arity = impl_matches
         candidates = arity if arity else impl_matches
@@ -2065,7 +1984,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         visited: set[str] = set()
         queue = list(
             implementers_by_fqn.get(fqn, [])
-            + implementers_by_fqn.get(fqn.split(".")[-1], [])
+            + implementers_by_fqn.get(fqn.rsplit(".", maxsplit=1)[-1], [])
         )
         result: list[str] = []
         while queue:
@@ -2130,14 +2049,10 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                 continue
             cha_candidates: list[MethodEntry] = []
             for sub_fqn in subtypes:
-                sub_matches = methods_by_full_class_and_name.get(
-                    (sub_fqn, call.callee_name), []
-                )
+                sub_matches = methods_by_full_class_and_name.get((sub_fqn, call.callee_name), [])
                 if call.argument_count >= 0:
                     sub_arity = [
-                        m
-                        for m in sub_matches
-                        if len(m.parameter_types) == call.argument_count
+                        m for m in sub_matches if len(m.parameter_types) == call.argument_count
                     ]
                     cha_candidates.extend(sub_arity if sub_arity else sub_matches)
                 else:
@@ -2162,14 +2077,10 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                 continue
             extra: list[MethodEntry] = []
             for sub_fqn in subtypes:
-                sub_matches = methods_by_full_class_and_name.get(
-                    (sub_fqn, call.callee_name), []
-                )
+                sub_matches = methods_by_full_class_and_name.get((sub_fqn, call.callee_name), [])
                 if call.argument_count >= 0:
                     sub_arity = [
-                        m
-                        for m in sub_matches
-                        if len(m.parameter_types) == call.argument_count
+                        m for m in sub_matches if len(m.parameter_types) == call.argument_count
                     ]
                     extra.extend(sub_arity if sub_arity else sub_matches)
                 else:
@@ -2181,7 +2092,9 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
             call.resolved_candidates = all_ids
             call.candidate_count = len(all_ids)
             call.resolution_status = "resolved_cha"
-            call.resolution_reason = f"CHA: {callee_class.split('.')[-1]} → {len(subtypes)} subtypes, {len(extra)} extra"
+            call.resolution_reason = (
+                f"CHA: {callee_class.split('.')[-1]} → {len(subtypes)} subtypes, {len(extra)} extra"
+            )
 
     edges: list[ResolvedCallEdge] = []
     for call in callsites_in_scope:
@@ -2198,17 +2111,13 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
     if only_caller_ids is None:
         graph.resolved_call_edges = sorted(edges, key=lambda e: e.id)
     else:
-        kept = [
-            e
-            for e in graph.resolved_call_edges
-            if e.caller_method_id not in only_caller_ids
-        ]
+        kept = [e for e in graph.resolved_call_edges if e.caller_method_id not in only_caller_ids]
         graph.resolved_call_edges = sorted(kept + edges, key=lambda e: e.id)
 
 
-def diagnose_unresolved(graph: "Graph") -> dict:
+def diagnose_unresolved(graph: Graph) -> dict:
     """Group unresolved callsites by status and reason for gap analysis."""
-    from collections import defaultdict, Counter
+    from collections import Counter, defaultdict
 
     method_by_id = {m.id: m for m in graph.methods}
 
@@ -2253,12 +2162,10 @@ def diagnose_unresolved(graph: "Graph") -> dict:
             "main_count": len(main_items),
             "test_count": len(test_items),
             "top_reasons": Counter(i["reason"] for i in items).most_common(5),
-            "sample_receivers": list(
-                {i["receiver_raw"] for i in main_items if i["receiver_raw"]}
-            )[:10],
-            "sample_receiver_text": list(
-                {i["receiver"] for i in main_items if i["receiver"]}
-            )[:10],
+            "sample_receivers": list({i["receiver_raw"] for i in main_items if i["receiver_raw"]})[
+                :10
+            ],
+            "sample_receiver_text": list({i["receiver"] for i in main_items if i["receiver"]})[:10],
             "sample_callees": list({i["callee"] for i in main_items})[:10],
         }
 
@@ -2294,9 +2201,7 @@ def _build_java_graph(
     all_inheritance_edges: list[InheritanceEdge] = []
 
     file_paths = list(
-        iter_java_files(
-            codebase_root, extra_roots=extra_java_roots, skip_folders=skip_folders
-        )
+        iter_java_files(codebase_root, extra_roots=extra_java_roots, skip_folders=skip_folders)
     )
 
     t0 = time.perf_counter()
@@ -2332,12 +2237,16 @@ def _build_java_graph(
 
 def _merge_graphs(graphs: list[Graph]) -> Graph:
     return Graph(
-        classes=sum([g.classes for g in graphs], []),
-        methods=sum([g.methods for g in graphs], []),
-        fields=sum([g.fields for g in graphs], []),
-        callsites=sum([g.callsites for g in graphs], []),
-        inheritance_edges=sum([g.inheritance_edges for g in graphs], []),
-        resolved_call_edges=sum([g.resolved_call_edges for g in graphs], []),
+        classes=functools.reduce(operator.iadd, [g.classes for g in graphs], []),
+        methods=functools.reduce(operator.iadd, [g.methods for g in graphs], []),
+        fields=functools.reduce(operator.iadd, [g.fields for g in graphs], []),
+        callsites=functools.reduce(operator.iadd, [g.callsites for g in graphs], []),
+        inheritance_edges=functools.reduce(
+            operator.iadd, [g.inheritance_edges for g in graphs], []
+        ),
+        resolved_call_edges=functools.reduce(
+            operator.iadd, [g.resolved_call_edges for g in graphs], []
+        ),
     )
 
 
@@ -2357,30 +2266,15 @@ def build_graph(
         mini_graph, _failed = build_graph_for_files(changed_files, codebase_root)
 
         merged = Graph(
-            classes=[
-                c
-                for c in previous_graph.classes
-                if c.file_path not in changed_paths_str
-            ]
+            classes=[c for c in previous_graph.classes if c.file_path not in changed_paths_str]
             + mini_graph.classes,
-            methods=[
-                m
-                for m in previous_graph.methods
-                if m.file_path not in changed_paths_str
-            ]
+            methods=[m for m in previous_graph.methods if m.file_path not in changed_paths_str]
             + mini_graph.methods,
-            fields=[
-                f for f in previous_graph.fields if f.file_path not in changed_paths_str
-            ]
+            fields=[f for f in previous_graph.fields if f.file_path not in changed_paths_str]
             + mini_graph.fields,
-            callsites=[
-                c
-                for c in previous_graph.callsites
-                if c.file_path not in changed_paths_str
-            ]
+            callsites=[c for c in previous_graph.callsites if c.file_path not in changed_paths_str]
             + mini_graph.callsites,
-            inheritance_edges=previous_graph.inheritance_edges
-            + mini_graph.inheritance_edges,
+            inheritance_edges=previous_graph.inheritance_edges + mini_graph.inheritance_edges,
             resolved_call_edges=[],
         )
         if on_progress:
@@ -2409,9 +2303,7 @@ def build_graph(
     def _extract_python() -> Graph:
         from .py_extractor import build_py_graph
 
-        return build_py_graph(
-            codebase_root, on_progress=on_progress, skip_folders=skip_folders
-        )
+        return build_py_graph(codebase_root, on_progress=on_progress, skip_folders=skip_folders)
 
     def _extract_scala() -> Graph:
         from .scala_extractor import build_scala_graph
@@ -2421,9 +2313,7 @@ def build_graph(
     def _extract_go() -> Graph:
         from .go_extractor import build_go_graph
 
-        return build_go_graph(
-            codebase_root, on_progress=on_progress, skip_folders=skip_folders
-        )
+        return build_go_graph(codebase_root, on_progress=on_progress, skip_folders=skip_folders)
 
     def _extract_java() -> Graph:
         g = _build_java_graph(
@@ -2472,9 +2362,7 @@ def build_graph(
     return _merge_graphs(graphs)
 
 
-def build_graph_for_files(
-    files: set[Path], codebase_root: Path
-) -> tuple[Graph, set[Path]]:
+def build_graph_for_files(files: set[Path], codebase_root: Path) -> tuple[Graph, set[Path]]:
     """Build graph for specific set of files without running _resolve_calls().
 
     Used for incremental reindexing on changed files only.
@@ -2620,7 +2508,7 @@ def build_graph_for_files(
     )
 
 
-def _marshal_for_rust(graph: "Graph") -> tuple:
+def _marshal_for_rust(graph: Graph) -> tuple:
     """Convert Graph dataclasses to the flat tuples jidra_resolver expects."""
     methods = [
         (
@@ -2665,16 +2553,14 @@ def _marshal_for_rust(graph: "Graph") -> tuple:
         )
         for cs in graph.callsites
     ]
-    edges = [
-        (e.source_class, e.target_class, e.relation) for e in graph.inheritance_edges
-    ]
+    edges = [(e.source_class, e.target_class, e.relation) for e in graph.inheritance_edges]
     fields = [(f.class_id, f.name, f.type_name) for f in graph.fields]
     return methods, classes, callsites, edges, fields
 
 
 def _rust_resolve_and_store(
     db_path: str,
-    graph: "Graph",
+    graph: Graph,
     module_id: str | None = None,
 ) -> None:
     """Call jidra_resolver.resolve_and_store once for all callsites.

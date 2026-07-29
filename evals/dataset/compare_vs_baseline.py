@@ -68,9 +68,7 @@ def compare(baseline: dict, result: dict) -> None:
         total = b.get("total", r.get("total", "?"))
 
         print(f"\n{'─' * 60}")
-        print(
-            f"  {mode_label}  (baseline {b_passed}/{total} → result {r_passed}/{total})"
-        )
+        print(f"  {mode_label}  (baseline {b_passed}/{total} → result {r_passed}/{total})")
         print(f"{'─' * 60}")
         print(f"  {'Metric':<20} {'Baseline':>10} {'Result':>10} {'Delta':>12}")
         print(f"  {'-' * 20} {'-' * 10} {'-' * 10} {'-' * 12}")
@@ -118,9 +116,7 @@ def compare(baseline: dict, result: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compare eval result JSON vs baseline")
     parser.add_argument("--result", required=True, help="Path to new result JSON")
-    parser.add_argument(
-        "--baseline", default=None, help="Path to baseline JSON (default: v2)"
-    )
+    parser.add_argument("--baseline", default=None, help="Path to baseline JSON (default: v2)")
     args = parser.parse_args()
 
     result_path = Path(args.result)

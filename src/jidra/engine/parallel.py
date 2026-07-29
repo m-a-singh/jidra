@@ -66,10 +66,8 @@ def parallel_map(
         for item in items:
             try:
                 results.append(fn(item))
-            except Exception as exc:  # noqa: BLE001 - isolate per-item failure
-                logger.warning(
-                    "parallel_map: skipping item %r after error: %s", item, exc
-                )
+            except Exception as exc:
+                logger.warning("parallel_map: skipping item %r after error: %s", item, exc)
                 if on_error is not None:
                     on_error(item, exc)
         return results
@@ -77,13 +75,11 @@ def parallel_map(
     results = []
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futures = {pool.submit(fn, item): item for item in items}
-        for fut in futures:
+        for fut, item in futures.items():
             try:
                 results.append(fut.result())
-            except Exception as exc:  # noqa: BLE001 - isolate per-item failure
-                logger.warning(
-                    "parallel_map: skipping item %r after error: %s", futures[fut], exc
-                )
+            except Exception as exc:
+                logger.warning("parallel_map: skipping item %r after error: %s", item, exc)
                 if on_error is not None:
-                    on_error(futures[fut], exc)
+                    on_error(item, exc)
     return results

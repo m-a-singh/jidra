@@ -38,9 +38,7 @@ def load(path: Path) -> dict[str, dict]:
     return {r["case_id"]: r for r in raw}
 
 
-def compare(
-    a: dict[str, dict], b: dict[str, dict], label_a: str, label_b: str
-) -> list[dict]:
+def compare(a: dict[str, dict], b: dict[str, dict], label_a: str, label_b: str) -> list[dict]:
     all_ids = sorted(set(a) | set(b))
     rows = []
     for cid in all_ids:
@@ -71,9 +69,7 @@ def compare(
 
         a_pass = ra["passed"]
         b_pass = rb["passed"]
-        recall_delta = round(
-            ra["file_recall"] - rb["file_recall"], 4
-        )  # positive = A wins
+        recall_delta = round(ra["file_recall"] - rb["file_recall"], 4)  # positive = A wins
         mrr_delta = round(ra["mrr"] - rb["mrr"], 4)
 
         # Winner per case
@@ -137,9 +133,7 @@ def aggregate(results: dict[str, dict], label: str) -> dict:
         "mean_recall": round(sum(r["file_recall"] for r in rs) / n, 4),
         "mean_mrr": round(sum(r["mrr"] for r in rs) / n, 4),
         "mean_search_recall": round(sum(r.get("search_recall", 0) for r in rs) / n, 4),
-        "mean_explore_recall": round(
-            sum(r.get("explore_recall", 0) for r in rs) / n, 4
-        ),
+        "mean_explore_recall": round(sum(r.get("explore_recall", 0) for r in rs) / n, 4),
     }
 
 
@@ -170,9 +164,7 @@ def per_repo(rows: list[dict], label_a: str, label_b: str) -> dict[str, dict]:
     return out
 
 
-def print_report(
-    rows: list[dict], agg_a: dict, agg_b: dict, label_a: str, label_b: str
-) -> None:
+def print_report(rows: list[dict], agg_a: dict, agg_b: dict, label_a: str, label_b: str) -> None:
     sep = "─" * 72
 
     # Aggregate table
@@ -210,11 +202,7 @@ def print_report(
     both_fail = by_status.get("both_fail", [])
 
     total_valid = len(
-        [
-            r
-            for r in rows
-            if r["winner"] not in (f"only_in_{label_a}", f"only_in_{label_b}")
-        ]
+        [r for r in rows if r["winner"] not in (f"only_in_{label_a}", f"only_in_{label_b}")]
     )
     a_wins = len(a_only) + len(both_a)
     b_wins = len(b_only) + len(both_b)
@@ -279,12 +267,8 @@ def main() -> None:
         metavar="JSON",
         help="Second results JSON (e.g. CodeGraph output)",
     )
-    parser.add_argument(
-        "--label-a", default="JIDRA", help="Label for --a (default: JIDRA)"
-    )
-    parser.add_argument(
-        "--label-b", default="CodeGraph", help="Label for --b (default: CodeGraph)"
-    )
+    parser.add_argument("--label-a", default="JIDRA", help="Label for --a (default: JIDRA)")
+    parser.add_argument("--label-b", default="CodeGraph", help="Label for --b (default: CodeGraph)")
     parser.add_argument(
         "--out", default=None, metavar="JSON", help="Write combined comparison JSON"
     )

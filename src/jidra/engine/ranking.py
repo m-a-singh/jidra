@@ -71,9 +71,7 @@ _GENERATED_MARKERS = (
 _CAMEL_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 
 
-def score_hit(
-    row: dict, tokens: set[str], cfg: RankingConfig = DEFAULT_CONFIG
-) -> float:
+def score_hit(row: dict, tokens: set[str], cfg: RankingConfig = DEFAULT_CONFIG) -> float:
     """Compute relevance score for a candidate row given query tokens.
 
     Higher = better. Designed to be called after BM25 retrieval as a re-ranker.
@@ -103,17 +101,13 @@ def score_hit(
             boost += cfg.path_dir_boost
 
     stereotype = row.get("stereotypes") or ""
-    if cfg.stereotype_service_boost and (
-        "controller" in stereotype or "service" in stereotype
-    ):
+    if cfg.stereotype_service_boost and ("controller" in stereotype or "service" in stereotype):
         boost += cfg.stereotype_service_boost
     elif cfg.stereotype_repo_boost and "repository" in stereotype:
         boost += cfg.stereotype_repo_boost
 
     if cfg.test_penalty and (
-        "/test/" in path
-        or "/tests/" in path
-        or path.endswith(("test.java", "tests.java"))
+        "/test/" in path or "/tests/" in path or path.endswith(("test.java", "tests.java"))
     ):
         boost += cfg.test_penalty
 

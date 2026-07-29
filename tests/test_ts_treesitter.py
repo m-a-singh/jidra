@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("tree_sitter_typescript")
 
-from jidra.extractors.ts_treesitter import build_ts_graph_treesitter  # noqa: E402
+from jidra.extractors.ts_treesitter import build_ts_graph_treesitter
 
 
 def _build(tmp_path: Path, files: dict[str, str]):
@@ -43,24 +43,17 @@ class TestStructure:
         assert "interface" in cls.stereotypes
 
     def test_module_level_function(self, tmp_path):
-        g = _build(
-            tmp_path, {"util.ts": "export function helper(): number { return 1; }\n"}
-        )
+        g = _build(tmp_path, {"util.ts": "export function helper(): number { return 1; }\n"})
         assert any(m.method_name == "helper" for m in g.methods)
 
     def test_arrow_const_function(self, tmp_path):
-        g = _build(
-            tmp_path, {"a.ts": "export const add = (a: number, b: number) => a + b;\n"}
-        )
+        g = _build(tmp_path, {"a.ts": "export const add = (a: number, b: number) => a + b;\n"})
         m = next(m for m in g.methods if m.method_name == "add")
         assert m.parameter_types == ["number", "number"]
 
     def test_inheritance_edges(self, tmp_path):
         g = _build(tmp_path, {"a.ts": "export class C extends B {}\n"})
-        assert any(
-            e.target_class == "B" and e.relation == "extends"
-            for e in g.inheritance_edges
-        )
+        assert any(e.target_class == "B" and e.relation == "extends" for e in g.inheritance_edges)
 
 
 class TestFrameworkRoles:
@@ -104,8 +97,7 @@ class TestResolution:
         )
         by_id = {m.id: m.method_name for m in g.methods}
         edges = {
-            (by_id[e.caller_method_id], by_id[e.callee_method_id])
-            for e in g.resolved_call_edges
+            (by_id[e.caller_method_id], by_id[e.callee_method_id]) for e in g.resolved_call_edges
         }
         assert ("run", "helper") in edges
 
@@ -121,7 +113,6 @@ class TestResolution:
         )
         by_id = {m.id: m.method_name for m in g.methods}
         edges = {
-            (by_id[e.caller_method_id], by_id[e.callee_method_id])
-            for e in g.resolved_call_edges
+            (by_id[e.caller_method_id], by_id[e.callee_method_id]) for e in g.resolved_call_edges
         }
         assert ("go", "run") in edges

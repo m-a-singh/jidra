@@ -10,15 +10,13 @@ import json
 import subprocess
 import time
 import urllib.request
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
 
 
 class ActuatorError(Exception):
     """Raised when actuator operations fail."""
-
-    pass
 
 
 def fetch_beans_from_url(actuator_base_url: str, timeout: int = 30) -> dict:
@@ -85,6 +83,7 @@ def _get_service_container_name(compose_file: Path) -> str | None:
                     cwd=compose_file.parent,
                     capture_output=True,
                     text=True,
+                    check=False,
                 )
                 container_id = result.stdout.strip()
                 if container_id:
@@ -92,6 +91,7 @@ def _get_service_container_name(compose_file: Path) -> str | None:
                         ["docker", "inspect", "--format", "{{.Name}}", container_id],
                         capture_output=True,
                         text=True,
+                        check=False,
                     )
                     return name_result.stdout.strip().lstrip("/")
         return None
@@ -113,6 +113,7 @@ def _fetch_beans_via_exec(container_name: str, port: int) -> dict:
         capture_output=True,
         text=True,
         timeout=30,
+        check=False,
     )
     if result.returncode != 0:
         raise ActuatorError(f"docker exec curl failed: {result.stderr}")
@@ -137,6 +138,7 @@ def _wait_for_health_via_exec(
             ],
             capture_output=True,
             timeout=10,
+            check=False,
         )
         if result.returncode == 0:
             return
@@ -219,9 +221,7 @@ _TEST_DIR_PATTERNS = {
 
 def _is_test_dir(subdir: Path) -> bool:
     name = subdir.name.lower()
-    return (
-        name in _TEST_DIR_PATTERNS or name.endswith("-tests") or name.endswith("-test")
-    )
+    return name in _TEST_DIR_PATTERNS or name.endswith(("-tests", "-test"))
 
 
 def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
@@ -275,9 +275,7 @@ def _detect_build_directories(codebase_root: str) -> list[tuple[str, Path]]:
     return root_candidates
 
 
-def _detect_build_tool(
-    codebase_root: str, build_dir: str | None = None
-) -> tuple[str, Path]:
+def _detect_build_tool(codebase_root: str, build_dir: str | None = None) -> tuple[str, Path]:
     """
     Detect build tool and return (tool, build_directory).
 
@@ -302,9 +300,7 @@ def _detect_build_tool(
         # Prefer Maven if both exist (more reliable for toolchain issues)
         if (explicit_dir / "mvnw").exists() or (explicit_dir / "pom.xml").exists():
             return ("maven", explicit_dir)
-        elif (explicit_dir / "gradlew").exists() or (
-            explicit_dir / "build.gradle"
-        ).exists():
+        elif (explicit_dir / "gradlew").exists() or (explicit_dir / "build.gradle").exists():
             return ("gradle", explicit_dir)
         else:
             raise ActuatorError(f"No build tool found in {explicit_dir}")
@@ -362,12 +358,11 @@ def _build_java_app(codebase_root: str, build_dir: str | None = None) -> None:
             cmd,
             cwd=build_path,
             timeout=900,  # 15 minutes
+            check=False,
         ).returncode
 
         if result_code != 0:
-            raise ActuatorError(
-                f"Build failed with {build_tool} (exit code {result_code})"
-            )
+            raise ActuatorError(f"Build failed with {build_tool} (exit code {result_code})")
         print("✓ Build successful", flush=True)
 
         # Verify artifacts exist - check both build_path and root
@@ -377,9 +372,7 @@ def _build_java_app(codebase_root: str, build_dir: str | None = None) -> None:
             else []
         )
         maven_jars = (
-            list((build_path / "target").glob("*.jar"))
-            if (build_path / "target").exists()
-            else []
+            list((build_path / "target").glob("*.jar")) if (build_path / "target").exists() else []
         )
         # For multi-module, also check root
         root_jars = (
@@ -485,6 +478,7 @@ def run_docker_and_fetch_beans(
                     cwd=root,
                     capture_output=True,
                     timeout=60,
+                    check=False,
                 )
             elif image_tag:
                 for cmd in [
@@ -492,7 +486,7 @@ def run_docker_and_fetch_beans(
                     ["docker", "rm", image_tag],
                     ["docker", "rmi", image_tag],
                 ]:
-                    subprocess.run(cmd, capture_output=True, timeout=30)
+                    subprocess.run(cmd, capture_output=True, timeout=30, check=False)
             print("✓ Cleanup complete", flush=True)
         except Exception as cleanup_err:
             print(f"⚠ Cleanup warning (non-fatal): {cleanup_err}", flush=True)
@@ -510,6 +504,7 @@ def run_docker_and_fetch_beans(
                 cwd=root,
                 capture_output=True,
                 timeout=60,
+                check=False,
             )
             subprocess.run(
                 ["docker-compose", "--profile", "service", "up", "-d", "--build"],
@@ -551,9 +546,7 @@ def run_docker_and_fetch_beans(
 
         # Wait for health and fetch beans — use docker exec if compose (avoids host proxy issues)
         print(f"Waiting for app to be ready (timeout: {timeout}s)...", flush=True)
-        container_name = (
-            _get_service_container_name(compose_file) if use_compose else None
-        )
+        container_name = _get_service_container_name(compose_file) if use_compose else None
 
         if container_name:
             print(f"Using docker exec via container: {container_name}", flush=True)

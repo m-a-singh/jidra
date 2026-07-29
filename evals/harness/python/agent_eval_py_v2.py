@@ -36,7 +36,6 @@ sys.path.insert(
 import agent_eval as ae
 from agent_eval import Oracle, Task, _lc
 
-
 # ---------------------------------------------------------------------------
 # Hallucination checker — Python
 # Flags: .py filenames not in oracle + long snake_case names not in oracle
@@ -68,9 +67,7 @@ def _py_source_allowlist(oracle: Oracle) -> frozenset[str]:
     return _py_allowlist_cache[key]
 
 
-def py_hallucinated_refs(
-    text: str, oracle: Oracle, exempt: set[str] | None = None
-) -> list[str]:
+def py_hallucinated_refs(text: str, oracle: Oracle, exempt: set[str] | None = None) -> list[str]:
     bad: list[str] = []
     for m in _re.findall(r"\b[A-Za-z_]\w+\.py\b", text):
         if m not in oracle.file_basenames:
@@ -179,9 +176,7 @@ def _build_checker(cfg: dict, oracle: Oracle) -> ae.Checker:
             exists = method in oracle.method_names
             a = _lc(ans).replace("*", "").replace("_", "")
             says_absent = any(k in a for k in _ABSENT_PHRASES)
-            return (
-                not exists
-            ) and says_absent, f"exists={exists} says_absent={says_absent}"
+            return (not exists) and says_absent, f"exists={exists} says_absent={says_absent}"
 
         return check
 
@@ -221,9 +216,7 @@ def _build_checker(cfg: dict, oracle: Oracle) -> ae.Checker:
             if not caller_files:
                 return False, "no GT caller files"
             a = _lc(ans)
-            stems = {
-                _re.sub(r"\.[^.]+$", "", f.split("/")[-1]).lower() for f in caller_files
-            }
+            stems = {_re.sub(r"\.[^.]+$", "", f.split("/")[-1]).lower() for f in caller_files}
             hit_path = {f for f in caller_files if f.lower() in a}
             hit_stem = {s for s in stems if len(s) >= 5 and s in a}
             hit = len(hit_path | hit_stem)
@@ -266,9 +259,7 @@ async def run_async(args) -> None:
     results: list[dict] = []
     for task in tasks:
         for be in backends:
-            print(
-                f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
-            )
+            print(f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True)
             _skill_system = ae.SYSTEM if be.name == "jidra" else ae._SYSTEM_BASE
             rr = await ae.run_agent(
                 client,
@@ -283,12 +274,10 @@ async def run_async(args) -> None:
             if not rr.error:
                 try:
                     rr.correct, note = task.check(rr.answer, oracle)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     note = f"check_error: {e!r}"
                 _exempt = {task_methods[task.id]} if task_methods.get(task.id) else None
-                rr.hallucinated = py_hallucinated_refs(
-                    rr.answer, oracle, exempt=_exempt
-                )
+                rr.hallucinated = py_hallucinated_refs(rr.answer, oracle, exempt=_exempt)
                 if len(rr.hallucinated) > halluc_max:
                     rr.correct = False
                     note += f" [HALLUC_FAIL: {rr.hallucinated}]"
@@ -350,9 +339,7 @@ def selfcheck(graph: str, config_path: str) -> bool:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(
-        description="Agent-in-loop eval (Python v2): JIDRA vs CodeGraph"
-    )
+    ap = argparse.ArgumentParser(description="Agent-in-loop eval (Python v2): JIDRA vs CodeGraph")
     ap.add_argument("--graph", required=True)
     ap.add_argument("--codebase", default="")
     ap.add_argument("--config", required=True, help="path to JSON task config")

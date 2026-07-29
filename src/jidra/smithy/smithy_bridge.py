@@ -35,7 +35,7 @@ _JAVA_OPERATION_SUFFIXES = ("OperationAsync", "Operation")
 
 
 def _strip_generics_and_package(name: str) -> str:
-    simple = name.split(".")[-1]
+    simple = name.rsplit(".", maxsplit=1)[-1]
     return simple.split("<")[0].split("[")[0].strip()
 
 

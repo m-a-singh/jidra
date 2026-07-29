@@ -5,8 +5,8 @@ import time
 
 import pytest
 
-from jidra.utils import git_hooks
 from jidra.engine.watcher import JidraWatcher
+from jidra.utils import git_hooks
 
 
 @pytest.fixture
@@ -80,21 +80,17 @@ class TestWatcher:
             calls["files"] = sorted(hint_changed_files or [])
             return {"change_type": "structural"}
 
-        import jidra.engine.reindexer as reindexer
+        from jidra.engine import reindexer
 
         monkeypatch.setattr(reindexer, "incremental_reindex", fake_reindex)
 
         seen = []
-        w = JidraWatcher(
-            tmp_path, tmp_path / "graph.db", on_indexed=lambda s: seen.append(s)
-        )
+        w = JidraWatcher(tmp_path, tmp_path / "graph.db", on_indexed=seen.append)
         w.DEBOUNCE_MS = 50
         # Rapid bursts should coalesce into one reindex call.
         w._on_change(str(tmp_path / "A.java"))
         w._on_change(str(tmp_path / "B.java"))
         time.sleep(0.2)
-        assert calls["files"] == sorted(
-            [str(tmp_path / "A.java"), str(tmp_path / "B.java")]
-        )
+        assert calls["files"] == sorted([str(tmp_path / "A.java"), str(tmp_path / "B.java")])
         assert len(seen) == 1
         w.stop()

@@ -53,9 +53,9 @@ def parse_actuator_beans(beans_response: dict) -> set[str]:
     confirmed = set()
     contexts = beans_response.get("contexts", {})
 
-    for context_name, context_data in contexts.items():
+    for context_data in contexts.values():
         beans = context_data.get("beans", {})
-        for bean_name, bean_info in beans.items():
+        for bean_info in beans.values():
             if isinstance(bean_info, dict) and "type" in bean_info:
                 bean_type = bean_info["type"]
                 if bean_type:
@@ -105,9 +105,7 @@ def validate_graph(
         )
 
     # Classes confirmed present at runtime.
-    confirmed_class_ids = {
-        cls.id for cls in graph.classes if cls.full_name in confirmed_beans
-    }
+    confirmed_class_ids = {cls.id for cls in graph.classes if cls.full_name in confirmed_beans}
     confirmed_method_ids = {
         method.id for method in graph.methods if method.class_id in confirmed_class_ids
     }
@@ -129,7 +127,7 @@ def validate_graph(
     }
 
     def _ann_name(a: str) -> str:
-        name = a.split("(")[0].strip().lstrip("@")
+        name = a.split("(", maxsplit=1)[0].strip().lstrip("@")
         return name.split(".")[-1] if "." in name else name
 
     spring_managed_class_ids: set[str] = set()
@@ -137,9 +135,7 @@ def validate_graph(
         if any(_ann_name(a) in _SPRING_BEAN_ANNOTATIONS for a in cls.annotations):
             spring_managed_class_ids.add(cls.id)
 
-    unconfirmed_class_ids = {
-        cls.id for cls in graph.classes if cls.id not in confirmed_class_ids
-    }
+    unconfirmed_class_ids = {cls.id for cls in graph.classes if cls.id not in confirmed_class_ids}
 
     report.unconfirmed_classes = sorted(
         [cls.full_name for cls in graph.classes if cls.id in unconfirmed_class_ids]
@@ -168,9 +164,7 @@ def validate_graph(
 
     if no_filter:
         edges_to_remove = [
-            edge
-            for edge in graph.resolved_call_edges
-            if _is_phantom_edge(edge.callee_method_id)
+            edge for edge in graph.resolved_call_edges if _is_phantom_edge(edge.callee_method_id)
         ]
         report.edges_removed = len(edges_to_remove)
         report.removed_edges = [
@@ -181,9 +175,7 @@ def validate_graph(
 
     # Filter edges: remove only phantom Spring-DI edges.
     filtered_edges = [
-        edge
-        for edge in graph.resolved_call_edges
-        if not _is_phantom_edge(edge.callee_method_id)
+        edge for edge in graph.resolved_call_edges if not _is_phantom_edge(edge.callee_method_id)
     ]
     report.edges_removed = len(graph.resolved_call_edges) - len(filtered_edges)
     report.removed_edges = [
@@ -195,9 +187,9 @@ def validate_graph(
     # Filter callsites: only remove those where every candidate is a phantom Spring-DI edge.
     filtered_callsites = []
     for callsite in graph.callsites:
-        if not callsite.resolved_candidates:
-            filtered_callsites.append(callsite)
-        elif any(not _is_phantom_edge(mid) for mid in callsite.resolved_candidates):
+        if not callsite.resolved_candidates or any(
+            not _is_phantom_edge(mid) for mid in callsite.resolved_candidates
+        ):
             filtered_callsites.append(callsite)
         # else: every candidate is a phantom Spring bean — drop
 
@@ -254,7 +246,7 @@ def load_actuator_cache(graph_dir: Path) -> dict | None:
         return None
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return None
 
 
@@ -277,7 +269,7 @@ def detect_beans_from_graph(graph: Graph) -> set[str]:
     }
 
     def _ann_name(annotation: str) -> str:
-        name = annotation.split("(")[0].strip()
+        name = annotation.split("(", maxsplit=1)[0].strip()
         name = name.split(".")[-1] if "." in name else name
         return name.lstrip("@")
 
@@ -300,17 +292,13 @@ def detect_beans_from_graph(graph: Graph) -> set[str]:
         if method.class_full_name in config_classes:
             for annotation in method.annotations:
                 ann_name = _ann_name(annotation)
-                if ann_name == "Bean":
-                    # Return type is the bean class
-                    if method.return_type and method.return_type != "void":
-                        bean_classes.add(method.return_type)
+                if ann_name == "Bean" and method.return_type and method.return_type != "void":
+                    bean_classes.add(method.return_type)
 
     return bean_classes
 
 
-def load_confirmed_beans_for_reindex(
-    graph_dir: Path, graph: Graph
-) -> tuple[set[str], str]:
+def load_confirmed_beans_for_reindex(graph_dir: Path, graph: Graph) -> tuple[set[str], str]:
     """Load confirmed beans with priority fallback.
 
     Priority:

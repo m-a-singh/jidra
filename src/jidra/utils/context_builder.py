@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 NOISY_RECEIVER_PREFIXES = (
     "java.",
     "javax.",
@@ -155,9 +154,7 @@ def _is_noisy_callsite(callsite, language: str = "java"):
     if callee_name in NOISY_METHOD_NAMES:
         return True
 
-    prefixes = _NOISY_RECEIVER_PREFIXES_BY_LANGUAGE.get(
-        language, NOISY_RECEIVER_PREFIXES
-    )
+    prefixes = _NOISY_RECEIVER_PREFIXES_BY_LANGUAGE.get(language, NOISY_RECEIVER_PREFIXES)
 
     if receiver_type:
         simple = _simple_type_name(receiver_type)
@@ -167,15 +164,11 @@ def _is_noisy_callsite(callsite, language: str = "java"):
             return True
 
     if receiver and any(
-        receiver == prefix.rstrip(".") or receiver.startswith(prefix)
-        for prefix in prefixes
+        receiver == prefix.rstrip(".") or receiver.startswith(prefix) for prefix in prefixes
     ):
         return True
 
-    if status == "external_library" and not (language == "typescript" and not receiver):
-        return True
-
-    return False
+    return bool(status == "external_library" and not (language == "typescript" and not receiver))
 
 
 def _filter_context_calls(callsites, language: str = "java"):
@@ -306,11 +299,7 @@ def _is_noisy_unresolved_lambda_call(call: str, reason: str, receiver) -> bool:
     if recv_lower in LAMBDA_LOCAL_RECEIVER_NAMES:
         return True
 
-    for name in LAMBDA_LOCAL_RECEIVER_NAMES:
-        if recv_lower.startswith(f"{name}."):
-            return True
-
-    return False
+    return any(recv_lower.startswith(f"{name}.") for name in LAMBDA_LOCAL_RECEIVER_NAMES)
 
 
 def build_method_context(
@@ -336,9 +325,7 @@ def build_method_context(
         "method_source": method.source,
         "class_annotations": class_entry.annotations if class_entry else [],
         "class_stereotype": (
-            class_entry.stereotypes[0]
-            if class_entry and class_entry.stereotypes
-            else "unknown"
+            class_entry.stereotypes[0] if class_entry and class_entry.stereotypes else "unknown"
         ),
         "endpoint": {
             "is_endpoint": method.is_endpoint,
@@ -354,9 +341,7 @@ def build_method_context(
     # Line-based cap (budget tier) runs first so even a short-but-tall method is
     # windowed; the char-based cap below then guards total payload size.
     if max_source_lines is not None:
-        ctx["method_source"] = _truncate_source_lines(
-            method.source or "", max_source_lines
-        )
+        ctx["method_source"] = _truncate_source_lines(method.source or "", max_source_lines)
     text = json.dumps(ctx, default=str)
     if len(text) > max_chars:
         keep = max(300, max_chars // 3)
@@ -371,9 +356,7 @@ def _truncate_source_lines(source: str, max_lines: int) -> str:
         return source
     head_n = max(1, max_lines - 3)
     omitted = len(lines) - head_n - 3
-    return "\n".join(
-        lines[:head_n] + [f"... [{omitted} lines omitted] ..."] + lines[-3:]
-    )
+    return "\n".join([*lines[:head_n], f"... [{omitted} lines omitted] ...", *lines[-3:]])
 
 
 def _truncate_method_source(source: str, keep: int) -> str:

@@ -53,9 +53,7 @@ class ComparisonResult:
         n = self.without_tools_metrics
 
         reduction_pct = (
-            (n.input_tokens - w.input_tokens) / n.input_tokens * 100
-            if n.input_tokens > 0
-            else 0.0
+            (n.input_tokens - w.input_tokens) / n.input_tokens * 100 if n.input_tokens > 0 else 0.0
         )
         savings = n.cost - w.cost
         savings_pct = (savings / n.cost * 100) if n.cost > 0 else 0.0
@@ -111,9 +109,7 @@ def calculate_cost(
     pricing = get_llm_pricing(model)
     thinking_cost = (thinking_tokens * pricing["output"] * 3) if thinking_tokens else 0
     return (
-        input_tokens * pricing["input"]
-        + output_tokens * pricing["output"]
-        + thinking_cost
+        input_tokens * pricing["input"] + output_tokens * pricing["output"] + thinking_cost
     ) / 1_000_000
 
 
@@ -139,9 +135,7 @@ def get_jidra_tools() -> list[dict[str, Any]]:
             "description": "Get downstream call graph for a method",
             "input_schema": {
                 "type": "object",
-                "properties": {
-                    "method": {"type": "string", "description": "Method identifier"}
-                },
+                "properties": {"method": {"type": "string", "description": "Method identifier"}},
                 "required": ["method"],
             },
         },
@@ -160,9 +154,7 @@ def get_jidra_tools() -> list[dict[str, Any]]:
     ]
 
 
-def call_claude(
-    client: Anthropic, model: str, query: str, use_tools: bool = True
-) -> QueryMetrics:
+def call_claude(client: Anthropic, model: str, query: str, use_tools: bool = True) -> QueryMetrics:
     """Make Claude API call, optionally WITH JIDRA tools available."""
     start = time.time()
 
@@ -251,8 +243,8 @@ def get_sample_queries() -> list[str]:
 
 def main():
     """Interactive validator loop."""
-    import os
     import argparse
+    import os
     from pathlib import Path
 
     parser = argparse.ArgumentParser(
@@ -369,15 +361,11 @@ def main():
                 print(tabulate(summary_rows, headers=headers, tablefmt="grid"))
 
                 total_reduction = sum(
-                    (
-                        r.without_tools_metrics.input_tokens
-                        - r.with_tools_metrics.input_tokens
-                    )
+                    (r.without_tools_metrics.input_tokens - r.with_tools_metrics.input_tokens)
                     for r in results
                 )
                 total_savings = sum(
-                    r.without_tools_metrics.cost - r.with_tools_metrics.cost
-                    for r in results
+                    r.without_tools_metrics.cost - r.with_tools_metrics.cost for r in results
                 )
                 total_tool_calls = sum(r.with_tools_metrics.tool_calls for r in results)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
 
@@ -11,7 +12,7 @@ router = APIRouter()
 
 @router.get("/tools")
 async def list_tools(repo_path: str | None = None) -> list[dict]:
-    from ...server.mcp_server import visible_tool_names, build_mcp
+    from ...server.mcp_server import build_mcp, visible_tool_names
 
     try:
         names = visible_tool_names()
@@ -81,10 +82,7 @@ async def session_log(
     from ...server.mcp_server import _resolve_graph_dir
     from .util_routes import resolve_out_dir
 
-    if output_path:
-        graph_path = output_path
-    else:
-        graph_path = str(resolve_graph_db_path(resolve_out_dir(repo_path)))
+    graph_path = output_path or str(resolve_graph_db_path(resolve_out_dir(repo_path)))
     graph_dir = _resolve_graph_dir(graph_path)
 
     log_path = graph_dir / ".jidra" / "session_log.jsonl"
@@ -96,8 +94,6 @@ async def session_log(
     lines = log_path.read_text().splitlines()
     entries = []
     for line in lines[-limit:]:
-        try:
+        with contextlib.suppress(json.JSONDecodeError):
             entries.append(json.loads(line))
-        except json.JSONDecodeError:
-            pass
     return list(reversed(entries))
