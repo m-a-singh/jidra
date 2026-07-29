@@ -61,12 +61,13 @@ def compute_fingerprints(
     Returns: {abs_path_str: {"mtime_ns": int, "size": int}}
     """
     if extensions is None:
-        extensions = [".java", ".py", ".ts", ".tsx", ".js", ".jsx", ".scala", ".go"]
+        extensions = [".java", ".py", ".ts", ".tsx", ".js", ".jsx", ".scala", ".go", ".cs"]
     ext_set = set(extensions)
 
     # Same exclusion sets the real per-language extractors use — imported
     # rather than re-declared, so fingerprinting (which decides what counts
     # as "changed") never drifts out of sync with what actually gets indexed.
+    from ..filters.cs_filters import EXCLUDED_DIRS as cs_excluded
     from ..filters.file_filters import COMMON_EXCLUDED_DIRS, apply_filters
     from ..filters.filters import EXCLUDED_DIRS as java_excluded
     from ..filters.go_filters import EXCLUDED_DIRS as go_excluded
@@ -90,6 +91,7 @@ def compute_fingerprints(
         ".tsx": ts_excluded - COMMON_EXCLUDED_DIRS,
         ".js": ts_excluded - COMMON_EXCLUDED_DIRS,
         ".jsx": ts_excluded - COMMON_EXCLUDED_DIRS,
+        ".cs": cs_excluded - COMMON_EXCLUDED_DIRS,
     }
 
     candidates: list[Path] = []

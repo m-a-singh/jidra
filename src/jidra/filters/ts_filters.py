@@ -104,6 +104,8 @@ def detect_languages(root: Path) -> list[str]:
         or _rglob_outside_noise(root, "requirements.txt")
     ):
         langs.append("python")
+    if _rglob_outside_noise(root, "*.csproj") or _rglob_outside_noise(root, "*.sln"):
+        langs.append("csharp")
     return langs
 
 
