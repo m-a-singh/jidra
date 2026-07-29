@@ -1514,12 +1514,25 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         reason = "no candidate methods found"
 
         # arity_matches helper: skip arity filter for method references (args_count == -1).
+        # TypeScript: call_args <= method_params covers optional/rest params.
+        _is_ts = caller_method.language == "typescript"
+
         def _arity_filter(ms: list[MethodEntry]) -> list[MethodEntry]:
             if call.argument_count < 0:
                 return ms
-            arity_matches = [
-                m for m in ms if len(m.parameter_types) == call.argument_count
-            ]
+            if _is_ts:
+                arity_matches = [
+                    m for m in ms if call.argument_count <= len(m.parameter_types)
+                ]
+                if not arity_matches:
+                    # rest-params: method declared with fewer params can accept more args
+                    arity_matches = [
+                        m for m in ms if len(m.parameter_types) <= call.argument_count + 1
+                    ]
+            else:
+                arity_matches = [
+                    m for m in ms if len(m.parameter_types) == call.argument_count
+                ]
             return _type_filter(arity_matches)
 
         # Narrows arity-matched candidates further using call.argument_types,
@@ -1591,8 +1604,8 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
                         status = "unresolved_method"
                         reason = "no method with matching name+arity"
                     elif len(candidates) == 1:
-                        status = "candidate_global_name_arity"
-                        reason = "single global name+arity candidate; not treated as exact because receiver is implicit"
+                        status = "resolved_global_sole"
+                        reason = "single global name+arity candidate"
                     else:
                         status = "ambiguous_global_name_arity"
                         reason = "multiple global name+arity candidates; receiver is implicit"
@@ -2099,7 +2112,7 @@ def _resolve_calls(graph: Graph, only_caller_ids: set[str] | None = None) -> Non
         "resolved_same_package",
         "resolved_same_class",
         "resolved_via_sole_implementation",
-        "candidate_global_name_arity",
+        "resolved_global_sole",
         "ambiguous_overload",
         "resolved_impl_suffix",
     }

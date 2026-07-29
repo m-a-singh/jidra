@@ -36,7 +36,7 @@ from ..models import (
     method_signature,
 )
 from ..filters.py_filters import iter_python_files
-from ..filters.py_type_provider import PyrightValidator
+from ..filters.py_type_provider import PyrightLSPEnricher, PyrightValidator
 
 logger = logging.getLogger(__name__)
 
@@ -374,11 +374,22 @@ class ASTExtractor(ast.NodeVisitor):
         callee_name = "unknown"
         receiver = None
 
+        receiver_col = 1
         if isinstance(node.func, ast.Name):
             callee_name = node.func.id
         elif isinstance(node.func, ast.Attribute):
             callee_name = node.func.attr
             receiver = self._get_attribute_name(node.func.value)
+            # For hover queries: point at the last attribute in a chain.
+            # e.g. self.apps.check_models_ready() -> node.func.value is Attribute(self, 'apps')
+            # We want to hover on 'apps', so use end_col_offset - 1 of node.func.value,
+            # which points at the last char of the attribute name.
+            recv_node = node.func.value
+            if isinstance(recv_node, ast.Attribute):
+                # end_col_offset points just past the attr name; step back 1 char
+                receiver_col = getattr(recv_node, "end_col_offset", 0)
+            else:
+                receiver_col = getattr(recv_node, "col_offset", 0) + 1
 
         arg_count = len(node.args)
 
@@ -391,14 +402,14 @@ class ASTExtractor(ast.NodeVisitor):
                 receiver_type = self.symbol_table.get_type(f"self.{receiver}")
 
         callsite = CallSite(
-            id=callsite_id(caller_method_id, node.lineno, 1, callee_name),
+            id=callsite_id(caller_method_id, node.lineno, receiver_col, callee_name),
             caller_method_id=caller_method_id,
             callee_name=callee_name,
             receiver=receiver,
             argument_count=arg_count,
             file_path=self.file_path,
             line=node.lineno,
-            column=1,
+            column=receiver_col,
             text="",
             receiver_type_raw=receiver_type,
             receiver_type_normalized=receiver_type,
@@ -864,6 +875,19 @@ def build_py_graph(
         resolved_call_edges=[],
     )
     _resolve_calls(graph)
+
+    # Step 4b: LSP enrichment — uses all 6 LSP capabilities to fill gaps AST misses:
+    #   outgoingCalls (missing edges), incomingCalls (missed callers),
+    #   definition (resolve unknown receivers), references, workspace/symbol, documentSymbol.
+    # Runs AFTER initial resolve so new edges get a second resolution pass.
+    if enable_validation:
+        with PyrightLSPEnricher(codebase_root) as lsp:
+            if lsp.available:
+                lsp_results = lsp.enrich(graph, codebase_root, python_files)
+                if any(lsp_results.values()):
+                    logger.info(f"Pyright LSP enrichment: {lsp_results}")
+                    # Re-resolve calls now that new edges and receiver types are added
+                    _resolve_calls(graph)
 
     # Step 5: Drop cross-module edges with no import path (phantom removal)
     dropped = _filter_phantom_edges(graph)
