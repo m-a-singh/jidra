@@ -8,11 +8,11 @@ searched in the wrong text span) that a hand-written toy fixture wouldn't
 have surfaced.
 """
 
-from jidra.graph import graph_store
 from jidra.engine.engine import JidraEngine
+from jidra.extractors.smithy_extractor import parse_smithy_text
+from jidra.graph import graph_store
 from jidra.models import ClassEntry
 from jidra.smithy.smithy_bridge import link_operations
-from jidra.extractors.smithy_extractor import parse_smithy_text
 
 BEER_SERVICE_SMITHY = """
 $version: "2"
@@ -62,7 +62,7 @@ operation AddBeer {
 
 class TestSmithyParsing:
     def test_namespace_and_shape_ids(self):
-        shapes, operations = parse_smithy_text(BEER_SERVICE_SMITHY, "main.smithy")
+        _shapes, operations = parse_smithy_text(BEER_SERVICE_SMITHY, "main.smithy")
         op_ids = {o.id for o in operations}
         assert op_ids == {"smithy.example#GetBeer", "smithy.example#AddBeer"}
 
@@ -243,9 +243,7 @@ class TestSmithyPersistence:
         # Tables exist and are queryable post-upgrade (empty is fine -- the
         # migration only needs to make them queryable, not backfill them,
         # since there's no prior smithy data to have lost).
-        assert (
-            conn2.execute("SELECT count(*) FROM smithy_operations").fetchone()[0] == 0
-        )
+        assert conn2.execute("SELECT count(*) FROM smithy_operations").fetchone()[0] == 0
 
 
 class TestEngineOperationGraph:

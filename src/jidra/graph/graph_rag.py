@@ -18,8 +18,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-from .graph_store import search_methods, connect
-
+from .graph_store import connect, search_methods
 
 # ---------------------------------------------------------------------------
 # Main entry point
@@ -58,15 +57,11 @@ def graph_rag_query(
         return {"query": query, "seed_count": 0, "node_count": 0, "results": []}
 
     seed_ids: set[str] = {r["id"] for r in seed_rows}
-    seed_score: dict[str, float] = {
-        r["id"]: float(r.get("score", 0.0)) for r in seed_rows
-    }
+    seed_score: dict[str, float] = {r["id"]: float(r.get("score", 0.0)) for r in seed_rows}
 
     # --- Step 2: BFS over call + inheritance edges ---------------------------
     # visited: method_id → (hop_distance, bm25_score)
-    visited: dict[str, tuple[int, float]] = {
-        mid: (0, seed_score[mid]) for mid in seed_ids
-    }
+    visited: dict[str, tuple[int, float]] = {mid: (0, seed_score[mid]) for mid in seed_ids}
     queue: deque[tuple[str, int]] = deque((mid, 0) for mid in seed_ids)
 
     # pre-load class → method_ids for inheritance expansion
@@ -139,9 +134,7 @@ def _call_neighbors(conn: sqlite3.Connection, method_id: str, variant: str) -> s
 
 def _load_class_methods(conn: sqlite3.Connection, variant: str) -> dict[str, list[str]]:
     """Map class_full_name → list of method IDs for inheritance expansion."""
-    cur = conn.execute(
-        "SELECT id, class_full_name FROM methods WHERE variant = ?", (variant,)
-    )
+    cur = conn.execute("SELECT id, class_full_name FROM methods WHERE variant = ?", (variant,))
     result: dict[str, list[str]] = {}
     for row in cur.fetchall():
         result.setdefault(row["class_full_name"], []).append(row["id"])
@@ -184,9 +177,7 @@ def _inheritance_neighbors(
     return neighbors
 
 
-def _fetch_methods(
-    conn: sqlite3.Connection, method_ids: list[str], variant: str
-) -> list[Any]:
+def _fetch_methods(conn: sqlite3.Connection, method_ids: list[str], variant: str) -> list[Any]:
     """Batch-fetch method rows for a list of IDs."""
     if not method_ids:
         return []
@@ -194,6 +185,6 @@ def _fetch_methods(
     cur = conn.execute(
         f"SELECT id, method_name, signature, class_full_name, file_path, language "
         f"FROM methods WHERE id IN ({placeholders}) AND variant = ?",
-        method_ids + [variant],
+        [*method_ids, variant],
     )
     return cur.fetchall()

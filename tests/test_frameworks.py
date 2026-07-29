@@ -4,11 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from jidra.graph import graph_store
 from jidra.engine.engine import JidraEngine
 from jidra.extractors.extractor import detect_frameworks
+from jidra.graph import graph_store
 from jidra.models import ClassEntry, Graph, MethodEntry
-
 
 PY_SAMPLE = """from fastapi import APIRouter
 from flask import Blueprint

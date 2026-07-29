@@ -1,7 +1,7 @@
 import time
 from pathlib import Path
 
-import jidra.cli as cli
+from jidra import cli
 from jidra.utils.cache import cache_path, load_cache
 
 

@@ -95,9 +95,7 @@ def delete_source(conn: sqlite3.Connection, source_path: str) -> None:
 # ── Query ─────────────────────────────────────────────────────────────────────
 
 
-def query_by_class(
-    conn: sqlite3.Connection, class_name: str, limit: int = 5
-) -> list[dict]:
+def query_by_class(conn: sqlite3.Connection, class_name: str, limit: int = 5) -> list[dict]:
     """Return chunks explicitly linked to a class name."""
     rows = conn.execute(
         """SELECT id, source_path, source_type, title, content, linked_classes, chunk_index
@@ -154,7 +152,11 @@ def list_sources(conn: sqlite3.Connection) -> list[dict]:
     ).fetchall()
     return [
         dict(
-            zip(["source_path", "source_type", "title", "chunk_count", "indexed_at"], r)
+            zip(
+                ["source_path", "source_type", "title", "chunk_count", "indexed_at"],
+                r,
+                strict=False,
+            )
         )
         for r in rows
     ]
@@ -193,4 +195,4 @@ def _row_to_dict(row) -> dict:
         "linked_classes",
         "chunk_index",
     ]
-    return dict(zip(keys, row[: len(keys)]))
+    return dict(zip(keys, row[: len(keys)], strict=False))

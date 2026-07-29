@@ -46,17 +46,11 @@ def _load_methods_from_file(path: str) -> list[str]:
     text = Path(path).read_text().strip()
     if text.startswith("["):
         return [m.strip() for m in json.loads(text) if m.strip()]
-    return [
-        line.strip()
-        for line in text.splitlines()
-        if line.strip() and not line.startswith("#")
-    ]
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
 
 
 def _auto_discover_methods(graph_path: Path, limit: int) -> list[str]:
-    nodes = [
-        json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()
-    ]
+    nodes = [json.loads(line) for line in graph_path.read_text().splitlines() if line.strip()]
     method_nodes = [n for n in nodes if n.get("node_type") == "method"]
     endpoints = [n for n in method_nodes if n.get("is_endpoint")]
     candidates = sorted(
@@ -102,9 +96,7 @@ def main() -> None:
     )
 
     parser.add_argument("--discover-limit", type=int, default=5)
-    parser.add_argument(
-        "--model", default="claude-opus-4-7", help="Claude model to use"
-    )
+    parser.add_argument("--model", default="claude-opus-4-7", help="Claude model to use")
     parser.add_argument(
         "--queries",
         type=int,
@@ -185,9 +177,7 @@ def main() -> None:
         import dataclasses
 
         avg_reduction = (
-            sum(r.api_token_reduction_pct for r in results) / len(results)
-            if results
-            else 0
+            sum(r.api_token_reduction_pct for r in results) / len(results) if results else 0
         )
         total_annual = sum(r.api_annual_savings for r in results) if results else 0
         out = {

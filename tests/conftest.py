@@ -1,8 +1,9 @@
-import pytest
 from pathlib import Path
 
-from jidra.models import Graph, MethodEntry, ClassEntry, CallSite, ResolvedCallEdge
+import pytest
+
 from jidra.graph import graph_store
+from jidra.models import CallSite, ClassEntry, Graph, MethodEntry, ResolvedCallEdge
 
 
 @pytest.fixture

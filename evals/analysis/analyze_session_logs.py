@@ -104,13 +104,9 @@ def format_report(result: dict) -> str:
     utility_count = result["tier_counts"].get("utility", 0)
     utility_pct = 100 * utility_count / total
     lines.append("")
-    lines.append(
-        f"Agents expanded 'utility'-tier nodes in {utility_pct:.1f}% of cases."
-    )
+    lines.append(f"Agents expanded 'utility'-tier nodes in {utility_pct:.1f}% of cases.")
     if utility_pct > 25:
-        lines.append(
-            "This is a meaningful share — consider retuning the static ranking heuristic."
-        )
+        lines.append("This is a meaningful share — consider retuning the static ranking heuristic.")
     return "\n".join(lines)
 
 

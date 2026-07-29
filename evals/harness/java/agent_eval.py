@@ -37,9 +37,10 @@ import os
 import re
 import sqlite3
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -98,7 +99,7 @@ class Oracle:
     conn: sqlite3.Connection
 
     @classmethod
-    def load(cls, db: str, variant: str = "validated") -> "Oracle":
+    def load(cls, db: str, variant: str = "validated") -> Oracle:
         conn = sqlite3.connect(db)
         conn.row_factory = sqlite3.Row
         cfn, mn, sig, fp = set(), set(), set(), set()
@@ -111,9 +112,7 @@ class Oracle:
             cfn.add(r["class_full_name"])
             if r["file_path"]:
                 fp.add(r["file_path"])
-        for r in conn.execute(
-            "SELECT full_name FROM classes WHERE variant=?", (variant,)
-        ):
+        for r in conn.execute("SELECT full_name FROM classes WHERE variant=?", (variant,)):
             cfn.add(r["full_name"])
         base = {Path(p).name for p in fp}
         return cls(cfn, mn, sig, fp, base, conn)
@@ -142,9 +141,7 @@ class Oracle:
         ).fetchall()
         return {r[0] for r in rows}
 
-    def method_exists(
-        self, class_short: str, method: str, variant: str = "validated"
-    ) -> bool:
+    def method_exists(self, class_short: str, method: str, variant: str = "validated") -> bool:
         r = self.conn.execute(
             "SELECT 1 FROM methods WHERE variant=? AND method_name=? "
             "AND (class_full_name=? OR class_full_name LIKE ?) LIMIT 1",
@@ -168,9 +165,7 @@ class Oracle:
             parent = head.rsplit(".", 1)[0]
             if parent in self.class_full_names:
                 continue  # Class.method or Class.FIELD reference
-            if any(
-                c == head or c.startswith(head + ".") for c in self.class_full_names
-            ):
+            if any(c == head or c.startswith(head + ".") for c in self.class_full_names):
                 continue  # a package prefix
             bad.append(m)
         # *.java basenames
@@ -222,9 +217,7 @@ def jidra_backend(graph: str, codebase: str) -> Backend:
 def codegraph_backend(codebase: str) -> Backend:
     return Backend(
         "codegraph",
-        StdioServerParameters(
-            command="codegraph", args=["serve", "--mcp"], cwd=codebase
-        ),
+        StdioServerParameters(command="codegraph", args=["serve", "--mcp"], cwd=codebase),
     )
 
 
@@ -293,72 +286,72 @@ async def run_agent(
     rr = RunResult(backend=backend.name, task="")
     t0 = time.perf_counter()
     try:
-        async with stdio_client(backend.params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                tool_list = (await session.list_tools()).tools
-                tools = _to_anthropic_tools(tool_list)
-                log(label, f"connected · {len(tools)} tools available")
-                messages = [{"role": "user", "content": task_prompt}]
+        async with (
+            stdio_client(backend.params) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            tool_list = (await session.list_tools()).tools
+            tools = _to_anthropic_tools(tool_list)
+            log(label, f"connected · {len(tools)} tools available")
+            messages = [{"role": "user", "content": task_prompt}]
 
-                for it in range(1, MAX_ITERS + 1):
-                    resp = await client.messages.create(
-                        model=model,
-                        max_tokens=AGENT_MAX_TOKENS,
-                        system=SYSTEM,
-                        tools=tools,
-                        messages=messages,
-                    )
-                    rr.in_tokens += resp.usage.input_tokens
-                    rr.out_tokens += resp.usage.output_tokens
+            for it in range(1, MAX_ITERS + 1):
+                resp = await client.messages.create(
+                    model=model,
+                    max_tokens=AGENT_MAX_TOKENS,
+                    system=SYSTEM,
+                    tools=tools,
+                    messages=messages,
+                )
+                rr.in_tokens += resp.usage.input_tokens
+                rr.out_tokens += resp.usage.output_tokens
 
-                    tool_uses = [b for b in resp.content if b.type == "tool_use"]
-                    text = "".join(b.text for b in resp.content if b.type == "text")
+                tool_uses = [b for b in resp.content if b.type == "tool_use"]
+                text = "".join(b.text for b in resp.content if b.type == "text")
+                log(
+                    label,
+                    f"iter {it}: +{resp.usage.output_tokens}out tok "
+                    f"(cum {rr.total_tokens}) · {len(tool_uses)} tool-call(s)"
+                    + (f" · thinks: {_compact(text, 80)}" if text.strip() else ""),
+                )
+
+                if not tool_uses:
+                    rr.answer = text.strip()
                     log(
                         label,
-                        f"iter {it}: +{resp.usage.output_tokens}out tok "
-                        f"(cum {rr.total_tokens}) · {len(tool_uses)} tool-call(s)"
-                        + (f" · thinks: {_compact(text, 80)}" if text.strip() else ""),
+                        f"FINAL ({rr.tool_calls} calls): {_compact(rr.answer, 160)}",
                     )
+                    break
 
-                    if not tool_uses:
-                        rr.answer = text.strip()
+                messages.append({"role": "assistant", "content": resp.content})
+                tool_results = []
+                for tu in tool_uses:
+                    rr.tool_calls += 1
+                    rr.tools_used.append(tu.name)
+                    log(label, f"  → {tu.name}({_compact(tu.input or {}, 90)})")
+                    try:
+                        out = await asyncio.wait_for(session.call_tool(tu.name, tu.input or {}), 60)
+                        payload = _mcp_text(out)
                         log(
                             label,
-                            f"FINAL ({rr.tool_calls} calls): {_compact(rr.answer, 160)}",
+                            f"  ← {len(payload)} chars · {_compact(payload, 110)}",
                         )
-                        break
-
-                    messages.append({"role": "assistant", "content": resp.content})
-                    tool_results = []
-                    for tu in tool_uses:
-                        rr.tool_calls += 1
-                        rr.tools_used.append(tu.name)
-                        log(label, f"  → {tu.name}({_compact(tu.input or {}, 90)})")
-                        try:
-                            out = await asyncio.wait_for(
-                                session.call_tool(tu.name, tu.input or {}), 60
-                            )
-                            payload = _mcp_text(out)
-                            log(
-                                label,
-                                f"  ← {len(payload)} chars · {_compact(payload, 110)}",
-                            )
-                        except Exception as e:  # noqa: BLE001
-                            payload = f"TOOL_ERROR: {e!r}"
-                            log(label, f"  ← ERROR {_compact(repr(e), 110)}")
-                        tool_results.append(
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": tu.id,
-                                "content": payload or "(empty)",
-                            }
-                        )
-                    messages.append({"role": "user", "content": tool_results})
-                else:
-                    rr.answer = "(max iterations reached without final answer)"
-                    log(label, "hit MAX_ITERS without final answer")
-    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
+                        payload = f"TOOL_ERROR: {e!r}"
+                        log(label, f"  ← ERROR {_compact(repr(e), 110)}")
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tu.id,
+                            "content": payload or "(empty)",
+                        }
+                    )
+                messages.append({"role": "user", "content": tool_results})
+            else:
+                rr.answer = "(max iterations reached without final answer)"
+                log(label, "hit MAX_ITERS without final answer")
+    except Exception as e:
         rr.error = repr(e)[:300]
         log(label, f"RUN ERROR {_compact(repr(e), 160)}")
     rr.wall_ms = (time.perf_counter() - t0) * 1000
@@ -406,8 +399,7 @@ def make_tasks() -> list[Task]:
         # fail if it confidently names ONE as "the" implementation
         named = [c.split(".")[-1] for c in impls if c.split(".")[-1].lower() in a]
         confident_single = (
-            bool(re.search(r"\bthe (single |sole )?implementation\b", a))
-            and len(named) <= 1
+            bool(re.search(r"\bthe (single |sole )?implementation\b", a)) and len(named) <= 1
         )
         ok = signals_many and not confident_single
         return (
@@ -635,18 +627,14 @@ async def main_async(args) -> None:
     results: list[dict] = []
     for task in tasks:
         for be in backends:
-            print(
-                f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
-            )
-            rr = await run_agent(
-                client, args.model, be, task.prompt, label=f"{task.id}/{be.name}"
-            )
+            print(f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True)
+            rr = await run_agent(client, args.model, be, task.prompt, label=f"{task.id}/{be.name}")
             rr.task = task.id
             if not rr.error:
                 try:
                     ok, note = task.check(rr.answer, oracle)
                     rr.correct = ok
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     note = f"check_error: {e!r}"
                 rr.hallucinated = oracle.hallucinated_refs(rr.answer)
             else:
@@ -758,18 +746,14 @@ def selfcheck(graph: str) -> bool:
         all_ok &= ok
         print(f"  [{'ok ' if ok else 'BAD'}] {name:42} {detail}")
     print(
-        "=== ALL GT RESOLVES — safe to run ==="
-        if all_ok
-        else "=== FIX TASKS BEFORE PAID RUN ==="
+        "=== ALL GT RESOLVES — safe to run ===" if all_ok else "=== FIX TASKS BEFORE PAID RUN ==="
     )
     return all_ok
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Agent-in-loop eval: JIDRA vs CodeGraph")
-    ap.add_argument(
-        "--graph", required=True, help="path to JIDRA graph.db (also the GT oracle)"
-    )
+    ap.add_argument("--graph", required=True, help="path to JIDRA graph.db (also the GT oracle)")
     ap.add_argument("--codebase", help="repo root (CG reads its .codegraph here)")
     ap.add_argument("--model", default="claude-sonnet-4-6")
     ap.add_argument("--tasks", default="", help="comma list e.g. T1,T2 (default all)")

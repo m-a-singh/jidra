@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from ..models import (
     CallSite,
@@ -365,9 +366,7 @@ def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
 
 def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
     """Set a key-value pair in schema_meta."""
-    conn.execute(
-        "INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)", (key, value)
-    )
+    conn.execute("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)", (key, value))
     conn.commit()
 
 
@@ -443,9 +442,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                 )
                 conn.commit()
                 try:
-                    conn.execute(
-                        "INSERT INTO classes_fts(classes_fts) VALUES('optimize')"
-                    )
+                    conn.execute("INSERT INTO classes_fts(classes_fts) VALUES('optimize')")
                     conn.commit()
                 except Exception:
                     pass
@@ -616,9 +613,7 @@ def _inheritance_row(e: InheritanceEdge, variant: str, module_id: str | None) ->
     )
 
 
-def _resolved_call_row(
-    e: ResolvedCallEdge, variant: str, module_id: str | None
-) -> tuple:
+def _resolved_call_row(e: ResolvedCallEdge, variant: str, module_id: str | None) -> tuple:
     return (
         e.id,
         variant,
@@ -633,21 +628,15 @@ def _file_path_for_field(f: FieldEntry) -> str:
     return f.file_path
 
 
-def _file_path_for_inheritance(
-    e: InheritanceEdge, class_file_by_id: dict[str, str]
-) -> str:
+def _file_path_for_inheritance(e: InheritanceEdge, class_file_by_id: dict[str, str]) -> str:
     return class_file_by_id.get(e.source_class_id, "")
 
 
-def _file_path_for_resolved_call(
-    e: ResolvedCallEdge, method_file_by_id: dict[str, str]
-) -> str:
+def _file_path_for_resolved_call(e: ResolvedCallEdge, method_file_by_id: dict[str, str]) -> str:
     return method_file_by_id.get(e.caller_method_id, "")
 
 
-def _smithy_shape_row(
-    s: SmithyShapeEntry, variant: str, module_id: str | None
-) -> tuple:
+def _smithy_shape_row(s: SmithyShapeEntry, variant: str, module_id: str | None) -> tuple:
     members_json = json.dumps(
         [
             {"name": m.name, "target_shape": m.target_shape, "required": m.required}
@@ -667,9 +656,7 @@ def _smithy_shape_row(
     )
 
 
-def _smithy_operation_row(
-    o: SmithyOperationEntry, variant: str, module_id: str | None
-) -> tuple:
+def _smithy_operation_row(o: SmithyOperationEntry, variant: str, module_id: str | None) -> tuple:
     return (
         o.id,
         variant,
@@ -688,9 +675,7 @@ def _smithy_operation_row(
     )
 
 
-def _smithy_link_row(
-    link: SmithyOperationLink, variant: str, module_id: str | None
-) -> tuple:
+def _smithy_link_row(link: SmithyOperationLink, variant: str, module_id: str | None) -> tuple:
     return (
         link.id,
         variant,
@@ -708,9 +693,7 @@ def _smithy_link_row(
 
 def _row_to_smithy_shape(row: sqlite3.Row) -> SmithyShapeEntry:
     members = [
-        SmithyMemberEntry(
-            name=m["name"], target_shape=m["target_shape"], required=m["required"]
-        )
+        SmithyMemberEntry(name=m["name"], target_shape=m["target_shape"], required=m["required"])
         for m in _loads(row["members_json"], [])
     ]
     return SmithyShapeEntry(
@@ -860,10 +843,7 @@ def _insert_graph(
     )
     conn.executemany(
         "INSERT INTO fields VALUES (?,?,?,?,?,?,?,?,?)",
-        [
-            _field_row(f, variant_of(_file_path_for_field(f)), module_id)
-            for f in graph.fields
-        ],
+        [_field_row(f, variant_of(_file_path_for_field(f)), module_id) for f in graph.fields],
     )
     conn.executemany(
         "INSERT INTO callsites VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -1253,7 +1233,7 @@ def _fts_query(text: str) -> str:
     token_set: list[str] = []
     seen: set[str] = set()
     for tok in raw_tokens:
-        for part in [tok] + _CAMEL_SPLIT_RE.findall(tok):
+        for part in [tok, *_CAMEL_SPLIT_RE.findall(tok)]:
             low = part.lower()
             if low and low not in seen:
                 seen.add(low)
@@ -1271,7 +1251,7 @@ def _fts_query_or(text: str) -> str:
     token_set: list[str] = []
     seen: set[str] = set()
     for tok in raw_tokens:
-        for part in [tok] + _CAMEL_SPLIT_RE.findall(tok):
+        for part in [tok, *_CAMEL_SPLIT_RE.findall(tok)]:
             low = part.lower()
             if low and low not in seen:
                 seen.add(low)
@@ -1428,9 +1408,7 @@ def search_methods(
         # NL: strip stopwords then OR-match so any relevant token scores
         fts_text = _strip_stopwords(query)
         match_or = _fts_query_or(fts_text)
-        fts_rows = (
-            _run_fts(conn, match_or, variant, language, limit) if match_or else []
-        )
+        fts_rows = _run_fts(conn, match_or, variant, language, limit) if match_or else []
 
     # Name-scoped rows get a large score bonus so the engine's BM25 sort always
     # ranks them above full-text matches (which hit source_text and score higher
@@ -1450,15 +1428,12 @@ def search_methods(
         all_ids = {r["id"] for r in method_combined}
         # Exact-name class hits go before methods; partial hits go after
         class_exact = [
-            r
-            for r in class_rows
-            if r["method_name"].lower() in {t.lower() for t in raw_tokens}
+            r for r in class_rows if r["method_name"].lower() in {t.lower() for t in raw_tokens}
         ]
         class_rest = [
             r
             for r in class_rows
-            if r["id"] not in {r2["id"] for r2 in class_exact}
-            and r["id"] not in all_ids
+            if r["id"] not in {r2["id"] for r2 in class_exact} and r["id"] not in all_ids
         ]
         combined = class_exact + method_combined + class_rest
     else:
@@ -1535,7 +1510,7 @@ def fetch_methods_by_ids(
     cur = conn.execute(
         f"SELECT id, method_name, signature, class_full_name, file_path, language "
         f"FROM methods WHERE id IN ({placeholders}) AND variant = ?",
-        method_ids + [variant],
+        [*method_ids, variant],
     )
     return [dict(r) for r in cur.fetchall()]
 

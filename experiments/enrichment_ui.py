@@ -52,9 +52,7 @@ class AgentProgressUI:
         """Initialize display and start render thread."""
         if self._is_tty:
             self._print_header()
-            self._render_thread = threading.Thread(
-                target=self._render_loop, daemon=True
-            )
+            self._render_thread = threading.Thread(target=self._render_loop, daemon=True)
             self._render_thread.start()
 
     def update(
@@ -78,10 +76,7 @@ class AgentProgressUI:
                 pass
             else:
                 # State transition
-                if (
-                    state in ("extracting", "judging")
-                    and self._start_time[name] is None
-                ):
+                if state in ("extracting", "judging") and self._start_time[name] is None:
                     self._start_time[name] = time.monotonic()
                 if state == "enriched":
                     self._enriched += 1
@@ -149,29 +144,20 @@ class AgentProgressUI:
     def _format_row(self, index: int, name: str) -> str:
         """Format a single agent status row."""
         state = self.state[name]
-        elapsed = (
-            time.monotonic() - self._start_time[name] if self._start_time[name] else 0.0
-        )
+        elapsed = time.monotonic() - self._start_time[name] if self._start_time[name] else 0.0
 
         # Icon and color
         if state == "queued":
             icon = "●"
             color = ""
-        elif state == "extracting":
-            spinner_char = self.SPINNER[self._frame % len(self.SPINNER)]
-            icon = spinner_char
-            color = ""
-        elif state == "judging":
+        elif state == "extracting" or state == "judging":
             spinner_char = self.SPINNER[self._frame % len(self.SPINNER)]
             icon = spinner_char
             color = ""
         elif state == "enriched":
             icon = "✓"
             color = self.GREEN
-        elif state == "failed":
-            icon = "✗"
-            color = self.RED
-        elif state == "rejected":
+        elif state == "failed" or state == "rejected":
             icon = "✗"
             color = self.RED
         else:
@@ -182,10 +168,7 @@ class AgentProgressUI:
         name_display = name[:25].ljust(25)
 
         # Elapsed time
-        if state == "queued":
-            elapsed_str = "—"
-        else:
-            elapsed_str = f"{elapsed:.1f}s"
+        elapsed_str = "—" if state == "queued" else f"{elapsed:.1f}s"
 
         # Detailed error for failed state right after status
         failed_error_str = ""

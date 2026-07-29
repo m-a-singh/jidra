@@ -26,16 +26,16 @@ import argparse
 import json
 import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from jidra.engine.engine import JidraEngine
-from jidra.engine.ranking import RankingConfig, DEFAULT_CONFIG
 import jidra.engine.ranking as _ranking_mod
+from jidra.engine.engine import JidraEngine
+from jidra.engine.ranking import DEFAULT_CONFIG, RankingConfig
 
 PASS_THRESHOLD = 0.5
 SEARCH_LIMIT = 20
@@ -97,9 +97,7 @@ def _extract_names(results: list[dict]) -> list[str]:
     return names
 
 
-def _score(
-    case: Case, result_names: list[str]
-) -> tuple[float, float, list[str], list[str], int]:
+def _score(case: Case, result_names: list[str]) -> tuple[float, float, list[str], list[str], int]:
     """Returns (recall, mrr, found, missed, first_rank)."""
     found, missed = [], []
     first_rank = 0
@@ -201,15 +199,9 @@ def summarise(results: list[CaseResult]) -> list[RepoSummary]:
     for repo, cases in repos.items():
         search_cases = [c for c in cases if c.tool == "search"]
         explore_cases = [c for c in cases if c.tool == "explore"]
-        mean_mrr = (
-            sum(c.mrr for c in search_cases) / len(search_cases)
-            if search_cases
-            else 0.0
-        )
+        mean_mrr = sum(c.mrr for c in search_cases) / len(search_cases) if search_cases else 0.0
         explore_recall = (
-            sum(c.recall for c in explore_cases) / len(explore_cases)
-            if explore_cases
-            else 0.0
+            sum(c.recall for c in explore_cases) / len(explore_cases) if explore_cases else 0.0
         )
         summaries.append(
             RepoSummary(
@@ -242,18 +234,12 @@ def diff_baseline(
         if not b:
             continue
         if r.passed and not b["passed"]:
-            improvements.append(
-                f"  + {r.case_id}  recall {b['recall']:.2f}→{r.recall:.2f}"
-            )
+            improvements.append(f"  + {r.case_id}  recall {b['recall']:.2f}→{r.recall:.2f}")
         elif not r.passed and b["passed"]:
-            regressions.append(
-                f"  - {r.case_id}  recall {b['recall']:.2f}→{r.recall:.2f}"
-            )
+            regressions.append(f"  - {r.case_id}  recall {b['recall']:.2f}→{r.recall:.2f}")
         elif abs(r.mrr - b["mrr"]) >= 0.1:
             direction = "↑" if r.mrr > b["mrr"] else "↓"
-            improvements.append(
-                f"  {direction} {r.case_id}  MRR {b['mrr']:.2f}→{r.mrr:.2f}"
-            )
+            improvements.append(f"  {direction} {r.case_id}  MRR {b['mrr']:.2f}→{r.mrr:.2f}")
 
     if improvements:
         print("\nImprovements:")
@@ -343,9 +329,7 @@ def load_ranking_config(path: str | None) -> RankingConfig:
         return DEFAULT_CONFIG
     with open(path) as f:
         overrides = yaml.safe_load(f) or {}
-    cfg = RankingConfig(
-        **{k: v for k, v in overrides.items() if hasattr(RankingConfig, k) or True}
-    )
+    cfg = RankingConfig(**{k: v for k, v in overrides.items() if hasattr(RankingConfig, k) or True})
     return cfg
 
 

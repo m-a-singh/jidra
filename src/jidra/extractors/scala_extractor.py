@@ -10,8 +10,8 @@ from __future__ import annotations
 import re
 import subprocess
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from ..models import (
     CallSite,
@@ -46,6 +46,7 @@ def _ensure_image() -> None:
     check = subprocess.run(
         ["docker", "image", "inspect", DOCKER_IMAGE],
         capture_output=True,
+        check=False,
     )
     if check.returncode == 0:
         return
@@ -58,11 +59,10 @@ def _ensure_image() -> None:
         ["docker", "build", "-t", DOCKER_IMAGE, str(SIDECAR_DIR)],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
-        raise ScalaExtractorError(
-            f"Failed to build scala-sidecar image:\n{result.stderr[-2000:]}"
-        )
+        raise ScalaExtractorError(f"Failed to build scala-sidecar image:\n{result.stderr[-2000:]}")
 
 
 def _is_new_volume(volume: str) -> bool:
@@ -71,6 +71,7 @@ def _is_new_volume(volume: str) -> bool:
     result = _sp.run(
         ["docker", "volume", "inspect", volume],
         capture_output=True,
+        check=False,
     )
     return result.returncode != 0
 
@@ -119,6 +120,7 @@ def _run_sidecar(codebase_root: Path, tmp_out: str, timeout: int = 600) -> None:
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
     except subprocess.TimeoutExpired as e:
         raise ScalaExtractorError(
@@ -197,9 +199,7 @@ def _symbol_to_method_name(symbol: str) -> str:
 def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Graph:
     import sys as _sys
 
-    _proto_dir = str(
-        Path(__file__).resolve().parents[3] / "sidecar" / "scala" / "proto"
-    )
+    _proto_dir = str(Path(__file__).resolve().parents[3] / "sidecar" / "scala" / "proto")
     if _proto_dir not in _sys.path:
         _sys.path.insert(0, _proto_dir)
     import semanticdb_pb2
@@ -214,9 +214,7 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
     callsites: list[CallSite] = []
     inheritance_edges: list[InheritanceEdge] = []
     resolved_call_edges: list[ResolvedCallEdge] = []
-    _pending_locals: list[
-        tuple[str, int, str, str]
-    ] = []  # (file_path, line, var_name, type_name)
+    _pending_locals: list[tuple[str, int, str, str]] = []  # (file_path, line, var_name, type_name)
 
     # symbol string → MethodEntry (for call resolution pass)
     symbol_to_method: dict[str, MethodEntry] = {}
@@ -235,17 +233,13 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
 
         for doc in docs.documents:
             # Reconstruct the original source path
-            uri = (
-                doc.uri
-            )  # relative path from sourceroot, e.g. src/main/scala/Foo.scala
+            uri = doc.uri  # relative path from sourceroot, e.g. src/main/scala/Foo.scala
             source_path = codebase_root / uri
             file_path_str = str(source_path)
             package_name = _parse_package(source_path)
 
             # Build symbol info lookup for this document
-            sym_info: dict[str, pb2.SymbolInformation] = {
-                s.symbol: s for s in doc.symbols
-            }
+            sym_info: dict[str, pb2.SymbolInformation] = {s.symbol: s for s in doc.symbols}
 
             # Collect definition occurrences
             def_occs = [o for o in doc.occurrences if o.role == role.DEFINITION]
@@ -310,9 +304,7 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
                     if extends_name:
                         inheritance_edges.append(
                             InheritanceEdge(
-                                id=inheritance_edge_id(
-                                    full_name, extends_name, "extends"
-                                ),
+                                id=inheritance_edge_id(full_name, extends_name, "extends"),
                                 source_class_id=cls.id,
                                 source_class=full_name,
                                 target_class=extends_name,
@@ -339,9 +331,7 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
                     # Extract owning class from symbol: strip the method part after last #
                     class_sym = sym[: sym.rfind("#") + 1] if "#" in sym else ""
                     owner_full = (
-                        _symbol_to_class_full_name(class_sym)
-                        if class_sym
-                        else package_name
+                        _symbol_to_class_full_name(class_sym) if class_sym else package_name
                     )
 
                     param_types: list[str] = []
@@ -350,9 +340,7 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
                     if info.signature.HasField("method_signature"):
                         msig = info.signature.method_signature
                         return_type = (
-                            msig.return_type.type_ref.symbol.split("/")[-1].rstrip(
-                                "#.()"
-                            )
+                            msig.return_type.type_ref.symbol.split("/")[-1].rstrip("#.()")
                             if msig.return_type.HasField("type_ref")
                             else "Unit"
                         )
@@ -364,9 +352,9 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
                                     if pinfo.signature.HasField("value_signature"):
                                         vs = pinfo.signature.value_signature
                                         if vs.tpe.HasField("type_ref"):
-                                            ptype = vs.tpe.type_ref.symbol.split("/")[
-                                                -1
-                                            ].rstrip("#.()")
+                                            ptype = vs.tpe.type_ref.symbol.split("/")[-1].rstrip(
+                                                "#.()"
+                                            )
                                     param_types.append(ptype)
                                     param_names.append(pinfo.display_name or "arg")
 
@@ -376,11 +364,9 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
                     mid = method_id(sig, file_path_str, start_line)
 
                     # Find the owning ClassEntry (may not be indexed yet — handle in pass 2)
-                    owner_cls_id = symbol_to_class.get(class_sym, None)
+                    owner_cls_id = symbol_to_class.get(class_sym)
                     owner_class_id = (
-                        owner_cls_id.id
-                        if owner_cls_id
-                        else class_id(owner_full, file_path_str)
+                        owner_cls_id.id if owner_cls_id else class_id(owner_full, file_path_str)
                     )
 
                     m_entry = MethodEntry(
@@ -412,21 +398,15 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
                         if info.signature.HasField("value_signature"):
                             vs = info.signature.value_signature
                             if vs.tpe.HasField("type_ref"):
-                                type_name = vs.tpe.type_ref.symbol.split("/")[
-                                    -1
-                                ].rstrip("#.()")
+                                type_name = vs.tpe.type_ref.symbol.split("/")[-1].rstrip("#.()")
                         if type_name and type_name != "Any":
-                            _pending_locals.append(
-                                (file_path_str, line, var_name, type_name)
-                            )
+                            _pending_locals.append((file_path_str, line, var_name, type_name))
                         continue
                     field_name = info.display_name
                     if not field_name:
                         continue
                     class_sym = sym[: sym.rfind("#") + 1] if "#" in sym else ""
-                    owner_full = (
-                        _symbol_to_class_full_name(class_sym) if class_sym else ""
-                    )
+                    owner_full = _symbol_to_class_full_name(class_sym) if class_sym else ""
                     owner_class_id = (
                         symbol_to_class[class_sym].id
                         if class_sym in symbol_to_class
@@ -436,9 +416,7 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
                     if info.signature.HasField("value_signature"):
                         vs = info.signature.value_signature
                         if vs.tpe.HasField("type_ref"):
-                            type_name = vs.tpe.type_ref.symbol.split("/")[-1].rstrip(
-                                "#.()"
-                            )
+                            type_name = vs.tpe.type_ref.symbol.split("/")[-1].rstrip("#.()")
 
                     fields.append(
                         FieldEntry(
@@ -463,9 +441,10 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
     for _fp, _ln, _vname, _tname in _pending_locals:
         _best: MethodEntry | None = None
         for _m in _methods_by_file.get(_fp, []):
-            if _m.start_line <= _ln <= _m.end_line:
-                if _best is None or _m.start_line > _best.start_line:
-                    _best = _m
+            if _m.start_line <= _ln <= _m.end_line and (
+                _best is None or _m.start_line > _best.start_line
+            ):
+                _best = _m
         if _best is not None:
             _best.local_variable_types.setdefault(_vname, _tname)
     for _m in methods:
@@ -492,12 +471,15 @@ def _build_graph_from_semanticdb(output_root: Path, codebase_root: Path) -> Grap
                 key=lambda m: m.start_line,
             )
 
-            def _enclosing_method(line_num: int) -> MethodEntry | None:
+            def _enclosing_method(
+                line_num: int, _fm: list[MethodEntry] = file_methods
+            ) -> MethodEntry | None:
                 best: MethodEntry | None = None
-                for m in file_methods:
-                    if m.start_line <= line_num <= m.end_line:
-                        if best is None or m.start_line > best.start_line:
-                            best = m
+                for m in _fm:
+                    if m.start_line <= line_num <= m.end_line and (
+                        best is None or m.start_line > best.start_line
+                    ):
+                        best = m
                 return best
 
             for occ in doc.occurrences:

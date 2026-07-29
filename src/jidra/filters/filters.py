@@ -24,9 +24,8 @@ def iter_java_files(
 
     # Extra roots (e.g. smithy4j generated sources in build/) bypass both
     # EXCLUDED_DIRS and the gitignore filter since build/ is typically gitignored.
-    extra_files: list[Path] = []
-    for extra in extra_roots or []:
-        for path in extra.rglob("*.java"):
-            extra_files.append(path)
+    extra_files: list[Path] = [
+        path for extra in extra_roots or [] for path in extra.rglob("*.java")
+    ]
 
     return sorted(apply_filters(files, root, skip_folders=skip_folders) + extra_files)

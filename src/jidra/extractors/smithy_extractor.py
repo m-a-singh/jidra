@@ -75,9 +75,7 @@ def _parse_members(body: str) -> list[SmithyMemberEntry]:
         required, name, target = m.group(1), m.group(2), m.group(3)
         if name in ("input", "output", "errors", "operations", "resources"):
             continue
-        members.append(
-            SmithyMemberEntry(name=name, target_shape=target, required=bool(required))
-        )
+        members.append(SmithyMemberEntry(name=name, target_shape=target, required=bool(required)))
     return members
 
 
@@ -186,9 +184,7 @@ def parse_smithy_text(
 
             errors_match = _ERRORS_RE.search(body)
             errors = (
-                [e for e in re.split(r"[,\s]+", errors_match.group(1)) if e]
-                if errors_match
-                else []
+                [e for e in re.split(r"[,\s]+", errors_match.group(1)) if e] if errors_match else []
             )
 
             pending_operations.append(

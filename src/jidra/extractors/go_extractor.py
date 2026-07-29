@@ -21,11 +21,11 @@ scope for this extractor.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
-from ..filters.go_filters import iter_go_files
 from ..engine.parallel import parallel_map
+from ..filters.go_filters import iter_go_files
 from ..models import (
     CallSite,
     ClassEntry,
@@ -120,9 +120,7 @@ def _find_return_type(node, source: bytes) -> str:
     return "void"
 
 
-def _param_types_and_names(
-    parameter_list_node, source: bytes
-) -> tuple[list[str], list[str]]:
+def _param_types_and_names(parameter_list_node, source: bytes) -> tuple[list[str], list[str]]:
     types: list[str] = []
     names: list[str] = []
     if parameter_list_node is None:
@@ -147,9 +145,7 @@ def _arg_count(args_node) -> int:
     return len([c for c in args_node.children if c.type not in ("(", ")", ",")])
 
 
-def _extract_struct_fields(
-    field_list_node, source: bytes, cls: "ClassEntry"
-) -> list[FieldEntry]:
+def _extract_struct_fields(field_list_node, source: bytes, cls: ClassEntry) -> list[FieldEntry]:
     fields: list[FieldEntry] = []
     for fd in _children_by_type(field_list_node, "field_declaration"):
         idents = _children_by_type(fd, "field_identifier")
@@ -190,9 +186,7 @@ def _extract_struct_fields(
 
 def _extract_classes_and_fields(
     root, source: bytes, file_path: str, package_name: str
-) -> tuple[
-    list[ClassEntry], list[FieldEntry], list[InheritanceEdge], dict[str, ClassEntry]
-]:
+) -> tuple[list[ClassEntry], list[FieldEntry], list[InheritanceEdge], dict[str, ClassEntry]]:
     classes: list[ClassEntry] = []
     fields: list[FieldEntry] = []
     inheritance_edges: list[InheritanceEdge] = []
@@ -239,9 +233,7 @@ def _extract_classes_and_fields(
                     if "embedded" in f.modifiers:
                         inheritance_edges.append(
                             InheritanceEdge(
-                                id=inheritance_edge_id(
-                                    full_name, f.type_name, "embeds"
-                                ),
+                                id=inheritance_edge_id(full_name, f.type_name, "embeds"),
                                 source_class_id=cls.id,
                                 source_class=full_name,
                                 target_class=f.type_name,
@@ -256,12 +248,12 @@ class _PendingBody:
     """A function/method body queued up for the global call-resolution pass."""
 
     __slots__ = (
-        "method",
         "block",
-        "local_types",
-        "source",
         "file_path",
+        "local_types",
+        "method",
         "package_name",
+        "source",
     )
 
     def __init__(self, method, block, local_types, source, file_path, package_name):
@@ -360,13 +352,11 @@ def _extract_methods_and_functions(
             local_types = {}
             if recv_var:
                 local_types[recv_var] = recv_type
-            for pname, ptype in zip(param_names, param_types):
+            for pname, ptype in zip(param_names, param_types, strict=False):
                 if pname:
                     local_types[pname] = _strip_pointer(ptype)
             pending.append(
-                _PendingBody(
-                    m_entry, block, local_types, source, file_path, package_scope
-                )
+                _PendingBody(m_entry, block, local_types, source, file_path, package_scope)
             )
 
     for node in _collect(root, "function_declaration"):
@@ -405,34 +395,24 @@ def _extract_methods_and_functions(
         block = _child_by_type(node, "block")
         if block is not None:
             local_types = {}
-            for pname, ptype in zip(param_names, param_types):
+            for pname, ptype in zip(param_names, param_types, strict=False):
                 if pname:
                     local_types[pname] = _strip_pointer(ptype)
             pending.append(
-                _PendingBody(
-                    m_entry, block, local_types, source, file_path, package_scope
-                )
+                _PendingBody(m_entry, block, local_types, source, file_path, package_scope)
             )
 
     extra_classes = [module_class] if module_class is not None else []
     return methods, extra_classes, pending
 
 
-def _infer_expr_type(
-    node, source: bytes, func_return_types: dict[str, str]
-) -> str | None:
+def _infer_expr_type(node, source: bytes, func_return_types: dict[str, str]) -> str | None:
     if node.type == "unary_expression":
         inner = node.children[-1] if node.children else None
-        return (
-            _infer_expr_type(inner, source, func_return_types)
-            if inner is not None
-            else None
-        )
+        return _infer_expr_type(inner, source, func_return_types) if inner is not None else None
     if node.type == "composite_literal":
         type_node = node.children[0] if node.children else None
-        return (
-            _strip_pointer(_text(type_node, source)) if type_node is not None else None
-        )
+        return _strip_pointer(_text(type_node, source)) if type_node is not None else None
     if node.type == "call_expression":
         callee = node.children[0] if node.children else None
         if callee is not None and callee.type == "identifier":
@@ -545,9 +525,7 @@ def _infer_var_types(
 def _resolve_calls(graph: Graph, pending: list[_PendingBody]) -> None:
     methods_by_class_and_name: dict[tuple[str, str], list[MethodEntry]] = {}
     for m in graph.methods:
-        methods_by_class_and_name.setdefault(
-            (m.class_full_name, m.method_name), []
-        ).append(m)
+        methods_by_class_and_name.setdefault((m.class_full_name, m.method_name), []).append(m)
 
     func_return_types: dict[str, str] = {}
     module_classes_by_package: dict[str, list[str]] = {}
@@ -559,9 +537,7 @@ def _resolve_calls(graph: Graph, pending: list[_PendingBody]) -> None:
             module_classes_by_package.setdefault(c.package_name, []).append(c.full_name)
     for edge in graph.inheritance_edges:
         if edge.relation == "embeds":
-            embeds_by_full_name.setdefault(edge.source_class, []).append(
-                edge.target_class
-            )
+            embeds_by_full_name.setdefault(edge.source_class, []).append(edge.target_class)
     for m in graph.methods:
         if "_functions" in m.class_full_name:
             func_return_types[m.method_name] = _strip_pointer(m.return_type)
@@ -588,9 +564,7 @@ def _resolve_calls(graph: Graph, pending: list[_PendingBody]) -> None:
     resolved_edges: list[ResolvedCallEdge] = []
 
     for p in pending:
-        local_types = _infer_var_types(
-            p.block, p.source, p.local_types, func_return_types
-        )
+        local_types = _infer_var_types(p.block, p.source, p.local_types, func_return_types)
 
         for call_node in _collect(p.block, "call_expression"):
             if not call_node.children:
@@ -608,9 +582,7 @@ def _resolve_calls(graph: Graph, pending: list[_PendingBody]) -> None:
             if callee_expr.type == "identifier":
                 callee_name = _text(callee_expr, p.source)
                 for pkg_full in module_classes_by_package.get(p.package_name, []):
-                    candidates.extend(
-                        methods_by_class_and_name.get((pkg_full, callee_name), [])
-                    )
+                    candidates.extend(methods_by_class_and_name.get((pkg_full, callee_name), []))
             elif callee_expr.type == "selector_expression":
                 base = callee_expr.children[0]
                 field_ident = _child_by_type(callee_expr, "field_identifier")
@@ -654,9 +626,7 @@ def _resolve_calls(graph: Graph, pending: list[_PendingBody]) -> None:
                 text=_text(call_node, p.source),
                 receiver_type_raw=receiver_type_raw,
                 receiver_type_normalized=receiver_type_raw,
-                receiver_resolution_source="local_symbol_table"
-                if receiver_type_raw
-                else None,
+                receiver_resolution_source="local_symbol_table" if receiver_type_raw else None,
                 receiver_type=receiver_type_raw,
                 resolved_candidates=resolved_candidate_ids,
                 resolution_status=status,
@@ -681,7 +651,7 @@ def _resolve_calls(graph: Graph, pending: list[_PendingBody]) -> None:
 class _FileMeta:
     """Parsed file data ready for the method-extraction pass."""
 
-    __slots__ = ("file_path", "root", "source", "package_name", "package_scope")
+    __slots__ = ("file_path", "package_name", "package_scope", "root", "source")
 
     def __init__(self, file_path, root, source, package_name, package_scope):
         self.file_path = file_path
@@ -785,9 +755,7 @@ def _extract_methods_for_file(
     lives in another file in the same directory are correctly attached.
     """
     scoped_class_by_name = {
-        short: cls
-        for (scope, short), cls in class_map.items()
-        if scope == meta.package_scope
+        short: cls for (scope, short), cls in class_map.items() if scope == meta.package_scope
     }
     return _extract_methods_and_functions(
         meta.root,
@@ -831,7 +799,7 @@ def build_go_graph(
     class_map: dict[tuple[str, str], ClassEntry] = {}
     for (
         file_path,
-        package_name,
+        _package_name,
         package_scope,
         classes,
         fields,

@@ -23,12 +23,12 @@ from typing import Any
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
-from rich.console import Console
-from rich.columns import Columns
-from rich.panel import Panel
-from rich.text import Text
-from rich.table import Table
 from rich import box
+from rich.columns import Columns
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -90,14 +90,13 @@ async def run_jidra(query: str, graph: str, codebase: str, mode: str) -> Backend
     )
     t0 = time.perf_counter()
     try:
-        async with stdio_client(params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                resp = await session.call_tool(tool, {"query": query})
-                raw = _extract_mcp_text(resp)
-                result.elapsed_ms = (time.perf_counter() - t0) * 1000
-                result.output = raw
-                result.tokens = approx_tokens(raw)
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            resp = await session.call_tool(tool, {"query": query})
+            raw = _extract_mcp_text(resp)
+            result.elapsed_ms = (time.perf_counter() - t0) * 1000
+            result.output = raw
+            result.tokens = approx_tokens(raw)
     except Exception as exc:
         result.elapsed_ms = (time.perf_counter() - t0) * 1000
         result.error = str(exc)
@@ -142,13 +141,8 @@ async def run_codegraph(query: str, codebase: str, mode: str) -> BackendResult:
         result.elapsed_ms = (time.perf_counter() - t0) * 1000
         if proc.returncode != 0:
             err_text = stderr.decode("utf-8", errors="replace").strip()
-            if (
-                "No CodeGraph index" in err_text
-                or "not initialized" in err_text.lower()
-            ):
-                result.error = (
-                    "No index — run: npx @colbymchenry/codegraph init " + codebase
-                )
+            if "No CodeGraph index" in err_text or "not initialized" in err_text.lower():
+                result.error = "No index — run: npx @colbymchenry/codegraph init " + codebase
             else:
                 result.error = err_text or f"exit {proc.returncode}"
         else:
@@ -201,9 +195,7 @@ def run_graph_rag(query: str, graph: str) -> BackendResult:
 # ---------------------------------------------------------------------------
 
 
-async def compare(
-    query: str, graph: str, codebase: str, mode: str
-) -> list[BackendResult]:
+async def compare(query: str, graph: str, codebase: str, mode: str) -> list[BackendResult]:
     loop = asyncio.get_event_loop()
     rag_future = loop.run_in_executor(None, run_graph_rag, query, graph)
     jidra_task = asyncio.ensure_future(run_jidra(query, graph, codebase, mode))
@@ -298,12 +290,8 @@ def repl(graph: str, codebase: str, mode: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Compare jidra / codegraph search side-by-side"
-    )
-    parser.add_argument(
-        "--graph", required=True, help="Path to jidra graph.db (or .jsonl)"
-    )
+    parser = argparse.ArgumentParser(description="Compare jidra / codegraph search side-by-side")
+    parser.add_argument("--graph", required=True, help="Path to jidra graph.db (or .jsonl)")
     parser.add_argument("--codebase", required=True, help="Path to the codebase root")
     parser.add_argument(
         "--mode",

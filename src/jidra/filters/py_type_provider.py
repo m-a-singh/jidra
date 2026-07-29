@@ -20,10 +20,9 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from ..models import CallSite, Graph
+from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 
@@ -112,9 +111,7 @@ class PyrightValidator:
             self.metrics.failures += 1
             return self.metrics
         except FileNotFoundError:
-            logger.warning(
-                "Pyright not found (optional). Install with: pip install pyright"
-            )
+            logger.warning("Pyright not found (optional). Install with: pip install pyright")
             self.metrics.failures += 1
             return self.metrics
         except Exception as e:
@@ -209,13 +206,44 @@ class PyrightLSPEnricher:
     )
 
     # Stdlib/builtins types that will never appear in the user's graph — skip enriching with these
-    _STDLIB_TYPES = frozenset({
-        "str", "int", "float", "bool", "bytes", "list", "dict", "set", "tuple",
-        "None", "Any", "Optional", "Union", "Type", "Callable", "Iterator",
-        "Generator", "Iterable", "Sequence", "Mapping", "MutableMapping",
-        "Path", "PurePath", "CompletedProcess", "Popen", "TextIOWrapper",
-        "Logger", "Pattern", "Match", "re", "os", "sys", "json", "subprocess",
-    })
+    _STDLIB_TYPES = frozenset(
+        {
+            "str",
+            "int",
+            "float",
+            "bool",
+            "bytes",
+            "list",
+            "dict",
+            "set",
+            "tuple",
+            "None",
+            "Any",
+            "Optional",
+            "Union",
+            "Type",
+            "Callable",
+            "Iterator",
+            "Generator",
+            "Iterable",
+            "Sequence",
+            "Mapping",
+            "MutableMapping",
+            "Path",
+            "PurePath",
+            "CompletedProcess",
+            "Popen",
+            "TextIOWrapper",
+            "Logger",
+            "Pattern",
+            "Match",
+            "re",
+            "os",
+            "sys",
+            "json",
+            "subprocess",
+        }
+    )
 
     def __init__(self, codebase_root: Path, timeout: int = 30):
         self.codebase_root = Path(codebase_root).resolve()
@@ -236,6 +264,7 @@ class PyrightLSPEnricher:
             return None
         try:
             import importlib.util
+
             spec = importlib.util.find_spec("pyright")
             if spec is None or spec.origin is None:
                 return None
@@ -247,7 +276,7 @@ class PyrightLSPEnricher:
             pass
         return None
 
-    def __enter__(self) -> PyrightLSPEnricher:
+    def __enter__(self) -> Self:
         cmd = self._find_langserver()
         if cmd is None:
             logger.debug("Pyright langserver not found; LSP enrichment skipped")
@@ -275,7 +304,9 @@ class PyrightLSPEnricher:
             return
         try:
             if proc.stdin and not proc.stdin.closed:
-                body = json.dumps({"jsonrpc": "2.0", "id": self._next_id(), "method": "shutdown", "params": None})
+                body = json.dumps(
+                    {"jsonrpc": "2.0", "id": self._next_id(), "method": "shutdown", "params": None}
+                )
                 header = f"Content-Length: {len(body)}\r\n\r\n"
                 proc.stdin.write((header + body).encode())
                 notif = json.dumps({"jsonrpc": "2.0", "method": "exit", "params": {}})
@@ -380,18 +411,20 @@ class PyrightLSPEnricher:
             time.sleep(0.5)
 
     def _open_file(self, abs_path: str, source: str) -> None:
-        notif = json.dumps({
-            "jsonrpc": "2.0",
-            "method": "textDocument/didOpen",
-            "params": {
-                "textDocument": {
-                    "uri": Path(abs_path).as_uri(),
-                    "languageId": "python",
-                    "version": 1,
-                    "text": source,
-                }
-            },
-        })
+        notif = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": Path(abs_path).as_uri(),
+                        "languageId": "python",
+                        "version": 1,
+                        "text": source,
+                    }
+                },
+            }
+        )
         header = f"Content-Length: {len(notif)}\r\n\r\n"
         if self._proc and self._proc.stdin:
             self._proc.stdin.write((header + notif).encode())
@@ -443,7 +476,8 @@ class PyrightLSPEnricher:
 
         # Only process files that have unresolved callsites
         files_with_unresolved = {
-            cs.file_path for cs in graph.callsites
+            cs.file_path
+            for cs in graph.callsites
             if not cs.resolution_status.startswith("resolved")
         }
 
@@ -468,13 +502,14 @@ class PyrightLSPEnricher:
             doc_syms = (doc_resp.get("result") or []) if doc_resp else []
             for sym in doc_syms:
                 children = sym.get("children", [])
-                for s in [sym] + children:
+                for s in [sym, *children]:
                     if s.get("kind") in (6, 12) and s.get("name") not in jidra_method_names:
                         results["missing_methods"] += 1
 
             # ── 2. definition + typeDefinition — resolve unknown receivers ────
             unresolved = [
-                cs for cs in file_callsites
+                cs
+                for cs in file_callsites
                 if cs.receiver_type is None
                 and cs.receiver
                 and cs.receiver not in {"self", "cls", "super"}
@@ -483,18 +518,26 @@ class PyrightLSPEnricher:
                 pos = {"line": cs.line - 1, "character": max(0, cs.column - 1)}
 
                 # try definition first
-                def_resp = self._request("textDocument/definition", {
-                    "textDocument": {"uri": uri}, "position": pos,
-                })
+                def_resp = self._request(
+                    "textDocument/definition",
+                    {
+                        "textDocument": {"uri": uri},
+                        "position": pos,
+                    },
+                )
                 result = (def_resp.get("result") or None) if def_resp else None
                 if isinstance(result, list):
                     result = result[0] if result else None
 
                 # fall back to typeDefinition if definition didn't point at a class
                 if not result:
-                    td_resp = self._request("textDocument/typeDefinition", {
-                        "textDocument": {"uri": uri}, "position": pos,
-                    })
+                    td_resp = self._request(
+                        "textDocument/typeDefinition",
+                        {
+                            "textDocument": {"uri": uri},
+                            "position": pos,
+                        },
+                    )
                     result = (td_resp.get("result") or None) if td_resp else None
                     if isinstance(result, list):
                         result = result[0] if result else None
@@ -513,7 +556,9 @@ class PyrightLSPEnricher:
                     continue
                 for cls in class_by_file_line.get(res_rel, []):
                     if cls.start_line <= res_line <= cls.end_line:
-                        cs.receiver_type = cls.full_name  # must match method.class_full_name for Phase 1
+                        cs.receiver_type = (
+                            cls.full_name
+                        )  # must match method.class_full_name for Phase 1
                         cs.receiver_type_raw = cls.full_name
                         cs.receiver_type_normalized = cls.name
                         cs.receiver_resolution_source = source_tag

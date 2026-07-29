@@ -69,7 +69,7 @@ MODULE_MAP: dict[str, str | None] = {
     "ui": "utils",
 }
 
-SUBPACKAGES = sorted(set(v for v in MODULE_MAP.values() if v is not None))
+SUBPACKAGES = sorted({v for v in MODULE_MAP.values() if v is not None})
 
 POC_DOCS = [
     "ENTERPRISE_GO_PROOF.md",
@@ -105,6 +105,7 @@ def git_mv(src: Path, dst: Path) -> None:
         cwd=ROOT,
         capture_output=True,
         text=True,
+        check=False,
     )
     if r.returncode != 0:
         print(f"  WARN git mv failed: {src.relative_to(ROOT)} → {r.stderr.strip()}")
@@ -172,9 +173,7 @@ def rewrite_relative_imports(content: str, file_subpkg: str | None) -> str:
                     dots_str = "." * (len(new_prefix) - len(new_prefix.lstrip(".")))
                     pkg_part = dots_str
                     name_part = new_prefix.lstrip(".")
-                new_lines.append(
-                    f"{indent}from {pkg_part} import {name_part}{alias_rest}"
-                )
+                new_lines.append(f"{indent}from {pkg_part} import {name_part}{alias_rest}")
             line = "\n".join(new_lines)
             out.append(line)
             continue
@@ -214,9 +213,7 @@ def rewrite_absolute_imports(content: str) -> str:
                 alias_rest = alias_match.group(2)
                 target = MODULE_MAP.get(mod)
                 if target is not None:
-                    new_lines.append(
-                        f"{indent}from jidra.{target} import {mod}{alias_rest}"
-                    )
+                    new_lines.append(f"{indent}from jidra.{target} import {mod}{alias_rest}")
                 else:
                     new_lines.append(f"{indent}from jidra import {mod}{alias_rest}")
             line = "\n".join(new_lines)
@@ -264,10 +261,7 @@ def main() -> None:
     for py_file in sorted(OLD_PKG.glob("*.py")):
         mod = py_file.stem
         subpkg = MODULE_MAP.get(mod)
-        if subpkg is None:
-            dst = NEW_PKG / py_file.name
-        else:
-            dst = NEW_PKG / subpkg / py_file.name
+        dst = NEW_PKG / py_file.name if subpkg is None else NEW_PKG / subpkg / py_file.name
         git_mv(py_file, dst)
 
     # ── 3. git mv config.yaml ───────────────────────────────────────────────

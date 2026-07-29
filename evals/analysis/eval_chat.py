@@ -32,16 +32,16 @@ import json
 import re
 import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
 
 VENV_PYTHON = str(Path(__file__).parent.parent / "venv" / "bin" / "python")
 
@@ -86,12 +86,10 @@ def grep_ground_truth(expected: list[str], codebase: str) -> set[str]:
                 exclude_args = []
                 for d in EXCLUDE_DIRS:
                     exclude_args += ["--glob", f"!{d}/**"]
-                cmd = (
-                    [rg, "-l", "--max-filesize", "1M"] + exclude_args + [sym, codebase]
-                )
+                cmd = [rg, "-l", "--max-filesize", "1M", *exclude_args, sym, codebase]
             else:
                 exclude_args = [f"--exclude-dir={d}" for d in EXCLUDE_DIRS]
-                cmd = ["grep", "-rl"] + exclude_args + [sym, codebase]
+                cmd = ["grep", "-rl", *exclude_args, sym, codebase]
             out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, timeout=15)
             for line in out.decode("utf-8", errors="replace").splitlines():
                 line = line.strip()
@@ -175,9 +173,7 @@ def score(result_texts: list[str], expected: list[str]) -> tuple[int, float, flo
                 expected_found.add(exp)
     recall = len(expected_found) / len(expected_lower) if expected_lower else 1.0
     noise_ratio = (
-        (len(result_texts) - len(matched_positions)) / len(result_texts)
-        if result_texts
-        else 0.0
+        (len(result_texts) - len(matched_positions)) / len(result_texts) if result_texts else 0.0
     )
     return rank_first, recall, noise_ratio
 
@@ -226,9 +222,7 @@ def score_gt(
 
 def _extract_mcp_text(resp: Any) -> str:
     if hasattr(resp, "content"):
-        return "\n".join(
-            item.text if hasattr(item, "text") else str(item) for item in resp.content
-        )
+        return "\n".join(item.text if hasattr(item, "text") else str(item) for item in resp.content)
     return str(resp)
 
 
@@ -237,9 +231,7 @@ def _extract_mcp_text(resp: Any) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def run_jidra(
-    query: str, graph: str, codebase: str, mode: str
-) -> tuple[str, float]:
+async def run_jidra(query: str, graph: str, codebase: str, mode: str) -> tuple[str, float]:
     tool = "jidra_explore" if mode == "explore" else "jidra_search"
     params = StdioServerParameters(
         command=VENV_PYTHON,
@@ -257,17 +249,16 @@ async def run_jidra(
     )
     t0 = time.perf_counter()
     try:
-        async with stdio_client(params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                resp = await session.call_tool(tool, {"query": query})
-                raw = _extract_mcp_text(resp)
-                return raw, (time.perf_counter() - t0) * 1000
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            resp = await session.call_tool(tool, {"query": query})
+            raw = _extract_mcp_text(resp)
+            return raw, (time.perf_counter() - t0) * 1000
     except Exception as exc:
         return f"ERROR: {exc}", (time.perf_counter() - t0) * 1000
 
 
-def run_graph_rag_sync(query: str, graph: str, codebase: str = "") -> tuple[str, float]:  # noqa: ARG001
+def run_graph_rag_sync(query: str, graph: str, codebase: str = "") -> tuple[str, float]:
     t0 = time.perf_counter()
     try:
         sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -406,9 +397,7 @@ async def eval_query(q: dict, graph: str, codebase: str, mode: str) -> QueryResu
     result.jidra_time_ms = jidra_time
     result.jidra_tokens = approx_tokens(jidra_raw)
     jidra_texts = extract_result_texts(jidra_raw)
-    result.jidra_rank_first, result.jidra_recall, result.jidra_noise = score(
-        jidra_texts, expected
-    )
+    result.jidra_rank_first, result.jidra_recall, result.jidra_noise = score(jidra_texts, expected)
     jidra_files = extract_result_files(jidra_raw, codebase)
     result.jidra_gt_rank, result.jidra_gt_recall, result.jidra_gt_noise = score_gt(
         jidra_files, gt_files, codebase
@@ -418,12 +407,12 @@ async def eval_query(q: dict, graph: str, codebase: str, mode: str) -> QueryResu
     result.codegraph_time_ms = cg_time
     result.codegraph_tokens = approx_tokens(cg_raw)
     cg_texts = extract_result_texts(cg_raw)
-    result.codegraph_rank_first, result.codegraph_recall, result.codegraph_noise = (
-        score(cg_texts, expected)
+    result.codegraph_rank_first, result.codegraph_recall, result.codegraph_noise = score(
+        cg_texts, expected
     )
     cg_files = extract_result_files(cg_raw, codebase)
-    result.codegraph_gt_rank, result.codegraph_gt_recall, result.codegraph_gt_noise = (
-        score_gt(cg_files, gt_files, codebase)
+    result.codegraph_gt_rank, result.codegraph_gt_recall, result.codegraph_gt_noise = score_gt(
+        cg_files, gt_files, codebase
     )
 
     result.rag_raw = rag_raw
@@ -508,9 +497,7 @@ def render_table(results: list[QueryResult], console: Console) -> None:
             winner = f"[{color}]{best}[/]"
 
         j_rank_str = f"[{rank_style(r.jidra_gt_rank)}]{r.jidra_gt_rank or 'NF'}[/]"
-        cg_rank_str = (
-            f"[{rank_style(r.codegraph_gt_rank)}]{r.codegraph_gt_rank or 'NF'}[/]"
-        )
+        cg_rank_str = f"[{rank_style(r.codegraph_gt_rank)}]{r.codegraph_gt_rank or 'NF'}[/]"
         rag_rank_str = f"[{rank_style(r.rag_gt_rank)}]{r.rag_gt_rank or 'NF'}[/]"
 
         t.add_row(
@@ -540,8 +527,7 @@ def render_summary(results: list[QueryResult], console: Console) -> None:
     valid = [
         r
         for r in results
-        if not r.jidra_raw.startswith("ERROR")
-        and not r.codegraph_raw.startswith("ERROR")
+        if not r.jidra_raw.startswith("ERROR") and not r.codegraph_raw.startswith("ERROR")
     ]
     if not valid:
         console.print("[red]No valid results to summarize.[/]")
@@ -552,12 +538,8 @@ def render_summary(results: list[QueryResult], console: Console) -> None:
 
     gt_valid = [r for r in valid if r.gt_count > 0]
 
-    j_wins = sum(
-        1 for r in gt_valid if (r.jidra_gt_rank or 9999) < (r.codegraph_gt_rank or 9999)
-    )
-    cg_wins = sum(
-        1 for r in gt_valid if (r.codegraph_gt_rank or 9999) < (r.jidra_gt_rank or 9999)
-    )
+    j_wins = sum(1 for r in gt_valid if (r.jidra_gt_rank or 9999) < (r.codegraph_gt_rank or 9999))
+    cg_wins = sum(1 for r in gt_valid if (r.codegraph_gt_rank or 9999) < (r.jidra_gt_rank or 9999))
     ties = len(gt_valid) - j_wins - cg_wins
 
     s = Table(
@@ -613,9 +595,7 @@ def render_summary(results: list[QueryResult], console: Console) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Score jidra vs codegraph on known-answer queries"
-    )
+    parser = argparse.ArgumentParser(description="Score jidra vs codegraph on known-answer queries")
     parser.add_argument("--graph", required=True)
     parser.add_argument("--codebase", required=True)
     parser.add_argument("--queries", required=True, help="YAML file with query list")

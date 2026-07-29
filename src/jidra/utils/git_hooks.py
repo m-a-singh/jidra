@@ -65,6 +65,7 @@ def _git_hooks_dir(repo: Path) -> Path:
             ["git", "-C", str(repo), "config", "--get", "core.hooksPath"],
             capture_output=True,
             text=True,
+            check=False,
         )
         if out.returncode == 0 and out.stdout.strip():
             hooks_path = Path(out.stdout.strip())
