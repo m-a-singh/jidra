@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tree_sitter import Language, Parser
-import tree_sitter_java as tsjava
 import tree_sitter_go as tsgo
+import tree_sitter_java as tsjava
+from tree_sitter import Language, Parser
 
 JAVA_LANGUAGE = Language(tsjava.language())
 GO_LANGUAGE = Language(tsgo.language())

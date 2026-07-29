@@ -31,9 +31,7 @@ def install_agent_hooks(project_root: Path) -> bool:
     settings_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        data: dict = (
-            json.loads(settings_path.read_text()) if settings_path.exists() else {}
-        )
+        data: dict = json.loads(settings_path.read_text()) if settings_path.exists() else {}
     except (json.JSONDecodeError, OSError):
         data = {}
 
@@ -72,9 +70,7 @@ def uninstall_agent_hooks(project_root: Path) -> bool:
     new_post = []
     changed = False
     for entry in post:
-        filtered = [
-            h for h in entry.get("hooks", []) if h.get("command") != _HOOK_COMMAND
-        ]
+        filtered = [h for h in entry.get("hooks", []) if h.get("command") != _HOOK_COMMAND]
         if filtered:
             entry = dict(entry)
             entry["hooks"] = filtered

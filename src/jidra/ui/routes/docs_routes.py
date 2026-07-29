@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
@@ -37,7 +36,7 @@ async def doc_graph(repo_path: str, output_path: str | None = None) -> dict:
     from ...indexing import doc_store
     from ...indexing.doc_graph_visualizer import build_doc_graph_data
 
-    conn, db_path = _connect(repo_path, output_path)
+    conn, _db_path = _connect(repo_path, output_path)
     doc_store.migrate(conn)
     sources = doc_store.list_sources(conn)
     if not sources:

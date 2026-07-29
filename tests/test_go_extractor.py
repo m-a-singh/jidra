@@ -2,7 +2,6 @@ from pathlib import Path
 
 from jidra.extractors.go_extractor import build_go_graph, build_go_graph_for_files
 
-
 GO_FIXTURE = """\
 package animal
 
@@ -79,9 +78,7 @@ def test_build_go_graph_resolves_calls(tmp_path):
     greet_method = next(m for m in graph.methods if m.method_name == "Greet")
     speak_method = next(m for m in graph.methods if m.method_name == "Speak")
 
-    speak_callsite_ids = {
-        cs.id for cs in graph.callsites if cs.caller_method_id == greet_method.id
-    }
+    speak_callsite_ids = {cs.id for cs in graph.callsites if cs.caller_method_id == greet_method.id}
     resolved_to_speak = [
         e
         for e in graph.resolved_call_edges
@@ -90,9 +87,7 @@ def test_build_go_graph_resolves_calls(tmp_path):
     assert resolved_to_speak
 
     make_it_talk = next(m for m in graph.methods if m.method_name == "MakeItTalk")
-    greet_callsite_ids = {
-        cs.id for cs in graph.callsites if cs.caller_method_id == make_it_talk.id
-    }
+    greet_callsite_ids = {cs.id for cs in graph.callsites if cs.caller_method_id == make_it_talk.id}
     resolved_to_greet = [
         e
         for e in graph.resolved_call_edges
@@ -350,9 +345,7 @@ def test_cross_file_method_resolution(tmp_path):
     graph = build_go_graph(tmp_path)
 
     method_names = {m.method_name for m in graph.methods}
-    assert "Run" in method_names, (
-        "method in separate file from type should be extracted"
-    )
+    assert "Run" in method_names, "method in separate file from type should be extracted"
     assert "Stop" in method_names
 
     # Both methods should be owned by the Service class

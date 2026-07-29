@@ -13,7 +13,7 @@ def build_method_analysis_prompt(input: MethodAnalysisInput) -> str:
     class_full_name = cls.get("full_name", "")
     class_annotations = cls.get("annotations", [])
     parameters = list(
-        zip(method.get("parameter_names", []), method.get("parameter_types", []))
+        zip(method.get("parameter_names", []), method.get("parameter_types", []), strict=False)
     )
     field_reads = input.field_reads
     field_writes = input.field_writes
@@ -51,9 +51,7 @@ def build_method_analysis_prompt(input: MethodAnalysisInput) -> str:
     def _fmt_local_lines() -> str:
         if not local_variables:
             return "(none)"
-        return "\n".join(
-            f"- {name}: {type_name}" for name, type_name in local_variables
-        )
+        return "\n".join(f"- {name}: {type_name}" for name, type_name in local_variables)
 
     return (
         "You are analyzing ONE Java method to build a DEBUG NAVIGATION MAP.\n"

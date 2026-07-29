@@ -48,5 +48,5 @@ if _UI_DIST.exists():
     app.mount("/assets", StaticFiles(directory=_UI_DIST / "assets"), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa_fallback(full_path: str = "") -> FileResponse:  # noqa: ARG001
+    async def spa_fallback(full_path: str = "") -> FileResponse:
         return FileResponse(_UI_DIST / "index.html")

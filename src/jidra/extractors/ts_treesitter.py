@@ -9,9 +9,11 @@ Produces the same ClassEntry/MethodEntry/CallSite/... shapes the sidecar does.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
+from ..filters.file_filters import apply_filters
+from ..filters.ts_filters import EXCLUDED_DIRS as _IGNORE_DIRS
 from ..models import (
     CallSite,
     ClassEntry,
@@ -27,9 +29,7 @@ from ..models import (
     method_signature,
     module_class_id,
 )
-from ..filters.file_filters import apply_filters
 from ..utils.parser import make_ts_parser
-from ..filters.ts_filters import EXCLUDED_DIRS as _IGNORE_DIRS
 
 _SOURCE_GLOBS = ("*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs")
 _COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
@@ -71,20 +71,16 @@ def _namespace(rel_path: str) -> str:
 
 
 def _class_name_from_path(rel_path: str) -> str:
-    return re.sub(r"\.(ts|tsx)$", "", rel_path.split("/")[-1])
+    return re.sub(r"\.(ts|tsx)$", "", rel_path.rsplit("/", maxsplit=1)[-1])
 
 
 def _path_stereotypes(rel_path: str) -> list[str]:
     out: list[str] = []
     if re.search(r"\.service\.tsx?$", rel_path) or re.search(r"/services?/", rel_path):
         out.append("service")
-    if re.search(r"\.controller\.tsx?$", rel_path) or re.search(
-        r"/controllers?/", rel_path
-    ):
+    if re.search(r"\.controller\.tsx?$", rel_path) or re.search(r"/controllers?/", rel_path):
         out.append("controller")
-    if re.search(r"\.component\.tsx?$", rel_path) or re.search(
-        r"/components?/", rel_path
-    ):
+    if re.search(r"\.component\.tsx?$", rel_path) or re.search(r"/components?/", rel_path):
         out.append("component")
     if re.search(r"/hooks/use[A-Z]", rel_path):
         out.append("hook")
@@ -158,9 +154,7 @@ def _return_type(node, src: bytes) -> str:
 
 
 class _FileExtractor:
-    def __init__(
-        self, rel_path: str, src: bytes, tsconfig_paths: dict[str, str] | None = None
-    ):
+    def __init__(self, rel_path: str, src: bytes, tsconfig_paths: dict[str, str] | None = None):
         self.rel = rel_path
         self.src = src
         self.namespace = _namespace(rel_path)
@@ -243,9 +237,7 @@ class _FileExtractor:
             for member in body.children:
                 if member.type == "method_definition":
                     self._emit_method(member, cls)
-                    nn = _child(member, "property_identifier") or _child(
-                        member, "identifier"
-                    )
+                    nn = _child(member, "property_identifier") or _child(member, "identifier")
                     name = _text(nn, self.src) if nn is not None else None
                     mbody = _child(member, "statement_block")
                     if name == "constructor" and mbody is not None:
@@ -306,11 +298,7 @@ class _FileExtractor:
                         continue
                     var_name = _text(ident, src)
                     type_node = next(
-                        (
-                            c
-                            for c in value.children
-                            if c.type in ("identifier", "type_identifier")
-                        ),
+                        (c for c in value.children if c.type in ("identifier", "type_identifier")),
                         None,
                     )
                     if type_node is not None:
@@ -338,11 +326,7 @@ class _FileExtractor:
                     ):
                         obj = left.child_by_field_name("object")
                         prop = left.child_by_field_name("property")
-                        if (
-                            obj is not None
-                            and _text(obj, src) == "this"
-                            and prop is not None
-                        ):
+                        if obj is not None and _text(obj, src) == "this" and prop is not None:
                             attr = _text(prop, src)
                             type_node = next(
                                 (
@@ -396,14 +380,14 @@ class _FileExtractor:
         # Param-name -> declared type, so a `param.method()` receiver can be typed
         # for the resolver (the main lever for syntax-only resolution quality).
         local_types = {
-            n: t for n, t in zip(param_names, param_types) if t and t != "unknown"
+            n: t for n, t in zip(param_names, param_types, strict=False) if t and t != "unknown"
         }
         if body is not None:
             local_types.update(self._collect_local_new_types(body, self.src))
         framework_role = _framework_role(name, body, decorators)
         # Backfill class stereotype when framework_role gives more signal than path
         if framework_role and framework_role not in cls.stereotypes:
-            cls.stereotypes = sorted(set(cls.stereotypes + [framework_role]))
+            cls.stereotypes = sorted({*cls.stereotypes, framework_role})
         self.methods.append(
             MethodEntry(
                 id=mid,
@@ -434,9 +418,7 @@ class _FileExtractor:
         ident = _child(node, "identifier")
         if ident is None:
             return
-        self._emit_method(
-            node, self._module_class_entry(), name_override=_text(ident, self.src)
-        )
+        self._emit_method(node, self._module_class_entry(), name_override=_text(ident, self.src))
 
     def _emit_lexical(self, node):
         """const X = () => {...} / function () {...} -> module-level method."""
@@ -549,11 +531,7 @@ class _FileExtractor:
         for spec in named.children:
             if spec.type == "import_specifier":
                 # alias import: `import { Foo as F }` — local name is last identifier
-                idents = [
-                    c
-                    for c in spec.children
-                    if c.type in ("identifier", "type_identifier")
-                ]
+                idents = [c for c in spec.children if c.type in ("identifier", "type_identifier")]
                 if not idents:
                     continue
                 local_name = _text(idents[-1], self.src)
@@ -669,9 +647,7 @@ def build_ts_graph_treesitter(
     inheritance: list[InheritanceEdge] = []
 
     count = 0
-    for path in _iter_ts_files(
-        codebase_root, only_files=only_files, skip_folders=skip_folders
-    ):
+    for path in _iter_ts_files(codebase_root, only_files=only_files, skip_folders=skip_folders):
         try:
             src = path.read_bytes()
         except OSError:

@@ -74,10 +74,7 @@ def ts_hallucinated_refs(text: str, oracle: Oracle) -> list[str]:
         r"\b[A-Z][a-zA-Z0-9]*(?:Service|Controller|Manager|Handler|Factory|Hook|Store|Provider|Context|Middleware|Guard|Interceptor|Resolver|Module)\b",
         text,
     ):
-        if not any(
-            c.endswith("." + m) or c.endswith("/" + m) or c == m
-            for c in oracle.class_full_names
-        ):
+        if not any(c.endswith(("." + m, "/" + m)) or c == m for c in oracle.class_full_names):
             bad.append(m)
     return sorted(set(bad))
 
@@ -175,9 +172,7 @@ def _build_checker(cfg: dict, oracle: Oracle) -> ae.Checker:
             exists = method in oracle.method_names
             a = _lc(ans).replace("*", "").replace("_", "")
             says_absent = any(k in a for k in _ABSENT_PHRASES)
-            return (
-                not exists
-            ) and says_absent, f"exists={exists} says_absent={says_absent}"
+            return (not exists) and says_absent, f"exists={exists} says_absent={says_absent}"
 
         return check
 
@@ -218,9 +213,7 @@ def _build_checker(cfg: dict, oracle: Oracle) -> ae.Checker:
                 return False, "no GT caller files"
             a = _lc(ans)
             # Match on full path OR file stem (without extension), min 5 chars
-            stems = {
-                _re.sub(r"\.[^.]+$", "", f.split("/")[-1]).lower() for f in caller_files
-            }
+            stems = {_re.sub(r"\.[^.]+$", "", f.split("/")[-1]).lower() for f in caller_files}
             hit_path = {f for f in caller_files if f.lower() in a}
             hit_stem = {s for s in stems if len(s) >= 5 and s in a}
             hit = len(hit_path | hit_stem)
@@ -261,9 +254,7 @@ async def run_async(args) -> None:
     results: list[dict] = []
     for task in tasks:
         for be in backends:
-            print(
-                f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
-            )
+            print(f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True)
             _skill_system = ae.SYSTEM if be.name == "jidra" else ae._SYSTEM_BASE
             rr = await ae.run_agent(
                 client,
@@ -278,7 +269,7 @@ async def run_async(args) -> None:
             if not rr.error:
                 try:
                     rr.correct, note = task.check(rr.answer, oracle)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     note = f"check_error: {e!r}"
                 rr.hallucinated = ts_hallucinated_refs(rr.answer, oracle)
                 if len(rr.hallucinated) > halluc_max:
@@ -347,9 +338,7 @@ def main() -> None:
     )
     ap.add_argument("--graph", required=True)
     ap.add_argument("--codebase", default="")
-    ap.add_argument(
-        "--config", required=True, help="Please proivde the path to config json"
-    )
+    ap.add_argument("--config", required=True, help="Please proivde the path to config json")
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
     ap.add_argument("--tasks", default="", help="comma list e.g. TS1,TS2")
     ap.add_argument("--out", default="results/eval_agent_results_ts_v2.json")

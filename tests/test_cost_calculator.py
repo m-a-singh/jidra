@@ -1,10 +1,12 @@
 """Tests for cost/ROI calculator."""
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from jidra.llm.cost_calculator import (
-    CostCalculator,
     CostBreakdown,
+    CostCalculator,
     GraphStats,
     analyze_graph,
 )
@@ -165,9 +167,7 @@ class TestROIAnalysis:
     def test_annual_savings_scales_with_queries(self, calc, synthetic_stats):
         roi_100 = calc.calculate_roi("claude-opus-4-7", synthetic_stats, 100)
         roi_1000 = calc.calculate_roi("claude-opus-4-7", synthetic_stats, 1000)
-        assert roi_1000.annual_savings == pytest.approx(
-            roi_100.annual_savings * 10, rel=0.01
-        )
+        assert roi_1000.annual_savings == pytest.approx(roi_100.annual_savings * 10, rel=0.01)
 
     def test_payback_calculated_when_costs_given(self, calc, synthetic_stats):
         roi = calc.calculate_roi(

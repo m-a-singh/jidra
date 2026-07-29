@@ -69,14 +69,10 @@ def build_graph_data(
 
                 # Find edges from this method
                 for edge in graph.resolved_call_edges:
-                    if (
-                        edge.caller_method_id == method_id
-                        and edge.callee_method_id not in visited
-                    ):
+                    if edge.caller_method_id == method_id and edge.callee_method_id not in visited:
                         queue.append((edge.callee_method_id, current_depth + 1))
                     elif (
-                        edge.callee_method_id == method_id
-                        and edge.caller_method_id not in visited
+                        edge.callee_method_id == method_id and edge.caller_method_id not in visited
                     ):
                         queue.append((edge.caller_method_id, current_depth + 1))
         else:

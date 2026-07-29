@@ -1,7 +1,7 @@
 import time
 from pathlib import Path
 
-import jidra.cli as cli
+from jidra import cli
 from jidra.engine import reindexer
 from jidra.extractors import extractor
 from jidra.graph import graph_store
@@ -98,9 +98,7 @@ public class UserService {
     cli._index(str(codebase), str(output), _quiet=True)
 
     main_path = output / "graph.db"
-    incremental_graph = graph_store.load_graph(
-        graph_store.connect(main_path), variant="main"
-    )
+    incremental_graph = graph_store.load_graph(graph_store.connect(main_path), variant="main")
 
     # Full rebuild into a separate output dir for comparison.
     full_output = tmp_path / "out_full"
@@ -122,9 +120,7 @@ def test_file_deletion_removes_records(tmp_path):
     files["repository"].unlink()
     cli._index(str(codebase), str(output), _quiet=True)
 
-    graph = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="main"
-    )
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="main")
     repo_path = str(files["repository"])
     assert all(c.file_path != repo_path for c in graph.classes)
     assert all(m.file_path != repo_path for m in graph.methods)
@@ -152,9 +148,7 @@ public class AuditLog {
 
     cli._index(str(codebase), str(output), _quiet=True)
 
-    graph = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="main"
-    )
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="main")
     assert any(c.full_name == "com.example.AuditLog" for c in graph.classes)
 
 
@@ -201,16 +195,12 @@ public class UserService {
 
     cli._index(str(codebase), str(output), _quiet=True)
 
-    graph = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="main"
-    )
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="main")
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch_all = method_by_sig["com.example.UserService#fetchAll()"]
     find_all = method_by_sig["com.example.UserRepository#findAll()"]
 
-    edges = {
-        (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
-    }
+    edges = {(e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges}
     assert (fetch_all.id, find_all.id) in edges
 
 
@@ -240,16 +230,12 @@ public class UserRepository {
 
     cli._index(str(codebase), str(output), _quiet=True)
 
-    graph = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="main"
-    )
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="main")
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch = method_by_sig["com.example.UserService#fetch(String)"]
     find = method_by_sig["com.example.UserRepository#find(String)"]
 
-    edges = {
-        (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
-    }
+    edges = {(e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges}
     assert (fetch.id, find.id) in edges
 
 
@@ -266,16 +252,12 @@ def test_signature_change_invalidates_unchanged_caller_edge(tmp_path):
 
     cli._index(str(codebase), str(output), _quiet=True)
 
-    graph = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="main"
-    )
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="main")
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch = method_by_sig["com.example.UserService#fetch(String)"]
     old_find = method_by_sig["com.example.UserRepository#find(String)"]
 
-    edges = {
-        (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
-    }
+    edges = {(e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges}
     assert (fetch.id, old_find.id) in edges
 
     # Change find(String) to find(String, boolean) — service.java (the only
@@ -295,17 +277,13 @@ public class UserRepository {
 
     cli._index(str(codebase), str(output), _quiet=True)
 
-    graph = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="main"
-    )
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="main")
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch = method_by_sig["com.example.UserService#fetch(String)"]
     assert "com.example.UserRepository#find(String, boolean)" in method_by_sig
     assert "com.example.UserRepository#find(String)" not in method_by_sig
 
-    edges = {
-        (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
-    }
+    edges = {(e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges}
     # The stale edge to the removed overload must be gone — it must not
     # silently linger in the DB just because fetch's own file/callsite list
     # was untouched by this change.
@@ -351,9 +329,7 @@ public class UserService {
 
     assert result["change_type"] == "callsite_change"
 
-    graph = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="validated"
-    )
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="validated")
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch = method_by_sig["com.example.UserService#fetch(String)"]
     callees = {c.callee_name for c in graph.callsites if c.caller_method_id == fetch.id}
@@ -394,18 +370,14 @@ public class UserRepository {
     result = reindexer.incremental_reindex(codebase, output / "graph.db")
     assert result["change_type"] == "structural"
 
-    graph = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="validated"
-    )
+    graph = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="validated")
     method_by_sig = {m.signature: m for m in graph.methods}
     fetch = method_by_sig["com.example.UserService#fetch(String)"]
     assert "com.example.UserRepository#find(String, boolean)" in method_by_sig
     assert "com.example.UserRepository#find(String)" not in method_by_sig
 
     live_method_ids = {m.id for m in graph.methods}
-    edges = {
-        (e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges
-    }
+    edges = {(e.caller_method_id, e.callee_method_id) for e in graph.resolved_call_edges}
     stale_edges = [e for e in edges if e[0] == fetch.id and e[1] not in live_method_ids]
     assert not stale_edges, (
         "scoped _resolve_calls left a dangling edge from an untouched caller "
@@ -474,9 +446,7 @@ public class UserService {
     result = reindexer.incremental_reindex(codebase, output / "graph.db")
     assert result["change_type"] != "skipped"
 
-    after = graph_store.load_graph(
-        graph_store.connect(output / "graph.db"), variant="validated"
-    )
+    after = graph_store.load_graph(graph_store.connect(output / "graph.db"), variant="validated")
     repo_methods_after = {
         m.signature for m in after.methods if m.file_path == str(files["repository"])
     }

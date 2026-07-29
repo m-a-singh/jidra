@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sqlite3
 
-
 from jidra.indexing.method_embeddings import (
     build_payload,
     ensure_embeddings_table,
@@ -13,25 +12,25 @@ from jidra.indexing.method_embeddings import (
 
 
 def _row(**kwargs) -> dict:
-    defaults = dict(
-        id="m1",
-        variant="main",
-        module_id="mod",
-        method_name="handleRequest",
-        signature="handleRequest(HttpServletRequest req): ResponseEntity",
-        file_path="src/main/java/com/example/FooController.java",
-        source="public ResponseEntity handleRequest(HttpServletRequest req) { return ok(); }",
-        class_full_name="com.example.FooController",
-        class_context_json=None,
-        annotations_json='["@GetMapping", "@Validated"]',
-        is_endpoint=1,
-        http_method="GET",
-        route="/foo",
-        full_route="/api/foo",
-        language="java",
-        framework_role="controller",
-        generated=0,
-    )
+    defaults = {
+        "id": "m1",
+        "variant": "main",
+        "module_id": "mod",
+        "method_name": "handleRequest",
+        "signature": "handleRequest(HttpServletRequest req): ResponseEntity",
+        "file_path": "src/main/java/com/example/FooController.java",
+        "source": "public ResponseEntity handleRequest(HttpServletRequest req) { return ok(); }",
+        "class_full_name": "com.example.FooController",
+        "class_context_json": None,
+        "annotations_json": '["@GetMapping", "@Validated"]',
+        "is_endpoint": 1,
+        "http_method": "GET",
+        "route": "/foo",
+        "full_route": "/api/foo",
+        "language": "java",
+        "framework_role": "controller",
+        "generated": 0,
+    }
     defaults.update(kwargs)
     return defaults
 
@@ -95,10 +94,7 @@ def test_ensure_embeddings_table_idempotent():
     ensure_embeddings_table(conn)
     ensure_embeddings_table(conn)  # second call must not raise
     tables = {
-        r[0]
-        for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
     assert "method_embeddings" in tables
     conn.close()
@@ -107,9 +103,7 @@ def test_ensure_embeddings_table_idempotent():
 def test_schema_columns():
     conn = sqlite3.connect(":memory:")
     ensure_embeddings_table(conn)
-    cols = {
-        r[1] for r in conn.execute("PRAGMA table_info(method_embeddings)").fetchall()
-    }
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(method_embeddings)").fetchall()}
     assert {
         "method_id",
         "variant",

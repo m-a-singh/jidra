@@ -207,6 +207,7 @@ def fetch_index_history(repo: str | None = None, limit: int = 100) -> list[dict]
                         "elapsed_ms",
                     ],
                     r,
+                    strict=False,
                 )
             )
             for r in rows
@@ -246,7 +247,7 @@ def fetch_reindex_history(repo: str | None = None, limit: int = 200) -> list[dic
                 (limit,),
             ).fetchall()
         conn.close()
-        return [dict(zip(cols, r)) for r in rows]
+        return [dict(zip(cols, r, strict=False)) for r in rows]
     except Exception:
         return []
 
@@ -305,7 +306,7 @@ def fetch_doc_index_history(limit: int = 200) -> list[dict]:
             (limit,),
         ).fetchall()
         conn.close()
-        return [dict(zip(cols, r)) for r in rows]
+        return [dict(zip(cols, r, strict=False)) for r in rows]
     except Exception:
         return []
 
@@ -329,12 +330,10 @@ def list_repos() -> list[str]:
     try:
         conn = _connect()
         index_repos = {
-            r[0]
-            for r in conn.execute("SELECT DISTINCT repo FROM index_events").fetchall()
+            r[0] for r in conn.execute("SELECT DISTINCT repo FROM index_events").fetchall()
         }
         reindex_repos = {
-            r[0]
-            for r in conn.execute("SELECT DISTINCT repo FROM reindex_events").fetchall()
+            r[0] for r in conn.execute("SELECT DISTINCT repo FROM reindex_events").fetchall()
         }
         conn.close()
         return sorted(index_repos | reindex_repos)

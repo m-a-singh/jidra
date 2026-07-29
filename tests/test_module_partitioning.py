@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from jidra.graph import graph_store
 from jidra.extractors.extractor import build_graph_partitioned
+from jidra.graph import graph_store
 
 
 def _write_java(path: Path, content: str) -> None:

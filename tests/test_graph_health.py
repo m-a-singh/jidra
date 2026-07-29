@@ -1,6 +1,6 @@
 from jidra.cli import compute_graph_health
-from jidra.server.mcp_server import graph_health
 from jidra.graph import graph_store
+from jidra.server.mcp_server import graph_health
 
 
 def test_compute_graph_health_breakdown(simple_test_graph):

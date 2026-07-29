@@ -16,6 +16,7 @@ speaks this small RPC, which keeps it simple and unit-testable.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -64,10 +65,8 @@ def _runtime_dir() -> Path:
     uid = getattr(os, "getuid", lambda: "u")()
     d = Path(base) / f"jidra-{uid}"
     d.mkdir(parents=True, exist_ok=True)
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(d, 0o700)
-    except OSError:
-        pass
     return d
 
 
@@ -136,19 +135,13 @@ class JidraDaemon:
             # Redirect stdin to /dev/null; stdout+stderr to daemon.log so
             # startup crashes are visible instead of silently lost.
             devnull = os.open(os.devnull, os.O_RDONLY)
-            try:
+            with contextlib.suppress(OSError):
                 os.dup2(devnull, 0)
-            except OSError:
-                pass
             log_path = _jidra_dir(self.graph_path) / "daemon.log"
-            log_fd = os.open(
-                str(log_path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644
-            )
+            log_fd = os.open(str(log_path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
             for fd in (1, 2):
-                try:
+                with contextlib.suppress(OSError):
                     os.dup2(log_fd, fd)
-                except OSError:
-                    pass
             os.close(log_fd)
 
         if not self._acquire_lock():
@@ -165,10 +158,8 @@ class JidraDaemon:
             pass
 
         # Warm the engine once so the first client doesn't pay the load cost.
-        try:
+        with contextlib.suppress(Exception):
             mcp_server.get_engine(self.graph_path or "")
-        except Exception:
-            pass
 
         # Integrity check: if DB is corrupt, force a full reindex before serving.
         if self.graph_path:
@@ -212,19 +203,15 @@ class JidraDaemon:
 
     def _cleanup(self) -> None:
         for path in (self.sock_path, self.pid_file):
-            try:
+            with contextlib.suppress(OSError):
                 path.unlink()
-            except OSError:
-                pass
 
     def _watchdog(self) -> None:
         """Idle shutdown: if no client has been connected for IDLE_TIMEOUT,
         stop. Prevents orphaned daemons after all editors close."""
         while not self._stop.is_set():
             time.sleep(self.POLL_INTERVAL)
-            idle = self._active == 0 and (
-                time.time() - self._last_active > self.IDLE_TIMEOUT
-            )
+            idle = self._active == 0 and (time.time() - self._last_active > self.IDLE_TIMEOUT)
             if idle:
                 self._stop.set()
                 try:  # nudge the accept() loop awake
@@ -246,13 +233,11 @@ class JidraDaemon:
         while not self._stop.is_set():
             try:
                 conn, _ = server.accept()
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
-            threading.Thread(
-                target=self._handle_client, args=(conn,), daemon=True
-            ).start()
+            threading.Thread(target=self._handle_client, args=(conn,), daemon=True).start()
         server.close()
 
     def _handle_client(self, conn: socket.socket) -> None:
@@ -270,10 +255,8 @@ class JidraDaemon:
         except OSError:
             pass
         finally:
-            try:
+            with contextlib.suppress(OSError):
                 conn.close()
-            except OSError:
-                pass
             with self._active_lock:
                 self._active -= 1
                 self._last_active = time.time()

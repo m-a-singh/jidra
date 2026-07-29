@@ -25,7 +25,6 @@ import sys
 from datetime import date
 from pathlib import Path
 
-
 # ── Markdown builder ──────────────────────────────────────────────────────────
 
 
@@ -335,24 +334,18 @@ def main() -> None:
         metavar="PATH",
         help="JIDRA graph.db path (triggers full pipeline)",
     )
-    parser.add_argument(
-        "--cg-db", default=None, metavar="PATH", help="CodeGraph codegraph.db path"
-    )
+    parser.add_argument("--cg-db", default=None, metavar="PATH", help="CodeGraph codegraph.db path")
     parser.add_argument(
         "--cases", nargs="+", default=None, metavar="YAML", help="Yaml dataset file(s)"
     )
-    parser.add_argument(
-        "--repo", default=None, metavar="ORG/REPO", help="Filter to one repo slug"
-    )
+    parser.add_argument("--repo", default=None, metavar="ORG/REPO", help="Filter to one repo slug")
     parser.add_argument(
         "--work-dir",
         default="evals/dataset/results",
         help="Directory for intermediate JSON files",
     )
 
-    parser.add_argument(
-        "--out", required=True, metavar="MD", help="Output markdown path"
-    )
+    parser.add_argument("--out", required=True, metavar="MD", help="Output markdown path")
     args = parser.parse_args()
 
     out_path = Path(args.out)

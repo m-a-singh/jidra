@@ -8,10 +8,11 @@ crashes on a missing optional dependency.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 try:
+    from rich import box
     from rich.console import Console
     from rich.panel import Panel
     from rich.progress import (
@@ -23,7 +24,6 @@ try:
     )
     from rich.prompt import Confirm, Prompt
     from rich.table import Table
-    from rich import box
 
     RICH = True
 except ImportError:  # pragma: no cover - rich is a declared dependency
@@ -156,9 +156,7 @@ def kv_panel(title: str, rows: list[tuple[str, str]]) -> None:
     for label, value in rows:
         table.add_row(label, value)
     console.print(
-        Panel(
-            table, title=f"[{OK}]{title}[/{OK}]", box=box.ROUNDED, border_style="green"
-        )
+        Panel(table, title=f"[{OK}]{title}[/{OK}]", box=box.ROUNDED, border_style="green")
     )
 
 
@@ -166,9 +164,7 @@ def rule(text: str = "") -> None:
     if not RICH:
         print(f"\n{'-' * 80}")
         return
-    console.print(
-        f"[{DIM}]{'─' * 60}[/{DIM}] {text}" if text else f"[{DIM}]{'─' * 60}[/{DIM}]"
-    )
+    console.print(f"[{DIM}]{'─' * 60}[/{DIM}] {text}" if text else f"[{DIM}]{'─' * 60}[/{DIM}]")
 
 
 def prompt(

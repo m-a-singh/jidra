@@ -1,25 +1,26 @@
 from __future__ import annotations
 
-import threading
+import asyncio
 import concurrent.futures
 import concurrent.futures.thread as _cft
-import weakref
-import asyncio
+import contextlib
 import json
 import os
 import signal
+import threading
+import weakref
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
 from ...filters.filters import EXCLUDED_DIRS as _JAVA_EXCLUDED_DIRS
 from ...filters.go_filters import EXCLUDED_DIRS as _GO_EXCLUDED_DIRS
 from ...filters.py_filters import EXCLUDED_DIRS as _PY_EXCLUDED_DIRS
 from ...filters.scala_filters import EXCLUDED_DIRS as _SCALA_EXCLUDED_DIRS
 from ...filters.ts_filters import EXCLUDED_DIRS as _TS_EXCLUDED_DIRS
 from ...indexing.resources_indexer import discover_resource_files, index_resource_file
-
 
 router = APIRouter()
 
@@ -36,7 +37,7 @@ class _DaemonThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
 
         num_threads = len(self._threads)
         if num_threads < self._max_workers:
-            thread_name = "%s_%d" % (self._thread_name_prefix or self, num_threads)
+            thread_name = f"{self._thread_name_prefix or self}_{num_threads}"
 
             # --- Python 3.14+ vs 3.13 Compatibility Branching ---
             if hasattr(self, "_create_worker_context"):
@@ -167,6 +168,7 @@ async def _stream_process(req: ProcessRequest):
 
         try:
             from collections import Counter
+
             from ...graph import graph_store as _gs
 
             _db = _gs.resolve_graph_db_path(out_dir)
@@ -180,35 +182,23 @@ async def _stream_process(req: ProcessRequest):
                     if (c.resolution_reason or "").startswith("second-pass")
                 )
                 _unres_recv = [
-                    c
-                    for c in _graph.callsites
-                    if c.resolution_status == "unresolved_receiver"
+                    c for c in _graph.callsites if c.resolution_status == "unresolved_receiver"
                 ]
-                _recv_no_dot = sum(
-                    1 for c in _unres_recv if c.receiver and "." not in c.receiver
-                )
+                _recv_no_dot = sum(1 for c in _unres_recv if c.receiver and "." not in c.receiver)
                 _recv_dotted = sum(
                     1
                     for c in _unres_recv
-                    if c.receiver
-                    and "." in c.receiver
-                    and not c.receiver.rstrip().endswith(")")
+                    if c.receiver and "." in c.receiver and not c.receiver.rstrip().endswith(")")
                 )
                 _recv_chain = sum(
-                    1
-                    for c in _unres_recv
-                    if c.receiver and c.receiver.rstrip().endswith(")")
+                    1 for c in _unres_recv if c.receiver and c.receiver.rstrip().endswith(")")
                 )
                 _recv_none = sum(1 for c in _unres_recv if not c.receiver)
                 _impl_suffix = _res.get("resolved_impl_suffix", 0)
                 _cha = _res.get("resolved_cha", 0)
                 _total_cs = len(_graph.callsites)
-                _resolved = sum(
-                    v for k, v in _res.items() if not k.startswith("unresolved")
-                )
-                _unresolved = sum(
-                    v for k, v in _res.items() if k.startswith("unresolved")
-                )
+                _resolved = sum(v for k, v in _res.items() if not k.startswith("unresolved"))
+                _unresolved = sum(v for k, v in _res.items() if k.startswith("unresolved"))
                 yield _sse(
                     "status",
                     {
@@ -237,11 +227,11 @@ async def _stream_process(req: ProcessRequest):
         # Auto-embed with default model after indexing
         _emb_start = asyncio.get_event_loop().time()
         try:
-            from ...indexing.method_embeddings import (
-                build_method_embeddings,
-                DEFAULT_EMBED_MODEL,
-            )
             from ...graph import graph_store as _emb_gs
+            from ...indexing.method_embeddings import (
+                DEFAULT_EMBED_MODEL,
+                build_method_embeddings,
+            )
 
             yield _sse(
                 "status",
@@ -255,9 +245,7 @@ async def _stream_process(req: ProcessRequest):
             try:
                 _emb_stats = await loop.run_in_executor(
                     _bg_executor,
-                    lambda: build_method_embeddings(
-                        _emb_conn, model_name=DEFAULT_EMBED_MODEL
-                    ),
+                    lambda: build_method_embeddings(_emb_conn, model_name=DEFAULT_EMBED_MODEL),
                 )
             finally:
                 _emb_conn.close()
@@ -304,17 +292,16 @@ async def _stream_process(req: ProcessRequest):
                     class_names, method_names = extract_graph_names(graph)
 
                     total_chunks = 0
-                    from ...llm.telemetry import record_doc_index_event as _rec_doc
                     import time as _time
+
+                    from ...llm.telemetry import record_doc_index_event as _rec_doc
 
                     for f in doc_files:
                         _doc_t0 = _time.time()
                         try:
                             n_chunks = await loop.run_in_executor(
                                 _bg_executor,
-                                lambda f=f: index_document(
-                                    conn, str(f), class_names, method_names
-                                ),
+                                lambda f=f: index_document(conn, str(f), class_names, method_names),
                             )
                             total_chunks += n_chunks
                             _doc_elapsed = int((_time.time() - _doc_t0) * 1000)
@@ -347,22 +334,16 @@ async def _stream_process(req: ProcessRequest):
                                 status="error",
                                 error=str(doc_err),
                             )
-                            yield _sse(
-                                "warn", {"msg": f"  {f.name} skipped: {doc_err}"}
-                            )
+                            yield _sse("warn", {"msg": f"  {f.name} skipped: {doc_err}"})
 
                     # Index Spring resources files (YAML/JSON/XML)
                     resource_files = discover_resource_files(
                         repo,
-                        skip_folders=set(req.skip_folders)
-                        if req.skip_folders
-                        else None,
+                        skip_folders=set(req.skip_folders) if req.skip_folders else None,
                     )
                     for rf in resource_files:
                         try:
-                            n = index_resource_file(
-                                conn, str(rf), class_names, method_names
-                            )
+                            n = index_resource_file(conn, str(rf), class_names, method_names)
                             if n:
                                 total_chunks += n
                         except Exception:
@@ -377,9 +358,7 @@ async def _stream_process(req: ProcessRequest):
                         },
                     )
                 except Exception as docs_err:
-                    yield _sse(
-                        "warn", {"msg": f"Document indexing skipped: {docs_err}"}
-                    )
+                    yield _sse("warn", {"msg": f"Document indexing skipped: {docs_err}"})
 
         if req.write_mcp_config:
             try:
@@ -467,9 +446,7 @@ async def list_folders(repo_path: str, subpath: str = "") -> dict:
         raise HTTPException(status_code=400, detail=f"Not a directory: {target}")
 
     try:
-        subdirs = sorted(
-            (d for d in target.iterdir() if d.is_dir()), key=lambda d: d.name
-        )
+        subdirs = sorted((d for d in target.iterdir() if d.is_dir()), key=lambda d: d.name)
     except OSError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -502,19 +479,13 @@ async def index_status(repo_path: str, output_path: str | None = None) -> dict:
         validated = conn.execute(
             "SELECT COUNT(*) FROM methods WHERE variant='validated'"
         ).fetchone()[0]
-        main = conn.execute(
-            "SELECT COUNT(*) FROM methods WHERE variant='main'"
-        ).fetchone()[0]
-        classes = conn.execute(
-            "SELECT COUNT(*) FROM classes WHERE variant='main'"
-        ).fetchone()[0]
+        main = conn.execute("SELECT COUNT(*) FROM methods WHERE variant='main'").fetchone()[0]
+        classes = conn.execute("SELECT COUNT(*) FROM classes WHERE variant='main'").fetchone()[0]
         doc_count = 0
-        try:
+        with contextlib.suppress(sqlite3.OperationalError):
             doc_count = conn.execute(
                 "SELECT COUNT(DISTINCT source_path) FROM doc_chunks"
             ).fetchone()[0]
-        except sqlite3.OperationalError:
-            pass
         conn.close()
         count = main if main > 0 else validated
         variant = "main" if main > 0 else "validated"
@@ -544,9 +515,7 @@ async def reindex(req: ReindexRequest) -> dict:
     out_dir = _out_dir(req.repo_path, req.output_path)
     graph_path = resolve_graph_db_path(out_dir)
     codebase = Path(req.repo_path).resolve()
-    summary = incremental_reindex(
-        codebase, graph_path, hint_changed_files=req.changed_files
-    )
+    summary = incremental_reindex(codebase, graph_path, hint_changed_files=req.changed_files)
     return {"summary": summary}
 
 
@@ -588,9 +557,7 @@ async def daemon_status(repo_path: str, output_path: str | None = None) -> dict:
     if manifest.get("last_indexed_at_ns"):
         from datetime import datetime, timezone
 
-        dt = datetime.fromtimestamp(
-            manifest["last_indexed_at_ns"] / 1_000_000_000, tz=timezone.utc
-        )
+        dt = datetime.fromtimestamp(manifest["last_indexed_at_ns"] / 1_000_000_000, tz=timezone.utc)
         last_indexed_at = dt.isoformat()
     else:
         # Fall back to graph.db mtime — set by initial full index pipeline
@@ -612,9 +579,7 @@ async def daemon_start(req: DaemonRequest) -> dict:
     out_dir = _out_dir(req.repo_path, req.output_path)
     graph_db = out_dir / "graph.db"
     if not graph_db.exists():
-        raise HTTPException(
-            status_code=400, detail="graph.db not found — run index first"
-        )
+        raise HTTPException(status_code=400, detail="graph.db not found — run index first")
 
     pid_file = pid_path(str(out_dir))
     if pid_file.exists():
@@ -670,9 +635,7 @@ async def daemon_startup_log(
 
 
 @router.get("/daemon/log")
-async def daemon_log(
-    repo_path: str, output_path: str | None = None, limit: int = 50
-) -> dict:
+async def daemon_log(repo_path: str, output_path: str | None = None, limit: int = 50) -> dict:
     out_dir = _out_dir(repo_path, output_path)
     log_path = out_dir / "reindex.log"
     if not log_path.exists():
@@ -684,10 +647,8 @@ async def daemon_log(
             line = line.strip()
             if not line:
                 continue
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 entries.append(json.loads(line))
-            except json.JSONDecodeError:
-                pass
         entries.reverse()
         return {"entries": entries}
     except OSError:
@@ -698,6 +659,7 @@ async def daemon_log(
 async def list_daemons() -> dict:
     """Scan the runtime dir for all running JIDRA daemon sockets and return their status."""
     import socket as _socket
+
     from ...engine.daemon import _runtime_dir
 
     rt = _runtime_dir()
@@ -741,9 +703,7 @@ async def list_daemons() -> dict:
 
 
 @router.get("/daemon/stale")
-async def daemon_stale(
-    repo_path: str, output_path: str | None = None, full: bool = False
-) -> dict:
+async def daemon_stale(repo_path: str, output_path: str | None = None, full: bool = False) -> dict:
     from ...engine.reindexer import check_staleness, quick_stale_check
 
     out_dir = _out_dir(repo_path, output_path)
