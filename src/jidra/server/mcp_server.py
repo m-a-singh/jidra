@@ -596,15 +596,15 @@ def build_mcp(
     codebase_path: str | None = None,
     invoke=None,
 ):
-    """Build the FastMCP server. `invoke(name, params) -> dict` does the work:
+    """Build the MCP server. `invoke(name, params) -> dict` does the work:
     in ``direct`` mode it dispatches locally; in ``proxy`` mode it forwards to
     the daemon over a socket. The tool surface (names, signatures, docstrings)
     is identical either way."""
     try:
-        from mcp.server.fastmcp import FastMCP  # mcp <2.0
+        from mcp.server.mcpserver import MCPServer
     except ImportError:
         try:
-            from fastmcp import FastMCP  # mcp >=2.0 uses standalone fastmcp package
+            from mcp.server.fastmcp import FastMCP as MCPServer  # mcp <2.0 fallback
         except ImportError as exc:
             raise RuntimeError(
                 "MCP support requires installing jidra[mcp] or pip install mcp"
@@ -621,7 +621,7 @@ def build_mcp(
                 codebase_path=codebase_path,
             )
 
-    mcp = FastMCP("JIDRA MCP")
+    mcp = MCPServer("JIDRA MCP")
 
     @mcp.tool()
     def jidra_get_method_context(
