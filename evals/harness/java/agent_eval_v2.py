@@ -27,9 +27,10 @@ import os
 import re
 import sqlite3
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -89,7 +90,7 @@ class Oracle:
     conn: sqlite3.Connection
 
     @classmethod
-    def load(cls, db: str, variant: str = "validated") -> "Oracle":
+    def load(cls, db: str, variant: str = "validated") -> Oracle:
         conn = sqlite3.connect(db)
         conn.row_factory = sqlite3.Row
         cfn, mn, sig, fp = set(), set(), set(), set()
@@ -102,9 +103,7 @@ class Oracle:
             cfn.add(r["class_full_name"])
             if r["file_path"]:
                 fp.add(r["file_path"])
-        for r in conn.execute(
-            "SELECT full_name FROM classes WHERE variant=?", (variant,)
-        ):
+        for r in conn.execute("SELECT full_name FROM classes WHERE variant=?", (variant,)):
             cfn.add(r["full_name"])
         base = {Path(p).name for p in fp}
         return cls(cfn, mn, sig, fp, base, conn)
@@ -133,9 +132,7 @@ class Oracle:
         ).fetchall()
         return {r[0] for r in rows}
 
-    def method_exists(
-        self, class_short: str, method: str, variant: str = "validated"
-    ) -> bool:
+    def method_exists(self, class_short: str, method: str, variant: str = "validated") -> bool:
         r = self.conn.execute(
             "SELECT 1 FROM methods WHERE variant=? AND method_name=? "
             "AND (class_full_name=? OR class_full_name LIKE ?) LIMIT 1",
@@ -159,9 +156,7 @@ class Oracle:
             parent = head.rsplit(".", 1)[0]
             if parent in self.class_full_names:
                 continue  # Class.method or Class.FIELD reference
-            if any(
-                c == head or c.startswith(head + ".") for c in self.class_full_names
-            ):
+            if any(c == head or c.startswith(head + ".") for c in self.class_full_names):
                 continue  # a package prefix
             bad.append(m)
         # *.java basenames
@@ -213,9 +208,7 @@ def jidra_backend(graph: str, codebase: str) -> Backend:
 def codegraph_backend(codebase: str) -> Backend:
     return Backend(
         "codegraph",
-        StdioServerParameters(
-            command="codegraph", args=["serve", "--mcp"], cwd=codebase
-        ),
+        StdioServerParameters(command="codegraph", args=["serve", "--mcp"], cwd=codebase),
     )
 
 
@@ -303,82 +296,82 @@ async def run_agent(
     t0 = time.perf_counter()
     _system = system if system is not None else SYSTEM
     try:
-        async with stdio_client(backend.params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                tool_list = (await session.list_tools()).tools
-                tools = _to_anthropic_tools(tool_list)
-                log(label, f"connected · {len(tools)} tools available")
-                messages = [{"role": "user", "content": task_prompt}]
+        async with (
+            stdio_client(backend.params) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            tool_list = (await session.list_tools()).tools
+            tools = _to_anthropic_tools(tool_list)
+            log(label, f"connected · {len(tools)} tools available")
+            messages = [{"role": "user", "content": task_prompt}]
 
-                for it in range(1, MAX_ITERS + 1):
-                    resp = await client.messages.create(
-                        model=model,
-                        max_tokens=AGENT_MAX_TOKENS,
-                        system=_system,
-                        tools=tools,
-                        messages=messages,
-                    )
-                    rr.in_tokens += resp.usage.input_tokens
-                    rr.out_tokens += resp.usage.output_tokens
+            for it in range(1, MAX_ITERS + 1):
+                resp = await client.messages.create(
+                    model=model,
+                    max_tokens=AGENT_MAX_TOKENS,
+                    system=_system,
+                    tools=tools,
+                    messages=messages,
+                )
+                rr.in_tokens += resp.usage.input_tokens
+                rr.out_tokens += resp.usage.output_tokens
 
-                    tool_uses = [b for b in resp.content if b.type == "tool_use"]
-                    text = "".join(b.text for b in resp.content if b.type == "text")
+                tool_uses = [b for b in resp.content if b.type == "tool_use"]
+                text = "".join(b.text for b in resp.content if b.type == "text")
+                log(
+                    label,
+                    f"iter {it}: +{resp.usage.output_tokens}out tok "
+                    f"(cum {rr.total_tokens}) · {len(tool_uses)} tool-call(s)"
+                    + (f" · thinks: {_compact(text, 80)}" if text.strip() else ""),
+                )
+
+                if not tool_uses:
+                    rr.answer = text.strip()
                     log(
                         label,
-                        f"iter {it}: +{resp.usage.output_tokens}out tok "
-                        f"(cum {rr.total_tokens}) · {len(tool_uses)} tool-call(s)"
-                        + (f" · thinks: {_compact(text, 80)}" if text.strip() else ""),
+                        f"FINAL ({rr.tool_calls} calls): {_compact(rr.answer, 160)}",
                     )
+                    break
 
-                    if not tool_uses:
-                        rr.answer = text.strip()
+                messages.append({"role": "assistant", "content": resp.content})
+                tool_results = []
+                for tu in tool_uses:
+                    rr.tool_calls += 1
+                    rr.tools_used.append(tu.name)
+                    log(label, f"  → {tu.name}({_compact(tu.input or {}, 90)})")
+                    try:
+                        out = await asyncio.wait_for(session.call_tool(tu.name, tu.input or {}), 60)
+                        payload = _mcp_text(out)
                         log(
                             label,
-                            f"FINAL ({rr.tool_calls} calls): {_compact(rr.answer, 160)}",
+                            f"  ← {len(payload)} chars · {_compact(payload, 110)}",
                         )
-                        break
-
-                    messages.append({"role": "assistant", "content": resp.content})
-                    tool_results = []
-                    for tu in tool_uses:
-                        rr.tool_calls += 1
-                        rr.tools_used.append(tu.name)
-                        log(label, f"  → {tu.name}({_compact(tu.input or {}, 90)})")
-                        try:
-                            out = await asyncio.wait_for(
-                                session.call_tool(tu.name, tu.input or {}), 60
-                            )
-                            payload = _mcp_text(out)
-                            log(
-                                label,
-                                f"  ← {len(payload)} chars · {_compact(payload, 110)}",
-                            )
-                        except Exception as e:  # noqa: BLE001
-                            payload = f"TOOL_ERROR: {e!r}"
-                            log(label, f"  ← ERROR {_compact(repr(e), 110)}")
-                        # v2: record full call trace
-                        rr.tool_trace.append(
-                            {
-                                "iter": it,
-                                "tool": tu.name,
-                                "input": tu.input or {},
-                                "response": payload[:TRACE_RESPONSE_CAP],
-                                "response_truncated": len(payload) > TRACE_RESPONSE_CAP,
-                            }
-                        )
-                        tool_results.append(
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": tu.id,
-                                "content": payload or "(empty)",
-                            }
-                        )
-                    messages.append({"role": "user", "content": tool_results})  # type: ignore[arg-type]
-                else:
-                    rr.answer = "(max iterations reached without final answer)"
-                    log(label, "hit MAX_ITERS without final answer")
-    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
+                        payload = f"TOOL_ERROR: {e!r}"
+                        log(label, f"  ← ERROR {_compact(repr(e), 110)}")
+                    # v2: record full call trace
+                    rr.tool_trace.append(
+                        {
+                            "iter": it,
+                            "tool": tu.name,
+                            "input": tu.input or {},
+                            "response": payload[:TRACE_RESPONSE_CAP],
+                            "response_truncated": len(payload) > TRACE_RESPONSE_CAP,
+                        }
+                    )
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tu.id,
+                            "content": payload or "(empty)",
+                        }
+                    )
+                messages.append({"role": "user", "content": tool_results})  # type: ignore[arg-type]
+            else:
+                rr.answer = "(max iterations reached without final answer)"
+                log(label, "hit MAX_ITERS without final answer")
+    except Exception as e:
         rr.error = repr(e)[:300]
         log(label, f"RUN ERROR {_compact(repr(e), 160)}")
     rr.wall_ms = (time.perf_counter() - t0) * 1000
@@ -427,8 +420,7 @@ def make_tasks() -> list[Task]:
         )
         named = [c.split(".")[-1] for c in impls if c.split(".")[-1].lower() in a]
         confident_single = (
-            bool(re.search(r"\bthe (single |sole )?implementation\b", a))
-            and len(named) <= 1
+            bool(re.search(r"\bthe (single |sole )?implementation\b", a)) and len(named) <= 1
         )
         ok = has_exact_count and signals_many and not confident_single
         return (
@@ -535,9 +527,7 @@ def make_tasks() -> list[Task]:
         if not callees:
             return False, "no callees in graph"
         hit = {c for c in callees if len(c) > 3 and c in _lc(ans)}
-        ok = (
-            len(hit) >= 3
-        )  # v2: raised from 1 — agent must enumerate real downstream chain
+        ok = len(hit) >= 3  # v2: raised from 1 — agent must enumerate real downstream chain
         return ok, f"callee_hit {len(hit)}/{len(callees)} (need>=3)"
 
     tasks.append(
@@ -671,9 +661,7 @@ async def main_async(args) -> None:
     results: list[dict] = []
     for task in tasks:
         for be in backends:
-            print(
-                f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
-            )
+            print(f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True)
             _skill_system = SYSTEM if be.name == "jidra" else _SYSTEM_BASE
             rr = await run_agent(
                 client,
@@ -688,7 +676,7 @@ async def main_async(args) -> None:
                 try:
                     ok, note = task.check(rr.answer, oracle)
                     rr.correct = ok
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     note = f"check_error: {e!r}"
                 rr.hallucinated = oracle.hallucinated_refs(rr.answer)
             else:
@@ -799,9 +787,7 @@ def selfcheck(graph: str) -> bool:
         all_ok &= ok
         print(f"  [{'ok ' if ok else 'BAD'}] {name:42} {detail}")
     print(
-        "=== ALL GT RESOLVES — safe to run ==="
-        if all_ok
-        else "=== FIX TASKS BEFORE PAID RUN ==="
+        "=== ALL GT RESOLVES — safe to run ===" if all_ok else "=== FIX TASKS BEFORE PAID RUN ==="
     )
     return all_ok
 
@@ -863,8 +849,7 @@ def _build_checker_java(cfg: dict, oracle: Oracle):
             a = _lc(ans)
             has_count = str(n) in a
             signals_many = any(
-                k in a
-                for k in ("multiple", "many", "several", "implementations", "dozens")
+                k in a for k in ("multiple", "many", "several", "implementations", "dozens")
             )
             confident_single = (
                 bool(re.search(r"\bthe (single |sole )?implementation\b", a))
@@ -887,9 +872,7 @@ def _build_checker_java(cfg: dict, oracle: Oracle):
                 return False, "no GT callers"
             a = _lc(ans)
             hit = {c for c in callers if len(c) > 4 and c in a}
-            return len(
-                hit
-            ) >= min_hits, f"caller_hit {len(hit)}/{len(callers)} (need>={min_hits})"
+            return len(hit) >= min_hits, f"caller_hit {len(hit)}/{len(callers)} (need>={min_hits})"
 
         return check
 
@@ -915,9 +898,7 @@ def _build_checker_java(cfg: dict, oracle: Oracle):
                 return False, "no GT callees"
             a = _lc(ans)
             hit = {c for c in callees if len(c) > 3 and c in a}
-            return len(
-                hit
-            ) >= min_hits, f"callee_hit {len(hit)}/{len(callees)} (need>={min_hits})"
+            return len(hit) >= min_hits, f"callee_hit {len(hit)}/{len(callees)} (need>={min_hits})"
 
         return check
 
@@ -931,9 +912,7 @@ def _build_checker_java(cfg: dict, oracle: Oracle):
             if class_filter:
                 exists = oracle.method_exists(class_filter, method)
             else:
-                exists = any(
-                    c.rsplit(".", 1)[-1] == method for c in oracle.class_full_names
-                )
+                exists = any(c.rsplit(".", 1)[-1] == method for c in oracle.class_full_names)
             a = _lc(ans)
             says_absent = any(k in a for k in absent_phrases)
             checked = (class_check in a) if class_check else True
@@ -998,9 +977,7 @@ def _build_checker_java(cfg: dict, oracle: Oracle):
             if not caller_files:
                 return False, "no GT caller files"
             a = _lc(ans)
-            stems = {
-                re.sub(r"\.[^.]+$", "", f.split("/")[-1]).lower() for f in caller_files
-            }
+            stems = {re.sub(r"\.[^.]+$", "", f.split("/")[-1]).lower() for f in caller_files}
             hit_path = {f for f in caller_files if f.lower() in a}
             hit_stem = {s for s in stems if len(s) >= 5 and s in a}
             hit = len(hit_path | hit_stem)
@@ -1028,39 +1005,26 @@ def selfcheck_config(graph: str, config_path: str) -> bool:
             if class_filter:
                 absent = not oracle.method_exists(class_filter, method)
             else:
-                absent = not any(
-                    c.rsplit(".", 1)[-1] == method for c in oracle.class_full_names
-                )
-            checks.append(
-                (f"{tid} {method} ABSENT", absent, "absent" if absent else "PRESENT!")
-            )
+                absent = not any(c.rsplit(".", 1)[-1] == method for c in oracle.class_full_names)
+            checks.append((f"{tid} {method} ABSENT", absent, "absent" if absent else "PRESENT!"))
 
         elif kind == "impl_count":
             iface = tc["interface"]
             n = len(oracle.implementers(iface))
             min_count = tc.get("min_count", 1)
-            checks.append(
-                (f"{tid} {iface} impls>={min_count}", n >= min_count, f"{n} impls")
-            )
+            checks.append((f"{tid} {iface} impls>={min_count}", n >= min_count, f"{n} impls"))
 
         elif kind == "caller_hit":
             n = len(oracle.callers_of(method))
             min_hits = tc.get("min_hits", 3)
-            checks.append(
-                (f"{tid} {method} callers>={min_hits}", n >= min_hits, f"{n} callers")
-            )
+            checks.append((f"{tid} {method} callers>={min_hits}", n >= min_hits, f"{n} callers"))
 
         elif kind == "callee_hit":
             class_filter = tc.get("class_filter", "")
-            if class_filter:
-                callees = _gt_callees_filtered(oracle, method, class_filter)
-            else:
-                callees = set()
+            callees = _gt_callees_filtered(oracle, method, class_filter) if class_filter else set()
             n = len(callees)
             min_hits = tc.get("min_hits", 3)
-            checks.append(
-                (f"{tid} {method} callees>={min_hits}", n >= min_hits, f"{n} callees")
-            )
+            checks.append((f"{tid} {method} callees>={min_hits}", n >= min_hits, f"{n} callees"))
 
         elif kind == "change_impact":
             n = len(_gt_caller_files(oracle, method))
@@ -1075,9 +1039,7 @@ def selfcheck_config(graph: str, config_path: str) -> bool:
 
         elif kind == "named_class":
             expected = tc["expected_class"]
-            present = any(
-                c.rsplit(".", 1)[-1] == expected for c in oracle.class_full_names
-            )
+            present = any(c.rsplit(".", 1)[-1] == expected for c in oracle.class_full_names)
             checks.append(
                 (
                     f"{tid} {expected} in graph",
@@ -1131,9 +1093,7 @@ async def run_config_async(args) -> None:
     results: list[dict] = []
     for task in tasks:
         for be in backends:
-            print(
-                f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
-            )
+            print(f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True)
             _skill_system = SYSTEM if be.name == "jidra" else _SYSTEM_BASE
             rr = await run_agent(
                 client,
@@ -1171,9 +1131,7 @@ async def run_config_async(args) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(
-        description="Agent-in-loop eval v2: JIDRA vs CodeGraph"
-    )
+    ap = argparse.ArgumentParser(description="Agent-in-loop eval v2: JIDRA vs CodeGraph")
     ap.add_argument("--graph", required=True, help="path to JIDRA graph.db")
     ap.add_argument("--codebase", help="repo root")
     ap.add_argument("--model", default="claude-sonnet-4-6")
@@ -1181,9 +1139,7 @@ def main() -> None:
     ap.add_argument("--out", default="agent_eval_results.json")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--selfcheck", action="store_true")
-    ap.add_argument(
-        "--config", default="", help="JSON task config (enables config-driven mode)"
-    )
+    ap.add_argument("--config", default="", help="JSON task config (enables config-driven mode)")
     ap.add_argument(
         "--skill",
         default="",

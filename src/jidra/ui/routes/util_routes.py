@@ -34,6 +34,7 @@ def _pick_folder_macos() -> str | None:
         capture_output=True,
         text=True,
         timeout=60,
+        check=False,
     )
     if result.returncode != 0:
         return None

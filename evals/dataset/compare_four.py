@@ -114,9 +114,7 @@ def print_report(js, je, cs, ce) -> None:
     print(
         f"  {'Metric':<22}  {'JIDRA search':<16}  {'JIDRA explore':<16}  {'CG search':<16}  {'CG explore*'}"
     )
-    print(
-        "  (* CG explore = 1-hop edge approximation, not CG's native semantic explore)"
-    )
+    print("  (* CG explore = 1-hop edge approximation, not CG's native semantic explore)")
     print(sep)
 
     for label, key in [
@@ -352,9 +350,7 @@ def build_markdown(
         ]
         for cid in sorted(wl["both_fail_ids"]):
             missed = (
-                js.get(cid, {}).get("missed_files")
-                or je.get(cid, {}).get("missed_files")
-                or []
+                js.get(cid, {}).get("missed_files") or je.get(cid, {}).get("missed_files") or []
             )
             lines.append(f"| {cid} | `{', '.join(missed)}` |")
         lines += ["", "---", ""]
@@ -442,9 +438,7 @@ def run_pipeline(args: argparse.Namespace, work: Path) -> tuple[Path, Path, Path
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="4-way retrieval comparison + markdown report"
-    )
+    parser = argparse.ArgumentParser(description="4-way retrieval comparison + markdown report")
 
     # Pre-computed JSONs
     parser.add_argument("--jidra-search", default=None, metavar="JSON")
@@ -459,12 +453,8 @@ def main() -> None:
     parser.add_argument("--repo", default=None, metavar="ORG/REPO")
     parser.add_argument("--work-dir", default="evals/dataset/results", metavar="DIR")
 
-    parser.add_argument(
-        "--out", default=None, metavar="JSON", help="Write summary JSON"
-    )
-    parser.add_argument(
-        "--report", default=None, metavar="MD", help="Write markdown report"
-    )
+    parser.add_argument("--out", default=None, metavar="JSON", help="Write summary JSON")
+    parser.add_argument("--report", default=None, metavar="MD", help="Write markdown report")
 
     args = parser.parse_args()
 
@@ -478,9 +468,7 @@ def main() -> None:
         cg_s = Path(args.cg_search)
         cg_e = Path(args.cg_explore)
     else:
-        sys.exit(
-            "Provide (--jidra-db + --cg-db + --cases) OR all 4 --*-search/explore JSONs"
-        )
+        sys.exit("Provide (--jidra-db + --cg-db + --cases) OR all 4 --*-search/explore JSONs")
 
     for p in (jidra_s, jidra_e, cg_s, cg_e):
         if not p.exists():

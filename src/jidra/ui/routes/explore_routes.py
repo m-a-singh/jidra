@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -30,9 +29,7 @@ def _resolve_method(graph, selector: str):
     if not candidates:
         raise HTTPException(status_code=404, detail=_method_not_found_error(selector))
     if len(candidates) > 1:
-        raise HTTPException(
-            status_code=409, detail=_method_ambiguous_error(selector, candidates)
-        )
+        raise HTTPException(status_code=409, detail=_method_ambiguous_error(selector, candidates))
     return candidates[0]
 
 
@@ -218,9 +215,7 @@ async def error_doc(req: ErrorDocRequest) -> dict:
 
     method_by_id = {m.id: m for m in graph.methods}
     failing_row = anchor
-    caller_row = (
-        matched_rows[anchor["frame_index"] - 1] if anchor["frame_index"] > 0 else None
-    )
+    caller_row = matched_rows[anchor["frame_index"] - 1] if anchor["frame_index"] > 0 else None
 
     neighbors = []
     if failing_row.get("matched_method_id"):
@@ -236,12 +231,8 @@ async def error_doc(req: ErrorDocRequest) -> dict:
                     neighbors.append(src.signature)
     neighbors = sorted(set(neighbors))[:10]
 
-    unresolved_near_all = (flow_result.get("mind_map", {}) or {}).get(
-        "unresolved_calls", []
-    )
-    unresolved_near = [
-        c for c in unresolved_near_all if not _is_error_doc_noise_call(c)
-    ][:10]
+    unresolved_near_all = (flow_result.get("mind_map", {}) or {}).get("unresolved_calls", [])
+    unresolved_near = [c for c in unresolved_near_all if not _is_error_doc_noise_call(c)][:10]
 
     anchor_id = failing_row.get("matched_method_id")
     meaningful_downstream = []
@@ -293,7 +284,9 @@ async def error_doc(req: ErrorDocRequest) -> dict:
             failing_location = m.signature
     lines.append(f"| 1 | `{failing_location}` | failing project frame |")
     if caller_row:
-        caller_loc = f"{caller_row['class_full_name']}#{caller_row['method_name']}:{caller_row['line']}"
+        caller_loc = (
+            f"{caller_row['class_full_name']}#{caller_row['method_name']}:{caller_row['line']}"
+        )
         lines.append(f"| 2 | `{caller_loc}` | caller frame above failure |")
     for c in unresolved_near:
         receiver = str(c.get("receiver") or "").strip()

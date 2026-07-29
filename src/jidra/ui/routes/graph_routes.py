@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
@@ -134,9 +133,7 @@ async def get_nodes(
 
 
 @router.get("/node/{node_id:path}")
-async def get_node(
-    node_id: str, repo_path: str, output_path: str | None = None
-) -> dict:
+async def get_node(node_id: str, repo_path: str, output_path: str | None = None) -> dict:
     try:
         engine = _get_engine(repo_path, output_path)
     except Exception as exc:
@@ -158,16 +155,10 @@ async def graph_html(
     from .util_routes import resolve_out_dir
 
     out_dir = resolve_out_dir(repo_path, output_path)
-    name = (
-        "graph_visualization_raw.html"
-        if variant == "raw"
-        else "graph_visualization.html"
-    )
+    name = "graph_visualization_raw.html" if variant == "raw" else "graph_visualization.html"
     html_path = out_dir / name
     if not html_path.exists():
-        raise HTTPException(
-            status_code=404, detail=f"{name} not found — run the pipeline first"
-        )
+        raise HTTPException(status_code=404, detail=f"{name} not found — run the pipeline first")
     html = html_path.read_text(encoding="utf-8")
     # vis-network requires a concrete pixel height on its container.
     # In an iframe the flex chain may not resolve, so we force it.

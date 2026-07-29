@@ -13,12 +13,15 @@ from __future__ import annotations
 import ast
 import logging
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Callable
+from typing import ClassVar
 
 from ..engine.parallel import parallel_map
+from ..filters.py_filters import iter_python_files
+from ..filters.py_type_provider import PyrightLSPEnricher, PyrightValidator
 from ..models import (
     CallSite,
     ClassEntry,
@@ -27,16 +30,14 @@ from ..models import (
     InheritanceEdge,
     MethodEntry,
     ResolvedCallEdge,
-    class_id,
-    method_id,
-    field_id,
     callsite_id,
+    class_id,
+    field_id,
     inheritance_edge_id,
-    resolved_call_edge_id,
+    method_id,
     method_signature,
+    resolved_call_edge_id,
 )
-from ..filters.py_filters import iter_python_files
-from ..filters.py_type_provider import PyrightValidator
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +80,7 @@ class ASTExtractor(ast.NodeVisitor):
         self.file_path = str(file_path.relative_to(root))
         self.root = root
         self.module_namespace = module_namespace
-        self.source_lines = file_path.read_text(
-            encoding="utf-8", errors="replace"
-        ).split("\n")
+        self.source_lines = file_path.read_text(encoding="utf-8", errors="replace").split("\n")
 
         self.classes: list[ClassEntry] = []
         self.methods: list[MethodEntry] = []
@@ -181,14 +180,10 @@ class ASTExtractor(ast.NodeVisitor):
                 and item.name == "__init__"
             ):
                 self_types = self._extract_self_field_types(item)
-                self._class_self_types.setdefault(class_entry.full_name, {}).update(
-                    self_types
-                )
+                self._class_self_types.setdefault(class_entry.full_name, {}).update(self_types)
 
         for item in node.body:
-            if isinstance(item, ast.FunctionDef) or isinstance(
-                item, ast.AsyncFunctionDef
-            ):
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 self._extracted_method_nodes.add(id(item))
                 self._extract_method(item, class_entry)
             elif isinstance(item, ast.AnnAssign):
@@ -196,15 +191,11 @@ class ASTExtractor(ast.NodeVisitor):
 
         # Emit FieldEntry for self-attrs discovered in __init__ so Rust's
         # fields_by_class lookup can walk self.attr chains.
-        for attr_name, attr_type in self._class_self_types.get(
-            class_entry.full_name, {}
-        ).items():
+        for attr_name, attr_type in self._class_self_types.get(class_entry.full_name, {}).items():
             if attr_type and attr_type != "unknown":
                 self.fields.append(
                     FieldEntry(
-                        id=field_id(
-                            class_entry.full_name, attr_name, self.file_path, 0
-                        ),
+                        id=field_id(class_entry.full_name, attr_name, self.file_path, 0),
                         class_id=class_entry.id,
                         name=attr_name,
                         type_name=attr_type,
@@ -226,9 +217,7 @@ class ASTExtractor(ast.NodeVisitor):
             self._ensure_module_class()
             self._extract_method(node, self.current_class)
         self.generic_visit(node)
-        self.current_class = (
-            prev_class  # Restore so sibling functions are also extracted
-        )
+        self.current_class = prev_class  # Restore so sibling functions are also extracted
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         """Extract async function."""
@@ -237,9 +226,7 @@ class ASTExtractor(ast.NodeVisitor):
             self._ensure_module_class()
             self._extract_method(node, self.current_class)
         self.generic_visit(node)
-        self.current_class = (
-            prev_class  # Restore so sibling functions are also extracted
-        )
+        self.current_class = prev_class  # Restore so sibling functions are also extracted
 
     def _extract_field(self, node: ast.AnnAssign, class_entry: ClassEntry):
         """Extract field from annotated assignment."""
@@ -248,9 +235,7 @@ class ASTExtractor(ast.NodeVisitor):
             type_name = self._get_annotation_name(node.annotation)
 
             field_entry = FieldEntry(
-                id=field_id(
-                    class_entry.full_name, field_name, self.file_path, node.lineno
-                ),
+                id=field_id(class_entry.full_name, field_name, self.file_path, node.lineno),
                 class_id=class_entry.id,
                 name=field_name,
                 type_name=type_name or "unknown",
@@ -278,9 +263,7 @@ class ASTExtractor(ast.NodeVisitor):
             param_names.append(param_name)
 
             if param.annotation:
-                param_types.append(
-                    self._get_annotation_name(param.annotation) or "unknown"
-                )
+                param_types.append(self._get_annotation_name(param.annotation) or "unknown")
             else:
                 param_types.append("unknown")
 
@@ -333,14 +316,12 @@ class ASTExtractor(ast.NodeVisitor):
         self.symbol_table.push_scope()
 
         # Track parameter types in scope
-        for pname, ptype in zip(param_names, param_types):
+        for pname, ptype in zip(param_names, param_types, strict=False):
             self.symbol_table.set_type(pname, ptype)
 
         # Seed self.attr types from __init__ scan (populated on first __init__ pass)
         if class_entry and class_entry.full_name in self._class_self_types:
-            for attr, attr_type in self._class_self_types[
-                class_entry.full_name
-            ].items():
+            for attr, attr_type in self._class_self_types[class_entry.full_name].items():
                 self.symbol_table.set_type(f"self.{attr}", attr_type)
 
         # Visit body to extract calls and assignments
@@ -374,11 +355,22 @@ class ASTExtractor(ast.NodeVisitor):
         callee_name = "unknown"
         receiver = None
 
+        receiver_col = 1
         if isinstance(node.func, ast.Name):
             callee_name = node.func.id
         elif isinstance(node.func, ast.Attribute):
             callee_name = node.func.attr
             receiver = self._get_attribute_name(node.func.value)
+            # For hover queries: point at the last attribute in a chain.
+            # e.g. self.apps.check_models_ready() -> node.func.value is Attribute(self, 'apps')
+            # We want to hover on 'apps', so use end_col_offset - 1 of node.func.value,
+            # which points at the last char of the attribute name.
+            recv_node = node.func.value
+            if isinstance(recv_node, ast.Attribute):
+                # end_col_offset points just past the attr name; step back 1 char
+                receiver_col = getattr(recv_node, "end_col_offset", 0)
+            else:
+                receiver_col = getattr(recv_node, "col_offset", 0) + 1
 
         arg_count = len(node.args)
 
@@ -391,14 +383,14 @@ class ASTExtractor(ast.NodeVisitor):
                 receiver_type = self.symbol_table.get_type(f"self.{receiver}")
 
         callsite = CallSite(
-            id=callsite_id(caller_method_id, node.lineno, 1, callee_name),
+            id=callsite_id(caller_method_id, node.lineno, receiver_col, callee_name),
             caller_method_id=caller_method_id,
             callee_name=callee_name,
             receiver=receiver,
             argument_count=arg_count,
             file_path=self.file_path,
             line=node.lineno,
-            column=1,
+            column=receiver_col,
             text="",
             receiver_type_raw=receiver_type,
             receiver_type_normalized=receiver_type,
@@ -437,20 +429,20 @@ class ASTExtractor(ast.NodeVisitor):
                     ):
                         # Try constructor call first, then param name lookup
                         inferred = self._infer_type_from_value(stmt.value)
-                        if not inferred or inferred == "unknown":
-                            if isinstance(stmt.value, ast.Name):
-                                inferred = param_types.get(stmt.value.id)
+                        if (not inferred or inferred == "unknown") and isinstance(
+                            stmt.value, ast.Name
+                        ):
+                            inferred = param_types.get(stmt.value.id)
                         if inferred and inferred != "unknown":
                             result[target.attr] = inferred
-            elif isinstance(stmt, ast.AnnAssign):
-                if (
-                    isinstance(stmt.target, ast.Attribute)
-                    and isinstance(stmt.target.value, ast.Name)
-                    and stmt.target.value.id == "self"
-                ):
-                    ann_type = self._get_annotation_name(stmt.annotation)
-                    if ann_type and ann_type != "unknown":
-                        result[stmt.target.attr] = ann_type
+            elif isinstance(stmt, ast.AnnAssign) and (
+                isinstance(stmt.target, ast.Attribute)
+                and isinstance(stmt.target.value, ast.Name)
+                and stmt.target.value.id == "self"
+            ):
+                ann_type = self._get_annotation_name(stmt.annotation)
+                if ann_type and ann_type != "unknown":
+                    result[stmt.target.attr] = ann_type
         return result
 
     def _track_assignments(self, node: ast.AST):
@@ -477,11 +469,8 @@ class ASTExtractor(ast.NodeVisitor):
                     if var_type:
                         self.symbol_table.set_type(var_name, var_type)
 
-            elif isinstance(child, ast.For):
-                # for x in iterable: track x
-                if isinstance(child.target, ast.Name):
-                    # For now, mark as unknown (could improve with typing analysis)
-                    pass
+            elif isinstance(child, ast.For) and isinstance(child.target, ast.Name):
+                pass  # for x in iterable: track x (type analysis not yet implemented)
 
     def _infer_type_from_value(self, value: ast.expr) -> str | None:
         """Infer variable type from assigned value with import resolution."""
@@ -520,18 +509,14 @@ class ASTExtractor(ast.NodeVisitor):
             )
             self.classes.append(self.current_class)
 
-    def _get_stereotypes(
-        self, node: ast.ClassDef, bases: list[str] | None = None
-    ) -> list[str]:
+    def _get_stereotypes(self, node: ast.ClassDef, bases: list[str] | None = None) -> list[str]:
         """Detect stereotypes from decorators and base classes."""
         stereotypes = []
         for decorator in node.decorator_list:
             dec_name = ""
             if isinstance(decorator, ast.Name):
                 dec_name = decorator.id
-            elif isinstance(decorator, ast.Call) and isinstance(
-                decorator.func, ast.Name
-            ):
+            elif isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Name):
                 dec_name = decorator.func.id
 
             if "dataclass" in dec_name.lower():
@@ -560,7 +545,7 @@ class ASTExtractor(ast.NodeVisitor):
             parts.append(func.id)
         return ".".join(reversed(parts))
 
-    _HTTP_VERBS = {"get", "post", "put", "patch", "delete", "head", "options"}
+    _HTTP_VERBS: ClassVar[set[str]] = {"get", "post", "put", "patch", "delete", "head", "options"}
 
     def _py_method_framework_meta(
         self, node: ast.FunctionDef | ast.AsyncFunctionDef, class_entry: ClassEntry
@@ -585,14 +570,8 @@ class ASTExtractor(ast.NodeVisitor):
                 if dec.args and isinstance(dec.args[0], ast.Constant):
                     first_arg = dec.args[0].value
                 for kw in dec.keywords:
-                    if kw.arg == "methods" and isinstance(
-                        kw.value, (ast.List, ast.Tuple)
-                    ):
-                        verbs = [
-                            e.value
-                            for e in kw.value.elts
-                            if isinstance(e, ast.Constant)
-                        ]
+                    if kw.arg == "methods" and isinstance(kw.value, (ast.List, ast.Tuple)):
+                        verbs = [e.value for e in kw.value.elts if isinstance(e, ast.Constant)]
                         kw_methods = verbs[0] if verbs else None
             # Flask / Blueprint: @app.route("/x", methods=["POST"])
             if tail == "route":
@@ -608,11 +587,14 @@ class ASTExtractor(ast.NodeVisitor):
                 http_method = tail.upper()
 
         # Django class-based view: get()/post()/... on a *View subclass.
-        if framework_role is None and node.name in self._HTTP_VERBS:
-            if "django_view" in (class_entry.stereotypes or []):
-                framework_role = "django_handler"
-                is_endpoint = True
-                http_method = node.name.upper()
+        if (
+            framework_role is None
+            and node.name in self._HTTP_VERBS
+            and "django_view" in (class_entry.stereotypes or [])
+        ):
+            framework_role = "django_handler"
+            is_endpoint = True
+            http_method = node.name.upper()
 
         return annotations, framework_role, is_endpoint, route, http_method
 
@@ -848,9 +830,7 @@ def build_py_graph(
     if validator is not None and validator.metrics.failures == 0:
         type_hints = validator.get_type_hints()
         if type_hints:
-            enriched = _apply_pyright_type_hints(
-                all_callsites, type_hints, codebase_root
-            )
+            enriched = _apply_pyright_type_hints(all_callsites, type_hints, codebase_root)
             if enriched:
                 logger.info(f"Pyright type pre-pass: enriched {enriched} call sites")
 
@@ -864,6 +844,19 @@ def build_py_graph(
         resolved_call_edges=[],
     )
     _resolve_calls(graph)
+
+    # Step 4b: LSP enrichment — uses all 6 LSP capabilities to fill gaps AST misses:
+    #   outgoingCalls (missing edges), incomingCalls (missed callers),
+    #   definition (resolve unknown receivers), references, workspace/symbol, documentSymbol.
+    # Runs AFTER initial resolve so new edges get a second resolution pass.
+    if enable_validation:
+        with PyrightLSPEnricher(codebase_root) as lsp:
+            if lsp.available:
+                lsp_results = lsp.enrich(graph, codebase_root, python_files)
+                if any(lsp_results.values()):
+                    logger.info(f"Pyright LSP enrichment: {lsp_results}")
+                    # Re-resolve calls now that new edges and receiver types are added
+                    _resolve_calls(graph)
 
     # Step 5: Drop cross-module edges with no import path (phantom removal)
     dropped = _filter_phantom_edges(graph)
@@ -918,9 +911,9 @@ def _resolve_calls(graph: Graph) -> None:
             by_name[method.method_name] = []
         by_name[method.method_name].append(method)
 
-        by_name_arity_buckets.setdefault(method.method_name, {}).setdefault(
-            arity, []
-        ).append(method)
+        by_name_arity_buckets.setdefault(method.method_name, {}).setdefault(arity, []).append(
+            method
+        )
 
     edges: list[ResolvedCallEdge] = []
 

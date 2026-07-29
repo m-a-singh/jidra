@@ -60,8 +60,7 @@ class JidraProxy:
                 return s
             time.sleep(self.POLL_INTERVAL)
         raise RuntimeError(
-            f"JIDRA daemon did not come up within {self.STARTUP_TIMEOUT}s "
-            f"(socket {self.sock_path})"
+            f"JIDRA daemon did not come up within {self.STARTUP_TIMEOUT}s (socket {self.sock_path})"
         )
 
     def _spawn_daemon(self) -> None:
@@ -122,14 +121,9 @@ class JidraProxy:
 
     def ping(self) -> bool:
         try:
-            return (
-                self._rpc({"id": self._next_id(), "method": "ping"}).get("result")
-                == "pong"
-            )
+            return self._rpc({"id": self._next_id(), "method": "ping"}).get("result") == "pong"
         except (OSError, RuntimeError, ValueError):
             return False
 
     def reload(self) -> dict:
-        return self._rpc({"id": self._next_id(), "method": "jidra/reload"}).get(
-            "result", {}
-        )
+        return self._rpc({"id": self._next_id(), "method": "jidra/reload"}).get("result", {})

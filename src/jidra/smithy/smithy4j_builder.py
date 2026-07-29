@@ -15,7 +15,6 @@ import sys
 import time
 from pathlib import Path
 
-
 _SMITHY4J_MARKER = "smithy4j"
 _GENERATED_SUBPATH = "build/generated-src/smithy4j/main"
 
@@ -25,9 +24,7 @@ def find_smithy4j_modules(codebase_root: Path) -> list[Path]:
     matches = []
     for gradle_file in codebase_root.rglob("build.gradle"):
         try:
-            if _SMITHY4J_MARKER in gradle_file.read_text(
-                encoding="utf-8", errors="ignore"
-            ):
+            if _SMITHY4J_MARKER in gradle_file.read_text(encoding="utf-8", errors="ignore"):
                 matches.append(gradle_file.parent)
         except OSError:
             continue
@@ -59,6 +56,7 @@ def build_smithy4j_sources(codebase_root: Path, timeout: int = 300) -> list[Path
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         elapsed = time.monotonic() - start

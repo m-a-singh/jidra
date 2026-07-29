@@ -65,8 +65,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jidra.cost_calculator import _build_jidra_context, _collect_naive_files
-from jidra import graph_store
 from jidra.selector import _resolve_method_selector
+
+from jidra import graph_store
 
 
 def _load_methods_from_file(path: str) -> list[str]:
@@ -74,11 +75,7 @@ def _load_methods_from_file(path: str) -> list[str]:
     text = Path(path).read_text().strip()
     if text.startswith("["):
         return [m.strip() for m in json.loads(text) if m.strip()]
-    return [
-        line.strip()
-        for line in text.splitlines()
-        if line.strip() and not line.startswith("#")
-    ]
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
 
 
 def _auto_discover_methods(graph, node_by_id: dict, limit: int) -> list[str]:
@@ -92,19 +89,13 @@ def _auto_discover_methods(graph, node_by_id: dict, limit: int) -> list[str]:
     # Prefer endpoint methods
     endpoints = [n for n in method_nodes if n.get("is_endpoint")]
     if endpoints:
-        candidates = sorted(
-            endpoints, key=lambda n: len(n.get("calls", [])), reverse=True
-        )
+        candidates = sorted(endpoints, key=lambda n: len(n.get("calls", [])), reverse=True)
     else:
         # Fall back to most-connected methods
-        candidates = sorted(
-            method_nodes, key=lambda n: len(n.get("calls", [])), reverse=True
-        )
+        candidates = sorted(method_nodes, key=lambda n: len(n.get("calls", [])), reverse=True)
 
     results = []
-    for node in candidates[
-        : limit * 3
-    ]:  # oversample to account for resolution failures
+    for node in candidates[: limit * 3]:  # oversample to account for resolution failures
         qn = node.get("qualified_name", "")
         if "#" in qn:
             class_part, method_part = qn.split("#", 1)
@@ -274,16 +265,12 @@ def _flush_debug(output_path: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _call_claude(
-    client, model: str, context: str, question: str
-) -> tuple[str, int, int]:
+def _call_claude(client, model: str, context: str, question: str) -> tuple[str, int, int]:
     global _total_cost, _total_input_tokens, _total_output_tokens
     resp = client.messages.create(
         model=model,
         max_tokens=1000,
-        messages=[
-            {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION:\n{question}"}
-        ],
+        messages=[{"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION:\n{question}"}],
     )
     text = resp.content[0].text if resp.content else ""
     inp, out = resp.usage.input_tokens, resp.usage.output_tokens
@@ -312,7 +299,7 @@ def _make_mc_question(
     """
     pool = distractors[:]
     random.shuffle(pool)
-    choices = [correct] + pool[: n_choices - 1]
+    choices = [correct, *pool[: n_choices - 1]]
     random.shuffle(choices)
     correct_letter = "ABCD"[choices.index(correct)]
     lines = [stem, ""]
@@ -443,9 +430,7 @@ def test_callee_mc(
         all_q_results.append(round_results)
 
     accuracy = {
-        label: round(questions_correct[label] / questions_total, 3)
-        if questions_total
-        else 0.0
+        label: round(questions_correct[label] / questions_total, 3) if questions_total else 0.0
         for label in ("traditional", "jidra")
     }
     return {
@@ -513,9 +498,7 @@ def test_caller_mc(
         all_q_results.append(round_results)
 
     accuracy = {
-        label: round(questions_correct[label] / questions_total, 3)
-        if questions_total
-        else 0.0
+        label: round(questions_correct[label] / questions_total, 3) if questions_total else 0.0
         for label in ("traditional", "jidra")
     }
     return {
@@ -564,9 +547,7 @@ def test_dependency_mc(
         }
 
     # Distractor class names — real classes in graph but not dependencies
-    all_classes = {
-        n.get("class_name") for n in node_by_id.values() if n.get("class_name")
-    }
+    all_classes = {n.get("class_name") for n in node_by_id.values() if n.get("class_name")}
     non_dep_classes = list(all_classes - dep_classes)
 
     dep_list = list(dep_classes)
@@ -579,9 +560,7 @@ def test_dependency_mc(
         distractors = random.sample(non_dep_classes, min(3, len(non_dep_classes)))
         if len(distractors) < 3:
             continue
-        stem = (
-            f"Which of the following classes does `{method_name}` directly depend on?"
-        )
+        stem = f"Which of the following classes does `{method_name}` directly depend on?"
         round_results = _run_mc_round(
             client,
             model,
@@ -600,9 +579,7 @@ def test_dependency_mc(
         all_q_results.append(round_results)
 
     accuracy = {
-        label: round(questions_correct[label] / questions_total, 3)
-        if questions_total
-        else 0.0
+        label: round(questions_correct[label] / questions_total, 3) if questions_total else 0.0
         for label in ("traditional", "jidra")
     }
     return {
@@ -752,9 +729,7 @@ def test_unit_test_generation(
         fabricated = project_identifiers - all_symbols
         real = project_identifiers & all_symbols
         fabrication_rate = (
-            round(len(fabricated) / len(project_identifiers), 3)
-            if project_identifiers
-            else 0.0
+            round(len(fabricated) / len(project_identifiers), 3) if project_identifiers else 0.0
         )
         results[label] = {
             "total_identifiers": len(all_identifiers),
@@ -788,7 +763,7 @@ def hybrid_tests(
         "What downstream step runs after the main search processor returns data?",
     ]
     results = []
-    for idx, question in enumerate(questions, 1):
+    for _idx, question in enumerate(questions, 1):
         answer, inp, out = _call_claude(client, model, jidra_ctx, question)
         results.append(
             {
@@ -820,13 +795,13 @@ def test_consistency_drift(
     results = {}
     for label, context in [("traditional", naive_src), ("jidra", jidra_ctx)]:
         # Two independent calls — simulates separate sessions
-        answer_a, inp_a, out_a = _call_claude(client, model, context, question)
+        answer_a, inp_a, _out_a = _call_claude(client, model, context, question)
         _debug(f"\n{'─' * 60}")
         _debug(f"TEST: consistency_drift  [{label.upper()}]  RUN 1")
         _debug(f"QUESTION: {question}")
         _debug(f"MODEL RESPONSE:\n{answer_a.strip()}")
         time.sleep(1)
-        answer_b, inp_b, out_b = _call_claude(client, model, context, question)
+        answer_b, inp_b, _out_b = _call_claude(client, model, context, question)
         _debug(f"\n{'─' * 60}")
         _debug(f"TEST: consistency_drift  [{label.upper()}]  RUN 2")
         _debug(f"MODEL RESPONSE:\n{answer_b.strip()}")
@@ -837,9 +812,7 @@ def test_consistency_drift(
         claims_b = _extract_java_identifiers(answer_b) & all_symbols
         drift = _drift_score(claims_a, claims_b)
 
-        _debug(
-            f"DRIFT: {drift}  verified_run1={len(claims_a)}  verified_run2={len(claims_b)}"
-        )
+        _debug(f"DRIFT: {drift}  verified_run1={len(claims_a)}  verified_run2={len(claims_b)}")
         _debug(f"STABLE: {sorted(claims_a & claims_b)[:10]}")
         _debug(f"DRIFTED: {sorted(claims_a.symmetric_difference(claims_b))[:10]}")
 
@@ -892,9 +865,7 @@ def main() -> None:
         default=5,
         help="Number of methods to auto-discover (default: 5)",
     )
-    parser.add_argument(
-        "--model", default="claude-opus-4-7", help="Claude model to use"
-    )
+    parser.add_argument("--model", default="claude-opus-4-7", help="Claude model to use")
     parser.add_argument(
         "--tests",
         default="1,2,3,4,5",
@@ -982,56 +953,64 @@ def main() -> None:
         method_name = method_node.get("method_name") or method_selector.split(".")[-1]
         method_results = {"method": method_selector, "tests": []}
 
+        _mn = method_node
+        _nc = node_by_id
+        _jc = jidra_ctx
+        _ns = naive_src
+        _mname = method_name
+        _as = all_symbols
         test_fns = {
-            1: lambda: test_callee_mc(
+            1: lambda mn=_mn, nc=_nc, jc=_jc, ns=_ns, mname=_mname, as_=_as: test_callee_mc(
                 client,
                 args.model,
-                method_node,
-                node_by_id,
-                jidra_ctx,
-                naive_src,
-                method_name,
-                all_symbols,
+                mn,
+                nc,
+                jc,
+                ns,
+                mname,
+                as_,
             ),
-            2: lambda: test_caller_mc(
+            2: lambda mn=_mn, nc=_nc, jc=_jc, ns=_ns, mname=_mname, as_=_as: test_caller_mc(
                 client,
                 args.model,
-                method_node,
-                node_by_id,
-                jidra_ctx,
-                naive_src,
-                method_name,
-                all_symbols,
+                mn,
+                nc,
+                jc,
+                ns,
+                mname,
+                as_,
             ),
-            3: lambda: test_dependency_mc(
+            3: lambda mn=_mn, nc=_nc, jc=_jc, ns=_ns, mname=_mname, as_=_as: test_dependency_mc(
                 client,
                 args.model,
-                method_node,
-                node_by_id,
-                jidra_ctx,
-                naive_src,
-                method_name,
-                all_symbols,
+                mn,
+                nc,
+                jc,
+                ns,
+                mname,
+                as_,
             ),
-            4: lambda: test_unit_test_generation(
-                client,
-                args.model,
-                method_node,
-                node_by_id,
-                jidra_ctx,
-                naive_src,
-                method_name,
-                all_symbols,
+            4: lambda mn=_mn, nc=_nc, jc=_jc, ns=_ns, mname=_mname, as_=_as: (
+                test_unit_test_generation(
+                    client,
+                    args.model,
+                    mn,
+                    nc,
+                    jc,
+                    ns,
+                    mname,
+                    as_,
+                )
             ),
-            5: lambda: test_consistency_drift(
+            5: lambda mn=_mn, nc=_nc, jc=_jc, ns=_ns, mname=_mname, as_=_as: test_consistency_drift(
                 client,
                 args.model,
-                method_node,
-                node_by_id,
-                jidra_ctx,
-                naive_src,
-                method_name,
-                all_symbols,
+                mn,
+                nc,
+                jc,
+                ns,
+                mname,
+                as_,
             ),
         }
 
@@ -1053,9 +1032,7 @@ def main() -> None:
                 _print_test_summary(result)
             except Exception as e:
                 print(f"      ✗ Error: {e}")
-                method_results["tests"].append(
-                    {"test": test_labels[test_num], "error": str(e)}
-                )
+                method_results["tests"].append({"test": test_labels[test_num], "error": str(e)})
 
         all_results.append(method_results)
 

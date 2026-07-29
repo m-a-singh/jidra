@@ -70,28 +70,28 @@ Python uses a **4-phase call resolution** approach, leveraging symbol table trac
 
 ### Phase 1: Exact Match (receiver type + method name + exact arity)
 ```python
-user = User(name, email)    # Symbol table: user → User
-user.validate()             # Resolve: User.validate() exactly
+user = User(name, email)  # Symbol table: user → User
+user.validate()  # Resolve: User.validate() exactly
 ```
 **Resolution:** 33.8% of calls
 
 ### Phase 2: Name + Exact Arity (any class)
 ```python
-app.route("/api/users")     # No receiver type, but "route" + 1 arg
+app.route("/api/users")  # No receiver type, but "route" + 1 arg
 # → Find any class with method "route(1 arg)" → Flask
 ```
 **Resolution:** 33.8% of calls
 
 ### Phase 3: Name + Close Arity (±1 parameter)
 ```python
-obj.process(x, y, z)        # process(x, y, z, debug=False)
+obj.process(x, y, z)  # process(x, y, z, debug=False)
 # → Match even if param count off by 1 (default params, *args)
 ```
 **Resolution:** 4.7% of calls
 
 ### Phase 4: Name Only (fallback)
 ```python
-render()                    # "render" called without receiver
+render()  # "render" called without receiver
 # → Fall back to any "render()" in codebase
 ```
 **Resolution:** 2.0% of calls
@@ -106,16 +106,17 @@ Core improvement over naive AST parsing: **variable type inference**
 
 ```python
 # Assignment tracking
-user = User(name, email)      # → symbol_table["user"] = "User"
-config = load_config()        # → symbol_table["config"] = "Config"
+user = User(name, email)  # → symbol_table["user"] = "User"
+config = load_config()  # → symbol_table["config"] = "Config"
 
 # Import mapping
-from flask import Flask       # → import_map["Flask"] = "flask.Flask"
+from flask import Flask  # → import_map["Flask"] = "flask.Flask"
+
 
 # Scope awareness
 def process(items):
-    for item in items:        # → symbol_table["item"] = "unknown" (conservative)
-        item.validate()       # → Can resolve if item type inferred elsewhere
+    for item in items:  # → symbol_table["item"] = "unknown" (conservative)
+        item.validate()  # → Can resolve if item type inferred elsewhere
 ```
 
 This enables the Phase 1 exact matches that push us to 68.5%.

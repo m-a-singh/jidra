@@ -117,9 +117,7 @@ def build_payload(row: dict) -> str:
 
     if row.get("is_endpoint"):
         ep_parts = [
-            p
-            for p in [row.get("http_method"), row.get("full_route") or row.get("route")]
-            if p
+            p for p in [row.get("http_method"), row.get("full_route") or row.get("route")] if p
         ]
         if ep_parts:
             lines.append(f"endpoint: {' '.join(ep_parts)}")
@@ -270,7 +268,7 @@ def build_method_embeddings(
     t0 = time.perf_counter()
     triples = []
     for raw in rows:
-        row = dict(zip(col_names, raw))
+        row = dict(zip(col_names, raw, strict=False))
         payload = build_payload(row)
         h = payload_hash(payload)
         triples.append((row, payload, h))
@@ -284,9 +282,7 @@ def build_method_embeddings(
             (model_name,),
         ).fetchall()
         existing = {(r[0], r[1], r[2]): r[3] for r in pk_rows}
-        print(
-            f"[embed] loaded {len(existing)} existing hashes in {time.perf_counter() - t0:.2f}s"
-        )
+        print(f"[embed] loaded {len(existing)} existing hashes in {time.perf_counter() - t0:.2f}s")
 
     to_embed: list[tuple[dict, str, str]] = []
     for row, payload, h in triples:
@@ -306,9 +302,7 @@ def build_method_embeddings(
         payloads = [t[1] for t in batch]
         try:
             t0 = time.perf_counter()
-            vectors = model.encode(
-                payloads, show_progress_bar=False, normalize_embeddings=True
-            )
+            vectors = model.encode(payloads, show_progress_bar=False, normalize_embeddings=True)
             t_encode_total += time.perf_counter() - t0
         except Exception as exc:
             print(f"[embed] batch {i // batch_size} encode failed: {exc}")
@@ -316,7 +310,7 @@ def build_method_embeddings(
             continue
 
         t0 = time.perf_counter()
-        for (row, _, h), vec in zip(batch, vectors):
+        for (row, _, h), vec in zip(batch, vectors, strict=False):
             blob = vec.astype("float32").tobytes()
             try:
                 conn.execute(
@@ -368,7 +362,7 @@ def build_method_embeddings(
 def load_embedding_index(
     conn: sqlite3.Connection,
     model_name: str,
-) -> "tuple[np.ndarray, list[str]]":
+) -> tuple[np.ndarray, list[str]]:
     """Load all embeddings for model_name into a (N, D) float32 matrix.
 
     Returns (matrix, method_ids). Matrix rows are L2-normalised so
@@ -447,7 +441,7 @@ def rerank_by_embedding(
     # (NULL = NULL is NULL, not TRUE), which would silently empty vec_map.
     method_ids = [c["id"] for c in candidates[:top_k]]
     placeholders = ",".join("?" for _ in method_ids)
-    params_q = method_ids + [model_name]
+    params_q = [*method_ids, model_name]
     try:
         rows = conn.execute(
             f"SELECT method_id, embedding FROM method_embeddings "
@@ -473,9 +467,7 @@ def rerank_by_embedding(
             sim = float(np.dot(q_vec, vec_map[key]))
             if min_sim > 0.0 and sim < min_sim:
                 continue
-            blend = (
-                bm25_weight * bm25 + embed_weight * sim + heuristic_weight * heuristic
-            )
+            blend = bm25_weight * bm25 + embed_weight * sim + heuristic_weight * heuristic
         else:
             # No vector: use bm25 + heuristic only, scaled to preserve relative order
             blend = (bm25_weight + embed_weight) * bm25 + heuristic_weight * heuristic

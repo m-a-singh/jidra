@@ -45,9 +45,7 @@ def main():
     print("\nResolution overview:")
     print(f"  Total callsites: {total}")
     print(f"  Resolved:        {resolved} ({100 * resolved / total:.1f}%)")
-    print(
-        f"  Unresolved/Ambiguous: {total - resolved} ({100 * (total - resolved) / total:.1f}%)"
-    )
+    print(f"  Unresolved/Ambiguous: {total - resolved} ({100 * (total - resolved) / total:.1f}%)")
 
     print("\nStatus breakdown:")
     for r in status_rows:
@@ -82,9 +80,7 @@ def main():
     # --- Build lookups ---
     # implementers: interface/parent -> [implementing classes]
     implementers = defaultdict(list)
-    for row in conn.execute(
-        "SELECT source_class, target_class, relation FROM inheritance_edges"
-    ):
+    for row in conn.execute("SELECT source_class, target_class, relation FROM inheritance_edges"):
         if row["relation"] == "implements":
             implementers[row["target_class"]].append(row["source_class"])
 
@@ -209,9 +205,7 @@ def main():
     print(
         f"  Learnable: {learnable_count}/{len(unresolved_rows)} ({100 * learnable_count / len(unresolved_rows):.1f}%)"
     )
-    print(
-        f"  External/hard: {len(unresolved_rows) - learnable_count}/{len(unresolved_rows)}"
-    )
+    print(f"  External/hard: {len(unresolved_rows) - learnable_count}/{len(unresolved_rows)}")
     print()
     if learnable_count / len(unresolved_rows) > 0.3:
         print("  -> YES: MiniLM can meaningfully improve your graph.")

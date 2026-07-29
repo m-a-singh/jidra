@@ -33,8 +33,8 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "java")
 )
 
-import agent_eval as ae  # noqa: E402
-from agent_eval import Oracle, Task, _lc  # noqa: E402
+import agent_eval as ae
+from agent_eval import Oracle, Task, _lc
 
 DEFAULT_REPO = "/Users/akhil.singh/Workflows/Personal/ai_watchtower"
 
@@ -72,10 +72,7 @@ def ts_hallucinated_refs(text: str, o: Oracle) -> list[str]:
         r"\b[A-Z][a-zA-Z0-9]*(?:Service|Controller|Manager|Handler|Factory|Hook|Store|Provider|Context|Middleware|Guard|Interceptor|Resolver|Module)\b",
         text,
     ):
-        if not any(
-            c.endswith("." + m) or c.endswith("/" + m) or c == m
-            for c in o.class_full_names
-        ):
+        if not any(c.endswith(("." + m, "/" + m)) or c == m for c in o.class_full_names):
             bad.append(m)
     return sorted(set(bad))
 
@@ -289,9 +286,7 @@ async def run_async(args) -> None:
     results: list[dict] = []
     for task in tasks:
         for be in backends:
-            print(
-                f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
-            )
+            print(f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True)
             rr = await ae.run_agent(
                 client, args.model, be, task.prompt, label=f"{task.id}/{be.name}"
             )
@@ -300,7 +295,7 @@ async def run_async(args) -> None:
                 try:
                     ok, note = task.check(rr.answer, oracle)
                     rr.correct = ok
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     note = f"check_error: {e!r}"
                 rr.hallucinated = ts_hallucinated_refs(rr.answer, oracle)
             else:
@@ -322,9 +317,7 @@ async def run_async(args) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(
-        description="Agent-in-loop eval (TypeScript): JIDRA vs CodeGraph"
-    )
+    ap = argparse.ArgumentParser(description="Agent-in-loop eval (TypeScript): JIDRA vs CodeGraph")
     ap.add_argument("--graph", required=True, help="JIDRA ts graph.db (also GT oracle)")
     ap.add_argument(
         "--codebase",

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from ..models import (
     CallSite,
@@ -36,6 +36,7 @@ def _ensure_image() -> None:
     check = subprocess.run(
         ["docker", "image", "inspect", DOCKER_IMAGE],
         capture_output=True,
+        check=False,
     )
     if check.returncode == 0:
         return  # already built
@@ -45,11 +46,10 @@ def _ensure_image() -> None:
         ["docker", "build", "-t", DOCKER_IMAGE, str(SIDECAR_DIR)],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
-        raise TsExtractorError(
-            f"Failed to build ts-sidecar image:\n{result.stderr[-2000:]}"
-        )
+        raise TsExtractorError(f"Failed to build ts-sidecar image:\n{result.stderr[-2000:]}")
 
 
 def _run_sidecar(
@@ -87,6 +87,7 @@ def _run_sidecar(
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
     except subprocess.TimeoutExpired as e:
         raise TsExtractorError(
@@ -270,9 +271,7 @@ def build_ts_graph(
     if backend == "treesitter":
         from .ts_treesitter import build_ts_graph_treesitter
 
-        return build_ts_graph_treesitter(
-            codebase_root, on_progress, skip_folders=skip_folders
-        )
+        return build_ts_graph_treesitter(codebase_root, on_progress, skip_folders=skip_folders)
 
     # "auto" and "tsmorph" both run the sidecar and gap-fill with
     # tree-sitter. They differ only in failure mode: "tsmorph" propagates a
@@ -298,18 +297,14 @@ def build_ts_graph(
 
         from .ts_treesitter import build_ts_graph_treesitter
 
-        return build_ts_graph_treesitter(
-            codebase_root, on_progress, skip_folders=skip_folders
-        )
+        return build_ts_graph_treesitter(codebase_root, on_progress, skip_folders=skip_folders)
 
     if on_progress:
         on_progress(1, 1)
 
     sidecar_graph = _build_graph_from_records(records)
     if skip_folders:
-        sidecar_graph = _filter_graph_by_skip_folders(
-            sidecar_graph, codebase_root, skip_folders
-        )
+        sidecar_graph = _filter_graph_by_skip_folders(sidecar_graph, codebase_root, skip_folders)
 
     gap_files = _compute_gap_files(codebase_root, records, skip_folders)
 
@@ -319,8 +314,8 @@ def build_ts_graph(
         _resolve_calls(sidecar_graph)
         return sidecar_graph
 
-    from .ts_treesitter import build_ts_graph_treesitter
     from .extractor import _resolve_calls
+    from .ts_treesitter import build_ts_graph_treesitter
 
     # Skip resolve in gap-fill — we resolve the full merged graph below so
     # that sidecar classes/methods are visible to the gap-fill callsites too.
@@ -352,9 +347,7 @@ def _compute_gap_files(
             covered_rel.update(r.get("files", []))
 
     covered_abs = {(codebase_root / rel).resolve() for rel in covered_rel}
-    all_files = {
-        p.resolve() for p in _iter_ts_files(codebase_root, skip_folders=skip_folders)
-    }
+    all_files = {p.resolve() for p in _iter_ts_files(codebase_root, skip_folders=skip_folders)}
     return all_files - covered_abs
 
 
@@ -372,9 +365,9 @@ def _filter_graph_by_skip_folders(
     """
     from ..filters.file_filters import excluded_by_skip_folders
 
-    all_file_paths = {
-        e.file_path for e in graph.classes + graph.fields + graph.callsites
-    } | {m.file_path for m in graph.methods}
+    all_file_paths = {e.file_path for e in graph.classes + graph.fields + graph.callsites} | {
+        m.file_path for m in graph.methods
+    }
     abs_paths = [(codebase_root / fp).resolve() for fp in all_file_paths]
     excluded_abs = excluded_by_skip_folders(abs_paths, codebase_root, skip_folders)
     root_resolved = codebase_root.resolve()
@@ -393,15 +386,12 @@ def _filter_graph_by_skip_folders(
         fields=[f for f in graph.fields if f.file_path not in excluded],
         callsites=[c for c in graph.callsites if c.file_path not in excluded],
         inheritance_edges=[
-            e
-            for e in graph.inheritance_edges
-            if e.source_class in kept_class_full_names
+            e for e in graph.inheritance_edges if e.source_class in kept_class_full_names
         ],
         resolved_call_edges=[
             e
             for e in graph.resolved_call_edges
-            if e.caller_method_id in kept_method_ids
-            and e.callee_method_id in kept_method_ids
+            if e.caller_method_id in kept_method_ids and e.callee_method_id in kept_method_ids
         ],
     )
 

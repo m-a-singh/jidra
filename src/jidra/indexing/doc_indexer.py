@@ -55,8 +55,7 @@ def _split_markdown(text: str) -> list[tuple[str | None, str]]:
             chunk_lines: list[str] = []
             for para in paragraphs:
                 if (
-                    sum(len(line) for line in chunk_lines) + len(para)
-                    > _CHUNK_TARGET_CHARS
+                    sum(len(line) for line in chunk_lines) + len(para) > _CHUNK_TARGET_CHARS
                     and chunk_lines
                 ):
                     result.append((heading, "\n\n".join(chunk_lines).strip()))
@@ -94,9 +93,7 @@ def _link_chunks_to_graph(
         matches = sorted(identifiers & graph_class_names)
         # Also match method names (less common in specs, but useful)
         method_matches = sorted(identifiers & graph_method_names)
-        all_matches = list(
-            dict.fromkeys(matches + method_matches)
-        )  # dedupe, preserve order
+        all_matches = list(dict.fromkeys(matches + method_matches))  # dedupe, preserve order
         linked.append(",".join(all_matches))
     return linked
 
@@ -184,7 +181,7 @@ def index_document(
 
     ts = int(time.time() * 1000)
     records = []
-    for i, ((heading, body), linked_classes) in enumerate(zip(chunks, linked)):
+    for i, ((heading, body), linked_classes) in enumerate(zip(chunks, linked, strict=False)):
         chunk_title = heading or title
         records.append(
             {
@@ -222,9 +219,7 @@ def index_directory(
     Returns {source_path: chunk_count}.
     """
     root = Path(directory)
-    files = [
-        f for f in root.rglob("*") if f.suffix.lower() in extensions and f.is_file()
-    ]
+    files = [f for f in root.rglob("*") if f.suffix.lower() in extensions and f.is_file()]
     results: dict[str, int] = {}
     for i, f in enumerate(files):
         if on_progress:

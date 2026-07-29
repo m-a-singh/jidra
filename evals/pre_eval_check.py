@@ -51,13 +51,9 @@ def check(db_path: Path) -> bool:
         for p in empty_orphans:
             warn(f"empty orphaned build file (harmless): {p.name}")
         for p in real_orphans:
-            fail(
-                f"orphaned reindexer file: {p.name} ({p.stat().st_size // (1024 * 1024)}MB)"
-            )
+            fail(f"orphaned reindexer file: {p.name} ({p.stat().st_size // (1024 * 1024)}MB)")
         if real_orphans:
-            fail(
-                "DB was replaced without WAL checkpoint — FTS5 may be corrupt. Re-index required."
-            )
+            fail("DB was replaced without WAL checkpoint — FTS5 may be corrupt. Re-index required.")
             passed = False
     else:
         ok("no orphaned reindexer WAL/SHM files")
@@ -88,9 +84,7 @@ def check(db_path: Path) -> bool:
             ok(f"{fts} integrity: OK")
         except sqlite3.DatabaseError as e:
             if "locked" in str(e).lower():
-                warn(
-                    f"{fts} integrity check skipped: DB locked by JIDRA server (not corruption)"
-                )
+                warn(f"{fts} integrity check skipped: DB locked by JIDRA server (not corruption)")
             else:
                 fail(f"{fts} integrity FAILED: {e}")
                 fail("  → re-index required (do not run eval)")
@@ -105,14 +99,10 @@ def check(db_path: Path) -> bool:
             models = conn.execute(
                 "SELECT model, COUNT(*) FROM method_embeddings GROUP BY model"
             ).fetchall()
-            warn(
-                f"method_embeddings not empty ({emb_count} rows) — leftover from previous run?"
-            )
+            warn(f"method_embeddings not empty ({emb_count} rows) — leftover from previous run?")
             for model, n in models:
                 warn(f"  model={model!r}  rows={n}")
-            warn(
-                '  Run: sqlite3 graph.db "DELETE FROM method_embeddings" before embed-index'
-            )
+            warn('  Run: sqlite3 graph.db "DELETE FROM method_embeddings" before embed-index')
         else:
             ok("method_embeddings: empty (clean for embed-index)")
     except Exception as e:

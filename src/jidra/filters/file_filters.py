@@ -60,9 +60,10 @@ def is_generated(path: Path) -> bool:
     try:
         with path.open(encoding="utf-8", errors="replace") as f:
             for i, line in enumerate(f):
-                if i < _GENERATED_HEADER_SCAN_LINES:
-                    if any(m in line.lower() for m in _GENERATED_HEADER_MARKERS):
-                        return True
+                if i < _GENERATED_HEADER_SCAN_LINES and any(
+                    m in line.lower() for m in _GENERATED_HEADER_MARKERS
+                ):
+                    return True
                 if len(line) > _MAX_GENERATED_LINE_LENGTH:
                     return True
     except OSError:
@@ -94,6 +95,7 @@ def gitignored_paths(root: Path, paths: list[Path]) -> set[Path]:
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return set()

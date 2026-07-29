@@ -29,8 +29,8 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "java")
 )
 
-import agent_eval as ae  # noqa: E402
-from agent_eval import Oracle, Task, _lc  # noqa: E402
+import agent_eval as ae
+from agent_eval import Oracle, Task, _lc
 
 
 # ---------------------------------------------------------------------------
@@ -138,8 +138,7 @@ def make_python_tasks() -> list[Task]:
         a = _lc(ans)
         located = any(k in a for k in ("engine.py", "jidraengine", "engine"))
         purpose = any(
-            k in a
-            for k in ("annotation", "framework_role", "framework role", "decorator")
+            k in a for k in ("annotation", "framework_role", "framework role", "decorator")
         )
         ok = exists and located and purpose
         return ok, f"exists={exists} located={located} purpose={purpose}"
@@ -157,9 +156,7 @@ def make_python_tasks() -> list[Task]:
     def py5(ans: str, o: Oracle) -> tuple[bool, str]:
         exists = "_resolve_calls" in o.method_names
         a = _lc(ans)
-        has_source = any(
-            k in a for k in ("callsite", "resolve", "candidate", "method", "receiver")
-        )
+        has_source = any(k in a for k in ("callsite", "resolve", "candidate", "method", "receiver"))
         ok = exists and has_source
         return ok, f"exists={exists} has_source={has_source}"
 
@@ -222,9 +219,7 @@ async def run_async(args) -> None:
     results: list[dict] = []
     for task in tasks:
         for be in backends:
-            print(
-                f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True
-            )
+            print(f"\n── {task.id} / {be.name} ─────────────────────────────", flush=True)
             rr = await ae.run_agent(
                 client, args.model, be, task.prompt, label=f"{task.id}/{be.name}"
             )
@@ -233,7 +228,7 @@ async def run_async(args) -> None:
                 try:
                     ok, note = task.check(rr.answer, oracle)
                     rr.correct = ok
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     note = f"check_error: {e!r}"
                 rr.hallucinated = oracle.hallucinated_refs(rr.answer)
             else:
@@ -255,12 +250,8 @@ async def run_async(args) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(
-        description="Agent-in-loop eval (Python): JIDRA vs CodeGraph"
-    )
-    ap.add_argument(
-        "--graph", required=True, help="JIDRA python graph.db (also GT oracle)"
-    )
+    ap = argparse.ArgumentParser(description="Agent-in-loop eval (Python): JIDRA vs CodeGraph")
+    ap.add_argument("--graph", required=True, help="JIDRA python graph.db (also GT oracle)")
     ap.add_argument("--codebase", help="repo root (CG reads its .codegraph here)")
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
     ap.add_argument("--tasks", default="", help="comma list e.g. PY1,PY2")

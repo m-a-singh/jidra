@@ -28,7 +28,7 @@ import argparse
 import json
 import sys
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -98,9 +98,7 @@ def make_test_cases() -> list[TestCase]:
             "mtkruto",
             ["method"],
         ),
-        TestCase(
-            "mtkruto-search-getMe", "getMe", "search", ["getMe"], "mtkruto", ["method"]
-        ),
+        TestCase("mtkruto-search-getMe", "getMe", "search", ["getMe"], "mtkruto", ["method"]),
         TestCase(
             "mtkruto-search-signIn",
             "signIn",
@@ -297,9 +295,7 @@ def make_test_cases() -> list[TestCase]:
             "postybirb",
             ["method"],
         ),
-        TestCase(
-            "postybirb-search-post", "post", "search", ["post"], "postybirb", ["method"]
-        ),
+        TestCase("postybirb-search-post", "post", "search", ["post"], "postybirb", ["method"]),
         TestCase(
             "postybirb-explore-submit",
             "How does a submission get validated and posted to a website?",
@@ -483,9 +479,7 @@ def score_search(case: TestCase, results: list[dict], latency_ms: float) -> Eval
             if first_rank == 0:
                 first_rank = idx + 1
         except ValueError:
-            partial = next(
-                (j + 1 for j, n in enumerate(result_names_list) if sym in n), None
-            )
+            partial = next((j + 1 for j, n in enumerate(result_names_list) if sym in n), None)
             if partial:
                 found.append(case.expected_symbols[i])
                 if first_rank == 0:
@@ -510,8 +504,8 @@ def score_search(case: TestCase, results: list[dict], latency_ms: float) -> Eval
 def score_explore_combined(
     case: TestCase, explore_res: list[dict], flow_res: list[dict], latency_ms: float
 ) -> EvalResult:
-    ex_r, ex_f, ex_m = _recall(case.expected_symbols, _extract_names(explore_res))
-    fl_r, fl_f, fl_m = _recall(case.expected_symbols, _extract_names(flow_res))
+    ex_r, _ex_f, _ex_m = _recall(case.expected_symbols, _extract_names(explore_res))
+    fl_r, _fl_f, _fl_m = _recall(case.expected_symbols, _extract_names(flow_res))
     comb_r, comb_f, comb_m = _recall(
         case.expected_symbols, _extract_names(explore_res) | _extract_names(flow_res)
     )
@@ -627,9 +621,7 @@ def print_summary(results: list[EvalResult], repo: str) -> dict:
         )
         if explore_res
         else 0,
-        "flow_only_recall": round(
-            sum(r.flow_recall for r in explore_res) / len(explore_res), 4
-        )
+        "flow_only_recall": round(sum(r.flow_recall for r in explore_res) / len(explore_res), 4)
         if explore_res
         else 0,
         "combined_explore_recall": round(
@@ -651,9 +643,7 @@ def compare_with_codegraph(results: list[EvalResult], cg_path: Path) -> None:
     explore_res = [r for r in results if r.api == "explore"]
     jidra_mrr = sum(r.mrr for r in search_res) / len(search_res) if search_res else 0
     comb_recall = (
-        sum(r.combined_recall for r in explore_res) / len(explore_res)
-        if explore_res
-        else 0
+        sum(r.combined_recall for r in explore_res) / len(explore_res) if explore_res else 0
     )
 
     cg_recall = cg_s.get("meanRecall", "—")
@@ -664,9 +654,7 @@ def compare_with_codegraph(results: list[EvalResult], cg_path: Path) -> None:
     print("\n── Comparison vs CodeGraph ──────────────────────────────────────────")
     print(f"  {'metric':<30} {'JIDRA':>10} {'CodeGraph':>12}")
     print(f"  {'─' * 30} {'─' * 10} {'─' * 12}")
-    print(
-        f"  {'passed':<30} {jidra_passed}/{len(results):>6} {f'{cg_passed}/{cg_total}':>12}"
-    )
+    print(f"  {'passed':<30} {jidra_passed}/{len(results):>6} {f'{cg_passed}/{cg_total}':>12}")
     print(
         f"  {'mean recall':<30} {jidra_recall:>10.3f} {cg_recall if isinstance(cg_recall, str) else f'{cg_recall:.3f}':>12}"
     )
