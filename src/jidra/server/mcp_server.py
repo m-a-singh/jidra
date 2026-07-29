@@ -601,9 +601,14 @@ def build_mcp(
     the daemon over a socket. The tool surface (names, signatures, docstrings)
     is identical either way."""
     try:
-        from mcp.server.fastmcp import FastMCP
-    except Exception as exc:  # pragma: no cover - runtime dependency gate
-        raise RuntimeError("MCP support requires installing jidra[mcp] or pip install mcp") from exc
+        from mcp.server.fastmcp import FastMCP  # mcp <2.0
+    except ImportError:
+        try:
+            from fastmcp import FastMCP  # mcp >=2.0 uses standalone fastmcp package
+        except ImportError as exc:
+            raise RuntimeError(
+                "MCP support requires installing jidra[mcp] or pip install mcp"
+            ) from exc
 
     default_path = default_graph_path or DEFAULT_MAIN_GRAPH
     if invoke is None:
