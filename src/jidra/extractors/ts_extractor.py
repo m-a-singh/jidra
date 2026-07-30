@@ -32,24 +32,54 @@ class TsExtractorError(Exception):
 
 
 def _ensure_image() -> None:
-    """Build the sidecar Docker image if it doesn't exist yet."""
+    """Build the sidecar Docker image if missing or source files changed."""
+    import json
+
     check = subprocess.run(
         ["docker", "image", "inspect", DOCKER_IMAGE],
-        capture_output=True,
-        check=False,
-    )
-    if check.returncode == 0:
-        return  # already built
-
-    print("  [jidra] Building ts-sidecar image (first run only)...", flush=True)
-    result = subprocess.run(
-        ["docker", "build", "-t", DOCKER_IMAGE, str(SIDECAR_DIR)],
         capture_output=True,
         text=True,
         check=False,
     )
-    if result.returncode != 0:
-        raise TsExtractorError(f"Failed to build ts-sidecar image:\n{result.stderr[-2000:]}")
+    needs_build = check.returncode != 0  # image doesn't exist
+
+    if not needs_build:
+        # Check if any sidecar source file is newer than the image.
+        try:
+            meta = json.loads(check.stdout)
+            created_str = meta[0].get("Created", "") if meta else ""
+            from datetime import datetime, timezone
+
+            # Truncate sub-second precision beyond 6 digits (Python limit)
+            ts = created_str[:26].rstrip("Z") if created_str else ""
+            if ts:
+                image_mtime = datetime.fromisoformat(ts).replace(tzinfo=timezone.utc).timestamp()
+                sidecar_files = [
+                    p
+                    for p in SIDECAR_DIR.rglob("*")
+                    if p.is_file()
+                    and p.name not in {"package-lock.json"}
+                    and "node_modules" not in p.parts
+                ]
+                newest_src = max((p.stat().st_mtime for p in sidecar_files), default=0.0)
+                if newest_src > image_mtime:
+                    needs_build = True
+        except Exception:
+            pass  # if anything fails, keep existing image
+
+    if not needs_build:
+        return
+
+    label = "Rebuilding" if check.returncode == 0 else "Building"
+    print(f"  [jidra] {label} ts-sidecar image...", flush=True)
+    build_proc = subprocess.run(
+        ["docker", "build", "-t", DOCKER_IMAGE, str(SIDECAR_DIR)],
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if build_proc.returncode != 0:
+        raise TsExtractorError(f"Failed to build ts-sidecar image:\n{build_proc.stderr[-2000:]}")
 
 
 def _run_sidecar(
@@ -342,11 +372,20 @@ def _compute_gap_files(
     from .ts_treesitter import _iter_ts_files
 
     covered_rel: set[str] = set()
+    files_with_entities: set[str] = set()
     for r in records:
         if r.get("_type") == "covered_files":
             covered_rel.update(r.get("files", []))
+        elif r.get("_type") in ("method", "class"):
+            fp = r.get("file_path", "")
+            if fp:
+                files_with_entities.add(fp)
 
-    covered_abs = {(codebase_root / rel).resolve() for rel in covered_rel}
+    # Only treat a file as truly covered if the sidecar emitted at least one
+    # entity record for it. Type-only files (interface-only, re-export barrels)
+    # land in covered_files but produce zero records — hand them to tree-sitter.
+    truly_covered = {rel for rel in covered_rel if rel in files_with_entities}
+    covered_abs = {(codebase_root / rel).resolve() for rel in truly_covered}
     all_files = {p.resolve() for p in _iter_ts_files(codebase_root, skip_folders=skip_folders)}
     return all_files - covered_abs
 

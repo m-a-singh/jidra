@@ -18,6 +18,11 @@ CLAUDE.md
 # UI
 ui/node_modules/
 ui/dist/
+
+# VS Code extension
+vscode-jidra/node_modules/
+vscode-jidra/dist/
+vscode-jidra/*.vsix
 .idea
 .idea/
 jidra.iml
