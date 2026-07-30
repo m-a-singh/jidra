@@ -132,6 +132,178 @@ async def get_nodes(
     }
 
 
+@router.get("/methods-in-file")
+async def methods_in_file(
+    file_path: str,
+    repo_path: str = "",
+    output_path: str | None = Query(None),
+) -> list[dict]:
+    """Return all methods in a file (for CodeLens batch resolution)."""
+    import sqlite3
+
+    from ...graph.graph_store import resolve_graph_db_path
+    from .util_routes import resolve_out_dir
+
+    if not repo_path and not output_path:
+        raise HTTPException(status_code=400, detail="repo_path or output_path required")
+    out_dir = resolve_out_dir(repo_path, output_path)
+    db = resolve_graph_db_path(out_dir)
+    if not db.exists():
+        return []
+    with sqlite3.connect(str(db)) as conn:
+        rows = conn.execute(
+            """SELECT id, method_name, signature, class_full_name, start_line, end_line
+               FROM methods WHERE file_path = ? AND variant = 'main' ORDER BY start_line""",
+            (file_path,),
+        ).fetchall()
+    return [
+        {
+            "id": r[0],
+            "method_name": r[1],
+            "signature": r[2],
+            "class_full_name": r[3],
+            "start_line": r[4],
+            "end_line": r[5],
+        }
+        for r in rows
+    ]
+
+
+@router.get("/callers")
+async def get_callers(
+    method_id: str,
+    depth: int = Query(2),
+    repo_path: str = "",
+    output_path: str | None = Query(None),
+) -> dict:
+    """Return methods that call method_id (upstream callers), up to depth hops."""
+    import sqlite3
+
+    from ...graph.graph_store import resolve_graph_db_path
+    from .util_routes import resolve_out_dir
+
+    if not repo_path and not output_path:
+        raise HTTPException(status_code=400, detail="repo_path or output_path required")
+    out_dir = resolve_out_dir(repo_path, output_path)
+    db = resolve_graph_db_path(out_dir)
+    if not db.exists():
+        raise HTTPException(status_code=404, detail=f"graph.db not found at {db}")
+
+    with sqlite3.connect(str(db)) as conn:
+        conn.row_factory = sqlite3.Row
+        visited: set[str] = set()
+        frontier = {method_id}
+        for _ in range(depth):
+            if not frontier:
+                break
+            placeholders = ",".join("?" * len(frontier))
+            rows = conn.execute(
+                f"SELECT DISTINCT caller_method_id FROM resolved_call_edges WHERE callee_method_id IN ({placeholders})",
+                list(frontier),
+            ).fetchall()
+            next_frontier: set[str] = set()
+            for r in rows:
+                cid = r[0]
+                if cid != method_id and cid not in visited:
+                    visited.add(cid)
+                    next_frontier.add(cid)
+            frontier = next_frontier
+
+        nodes = []
+        if visited:
+            placeholders = ",".join("?" * len(visited))
+            rows = conn.execute(
+                f"""SELECT id, method_name, class_full_name, file_path, start_line
+                    FROM methods WHERE id IN ({placeholders}) AND variant = 'main'""",
+                list(visited),
+            ).fetchall()
+            for r in rows:
+                short_class = (r["class_full_name"] or "").split(".")[-1]
+                nodes.append(
+                    {
+                        "id": r["id"],
+                        "label": f"{short_class}.{r['method_name']}",
+                        "file_path": r["file_path"],
+                        "line": r["start_line"],
+                    }
+                )
+    return {"nodes": nodes}
+
+
+@router.get("/subgraph")
+async def get_subgraph(
+    method_id: str,
+    depth: int = Query(2),
+    repo_path: str = "",
+    output_path: str | None = Query(None),
+) -> dict:
+    """Return nodes+edges for the call subgraph centred on method_id (both directions)."""
+    import sqlite3
+
+    from ...graph.graph_store import resolve_graph_db_path
+    from .util_routes import resolve_out_dir
+
+    if not repo_path and not output_path:
+        raise HTTPException(status_code=400, detail="repo_path or output_path required")
+    out_dir = resolve_out_dir(repo_path, output_path)
+    db = resolve_graph_db_path(out_dir)
+    if not db.exists():
+        raise HTTPException(status_code=404, detail=f"graph.db not found at {db}")
+
+    with sqlite3.connect(str(db)) as conn:
+        conn.row_factory = sqlite3.Row
+        visited: set[str] = {method_id}
+        frontier = {method_id}
+        for _ in range(depth):
+            if not frontier:
+                break
+            placeholders = ",".join("?" * len(frontier))
+            args = list(frontier)
+            rows = conn.execute(
+                f"""SELECT callee_method_id AS id FROM resolved_call_edges WHERE caller_method_id IN ({placeholders})
+                    UNION SELECT caller_method_id AS id FROM resolved_call_edges WHERE callee_method_id IN ({placeholders})""",
+                args + args,
+            ).fetchall()
+            next_frontier: set[str] = set()
+            for r in rows:
+                nid = r[0]
+                if nid not in visited:
+                    visited.add(nid)
+                    next_frontier.add(nid)
+            frontier = next_frontier
+
+        method_ids = list(visited)
+        placeholders = ",".join("?" * len(method_ids))
+        method_rows = conn.execute(
+            f"""SELECT id, method_name, class_full_name, file_path, start_line
+                FROM methods WHERE id IN ({placeholders}) AND variant = 'main'""",
+            method_ids,
+        ).fetchall()
+        nodes = []
+        for r in method_rows:
+            short_class = (r["class_full_name"] or "").split(".")[-1]
+            nodes.append(
+                {
+                    "id": r["id"],
+                    "label": f"{short_class}.{r['method_name']}",
+                    "file_path": r["file_path"],
+                    "line": r["start_line"],
+                }
+            )
+
+        node_id_set = {n["id"] for n in nodes}
+        placeholders2 = ",".join("?" * len(node_id_set))
+        edge_rows = conn.execute(
+            f"""SELECT caller_method_id AS "from", callee_method_id AS "to"
+                FROM resolved_call_edges
+                WHERE caller_method_id IN ({placeholders2}) AND callee_method_id IN ({placeholders2})""",
+            list(node_id_set) + list(node_id_set),
+        ).fetchall()
+        edges = [{"from": r["from"], "to": r["to"]} for r in edge_rows]
+
+    return {"nodes": nodes, "edges": edges}
+
+
 @router.get("/node/{node_id:path}")
 async def get_node(node_id: str, repo_path: str, output_path: str | None = None) -> dict:
     try:
@@ -192,3 +364,43 @@ async def search_nodes(
         return engine.search(q, limit=limit, language=language)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/method-at")
+async def method_at(
+    file_path: str,
+    line: int,
+    repo_path: str = "",
+    output_path: str | None = Query(None),
+) -> dict | None:
+    import sqlite3
+
+    from ...graph.graph_store import resolve_graph_db_path
+    from .util_routes import resolve_out_dir
+
+    if not repo_path and not output_path:
+        raise HTTPException(status_code=400, detail="repo_path or output_path required")
+
+    out_dir = resolve_out_dir(repo_path, output_path)
+    db = resolve_graph_db_path(out_dir)
+
+    if not db.exists():
+        raise HTTPException(status_code=404, detail=f"graph.db not found at {db}")
+
+    with sqlite3.connect(str(db)) as conn:
+        row = conn.execute(
+            """SELECT id, method_name, signature, class_full_name, start_line, end_line
+               FROM methods WHERE file_path = ? AND start_line <= ? AND end_line >= ?
+               AND variant = 'main' ORDER BY (end_line - start_line) ASC LIMIT 1""",
+            (file_path, line, line),
+        ).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": row[0],
+        "method_name": row[1],
+        "signature": row[2],
+        "class_full_name": row[3],
+        "start_line": row[4],
+        "end_line": row[5],
+    }

@@ -5,17 +5,49 @@ Config-driven: tasks are defined in a JSON config file, not hardcoded.
 Pass --config to point at any repo's eval config.
 Hallucinations cause hard failure (correct=False) when count > halluc_max (default 0).
 
-Run:
-    ./venv/bin/python evals/agent_eval_ts_v2.py \
-        --graph  output/database/ai_watchtower-.../graph.db \
-        --codebase /path/to/ai_watchtower \
-        --config evals/harness/typescript/config.json \
-        --model  claude-haiku-4-5-20251001 \
-        --out    results/results_ts_v2.json
+Bundled configs:
+    evals/harness/typescript/ai_watchtower.json          — ai_watchtower repo
+    evals/harness/typescript/search_service_visualizer.json — search-service-visualizer repo
 
-    ./venv/bin/python evals/agent_eval_ts_v2.py \
-        --graph output/database/ai_watchtower-.../graph.db \
-        --config evals/harness/typescript/config.json --selfcheck
+Usage (run from repo root):
+    # Run against ai_watchtower TypeScript codebase
+    python evals/harness/typescript/agent_eval_ts_v2.py \
+        --graph    /path/to/ai_watchtower/.jidra/graph.db \
+        --codebase /path/to/ai_watchtower \
+        --config   evals/harness/typescript/ai_watchtower.json \
+        --model    claude-haiku-4-5-20251001 \
+        --out      evals/harness/typescript/results/results_ts_v2.json
+
+    # Run against search-service-visualizer
+    python evals/harness/typescript/agent_eval_ts_v2.py \
+        --graph    /path/to/search-service-visualizer/.jidra/graph.db \
+        --codebase /path/to/search-service-visualizer \
+        --config   evals/harness/typescript/search_service_visualizer.json \
+        --out      evals/harness/typescript/results/results_ssv_v2.json
+
+    # Run specific tasks only
+    python evals/harness/typescript/agent_eval_ts_v2.py \
+        --graph    /path/to/ai_watchtower/.jidra/graph.db \
+        --codebase /path/to/ai_watchtower \
+        --config   evals/harness/typescript/ai_watchtower.json \
+        --tasks    TS1,TS3
+
+    # Validate ground-truth data in graph before running
+    python evals/harness/typescript/agent_eval_ts_v2.py \
+        --graph  /path/to/ai_watchtower/.jidra/graph.db \
+        --config evals/harness/typescript/ai_watchtower.json \
+        --selfcheck
+
+Flags:
+    --graph      Path to JIDRA graph.db  (required)
+    --codebase   Repo root dir           (required unless --selfcheck)
+    --config     JSON task config file   (required)
+    --model      Anthropic model ID      (default: claude-haiku-4-5-20251001)
+    --tasks      Comma list e.g. TS1,TS2 (default: all tasks in config)
+    --out        JSON output path        (default: results/eval_agent_results_ts_v2.json)
+    --skill      Path to .md skill file  (appended to system prompt)
+    --selfcheck  Validate graph data without running the agent
+    --quiet      Suppress per-call logs
 """
 
 from __future__ import annotations

@@ -9,13 +9,42 @@ Changes from v1 (agent_eval.py):
     (locale, feedType, searchString) — rejects REDACTED answers
     that the v1 loose check passed as correct.
 
-Usage:
-    ./venv/bin/python evals/agent_eval_v2.py \
-        --graph    <path/to/graph.db> \
+Usage (run from repo root):
+    # Run all 8 tasks against a Java codebase
+    python evals/harness/java/agent_eval_v2.py \
+        --graph    /path/to/repo/.jidra/graph.db \
         --codebase /path/to/repo \
-        [--model claude-haiku-4-5-20251001] \
-        [--tasks T1,T2] \
-        [--out evals/results_v8.json]
+        --model    claude-sonnet-4-6 \
+        --out      evals/harness/java/results/result_v2.json
+
+    # Run specific tasks only
+    python evals/harness/java/agent_eval_v2.py \
+        --graph    /path/to/repo/.jidra/graph.db \
+        --codebase /path/to/repo \
+        --tasks    T1,T3,T8 \
+        --out      evals/harness/java/results/result_v2.json
+
+    # Verify graph has required ground-truth data before running
+    python evals/harness/java/agent_eval_v2.py \
+        --graph /path/to/repo/.jidra/graph.db \
+        --selfcheck
+
+    # Config-driven mode (custom task set)
+    python evals/harness/java/agent_eval_v2.py \
+        --graph    /path/to/repo/.jidra/graph.db \
+        --codebase /path/to/repo \
+        --config   evals/harness/java/config.json
+
+Flags:
+    --graph      Path to JIDRA graph.db  (required)
+    --codebase   Repo root dir           (required unless --selfcheck)
+    --model      Anthropic model ID      (default: claude-sonnet-4-6)
+    --tasks      Comma list e.g. T1,T2   (default: all T1-T8)
+    --out        JSON output path        (default: agent_eval_results.json)
+    --config     JSON task config file   (enables config-driven mode)
+    --skill      Path to .md skill file  (appended to system prompt)
+    --selfcheck  Validate graph data without running the agent
+    --quiet      Suppress per-call logs
 """
 
 from __future__ import annotations

@@ -325,6 +325,23 @@ jidra/
 │       ├── hooks/useRepo.ts
 │       ├── lib/api.ts             # typed fetch client
 │       └── styles/
+├── vscode-jidra/                  # VS Code extension
+│   ├── package.json
+│   ├── src/
+│   │   ├── extension.ts           # activation entry point, command + provider registration
+│   │   ├── daemon.ts              # auto-discovers .jidra/graph.db, spawns jidra serve
+│   │   ├── client.ts              # JidraClient — methodAt, findCallers, fetchSubgraph, …
+│   │   ├── config.ts              # reads VS Code settings + discovered paths
+│   │   ├── statusBar.ts           # status bar item (JIDRA ✓ / ⟳)
+│   │   ├── commands/              # findCallers, showFlow, blastRadius, search, reindex
+│   │   ├── providers/
+│   │   │   ├── codelens.ts        # "Find Callers | Show Flow" above every method
+│   │   │   └── hover.ts           # hover card — signature, class, action links
+│   │   └── views/
+│   │       ├── callTree.ts        # JIDRA: Callers sidebar tree
+│   │       └── graphPanel.ts      # focused subgraph WebView panel (vis-network)
+│   └── media/
+│       └── vis-network.min.js     # bundled offline — no CDN required
 ├── sidecar/
 │   ├── scala/                     # JDK + sbt Docker sidecar (SemanticDB export)
 │   │   ├── src/Dockerfile
@@ -459,6 +476,75 @@ Key observations:
 - Both JIDRA approaches returned correct blast radius with HTTP endpoint and scheduled job flagged
 
 **Design note:** Skills are the trigger mechanism — agent `description` alone is not reliable, as the main session (Sonnet/Opus) will handle queries itself if it has jidra tools. Skills force explicit delegation to Haiku.
+
+## VS Code Extension
+
+The JIDRA VS Code extension brings call graph intelligence directly into the editor — no manual `jidra serve` required.
+
+### Auto-daemon
+
+On activation, the extension scans workspace folders for `.jidra/graph.db`. If found and no server is running on port 7474, it spawns `jidra serve --graph <path>` automatically. Status bar shows `JIDRA ✓` when connected.
+
+### CodeLens
+
+`Find Callers | Show Flow` appears above every method in Java, Python, TypeScript, Go, C#, and JavaScript files.
+
+![CodeLens and Show Flow graph panel](docs/assets/vscode-show-flow.png)
+
+### JIDRA: Callers sidebar
+
+Click **Find Callers** or run `JIDRA: Find Callers` from the command palette. The Explorer sidebar panel populates with every method that directly or transitively calls the target — upstream only, no callees. Click any entry to jump to that file and line.
+
+![Callers sidebar](docs/assets/vscode-callers-sidebar.png)
+
+### Hover card
+
+Hover any method — JIDRA shows the full qualified class name, complete signature, and inline links: **Find Callers · Show Flow · Blast Radius**.
+
+![Hover card](docs/assets/vscode-hover.png)
+
+### Show Flow
+
+Opens a focused call graph panel beside the editor (`JIDRA Graph`). Renders only the 2-hop subgraph centred on the target method — callers above, callees below — using vis-network with hierarchical layout. The focus method is highlighted in amber.
+
+### Blast Radius
+
+`JIDRA: Blast Radius` (or CodeLens → right-click) shows all upstream callers in the sidebar, identical to Find Callers but labelled as blast radius impact. Use it to assess risk before changing a method.
+
+### Search
+
+`Cmd+Shift+J` (Mac) / `Ctrl+Shift+J` (Win/Linux) opens a quick-pick symbol search across the indexed graph. Select any result to jump to it.
+
+### Commands
+
+| Command | Description |
+|---|---|
+| `JIDRA: Find Callers` | Upstream caller tree for method at cursor |
+| `JIDRA: Show Call Flow` | Focused subgraph panel (2-hop, both directions) |
+| `JIDRA: Blast Radius` | Caller impact tree labelled as blast radius |
+| `JIDRA: Search Symbol` | Quick-pick symbol search (`Cmd+Shift+J`) |
+| `JIDRA: Reindex` | Trigger incremental reindex |
+| `JIDRA: Open Graph` | Full graph panel |
+
+### Configuration
+
+| Setting | Default | Description |
+|---|---|---|
+| `jidra.serverUrl` | `http://127.0.0.1:7474` | JIDRA server URL |
+| `jidra.graphPath` | _(auto)_ | Path to `graph.db` — empty = auto-discover `.jidra/graph.db` |
+| `jidra.codebasePath` | _(workspace root)_ | Codebase root for indexing |
+| `jidra.autoReindex` | `true` | Reindex on file save |
+| `jidra.codeLensEnabled` | `true` | Show CodeLens above methods |
+
+### Install
+
+```bash
+cd vscode-jidra
+npm install
+npm run compile
+npm run package          # produces vscode-jidra-0.2.0.vsix
+code --install-extension vscode-jidra-0.2.0.vsix
+```
 
 ## Quick Start
 

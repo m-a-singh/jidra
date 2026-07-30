@@ -5,17 +5,39 @@ Config-driven: tasks are defined in a JSON config file, not hardcoded.
 Pass --config to point at any repo's eval config.
 Hallucinations cause hard failure (correct=False) when count > halluc_max (default 0).
 
-Run:
-    ./venv/bin/python evals/agent_eval_py_v2.py \
-        --graph    output/database/jidra-.../graph.db \
-        --codebase /path/to/jidra \
+Usage (run from repo root):
+    # Run against JIDRA's own Python codebase
+    python evals/harness/python/agent_eval_py_v2.py \
+        --graph    .jidra/graph.db \
+        --codebase . \
         --config   evals/harness/python/jidra_python.json \
-        --model    claude-haiku-4-5-20251001 \
-        --out      results/results_py_v2.json
+        --model    claude-sonnet-4-6 \
+        --out      evals/harness/python/results/results_py_v2.json
 
-    ./venv/bin/python evals/agent_eval_py_v2.py \
-        --graph output/database/jidra-.../graph.db \
-        --config evals/harness/python/jidra_python.json --selfcheck
+    # Run specific tasks only
+    python evals/harness/python/agent_eval_py_v2.py \
+        --graph    .jidra/graph.db \
+        --codebase . \
+        --config   evals/harness/python/jidra_python.json \
+        --tasks    PY1,PY3 \
+        --out      evals/harness/python/results/results_py_v2.json
+
+    # Validate ground-truth data in graph before running
+    python evals/harness/python/agent_eval_py_v2.py \
+        --graph  .jidra/graph.db \
+        --config evals/harness/python/jidra_python.json \
+        --selfcheck
+
+Flags:
+    --graph      Path to JIDRA graph.db  (required)
+    --codebase   Repo root dir           (required unless --selfcheck)
+    --config     JSON task config file   (required)
+    --model      Anthropic model ID      (default: claude-haiku-4-5-20251001)
+    --tasks      Comma list e.g. PY1,PY2 (default: all tasks in config)
+    --out        JSON output path        (default: results/eval_agent_results_py_v2.json)
+    --skill      Path to .md skill file  (appended to system prompt)
+    --selfcheck  Validate graph data without running the agent
+    --quiet      Suppress per-call logs
 """
 
 from __future__ import annotations

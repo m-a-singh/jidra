@@ -193,6 +193,22 @@ function nodeSource(node) {
   }
 }
 
+function nodeSourceWithDocs(node) {
+  try {
+    let docs = "";
+    try {
+      const jsDocs = node.getJsDocs ? node.getJsDocs() : [];
+      if (jsDocs.length > 0) {
+        docs = jsDocs.map(d => d.getText()).join("\n") + "\n";
+      }
+    } catch {}
+    const src = node.getText().slice(0, 4000 - docs.length);
+    return docs + src;
+  } catch {
+    return "";
+  }
+}
+
 function startLine(node) {
   try {
     return node.getStartLineNumber();
@@ -327,6 +343,105 @@ function extractFile(sourceFile, root) {
     // Constructor
     for (const ctor of cls.getConstructors()) {
       extractMethod(ctor, fullName, cId, relPath, imports, decoratorNames, allRecords, "__init__");
+    }
+
+    // Getters and setters
+    for (const getter of cls.getGetAccessors()) {
+      extractMethod(getter, fullName, cId, relPath, imports, decoratorNames, allRecords, `get_${getter.getName()}`);
+    }
+    for (const setter of cls.getSetAccessors()) {
+      extractMethod(setter, fullName, cId, relPath, imports, decoratorNames, allRecords, `set_${setter.getName()}`);
+    }
+  }
+
+  // ── Interfaces ────────────────────────────────────────────────────────────
+  for (const iface of sourceFile.getInterfaces()) {
+    const ifaceName = iface.getName();
+    if (!ifaceName) continue;
+    const fullName = `${ns}.${ifaceName}`;
+    const iId = classId(fullName, relPath);
+    const extendsExprs = iface.getExtends();
+
+    allRecords.push({
+      _type: "class",
+      id: iId,
+      package_name: ns,
+      name: ifaceName,
+      full_name: fullName,
+      file_path: relPath,
+      start_line: startLine(iface),
+      end_line: endLine(iface),
+      modifiers: [],
+      annotations: [],
+      extends: null,
+      implements: extendsExprs.map(e => e.getExpression().getText()),
+      imports,
+      stereotypes: ["interface"],
+      is_interface: true,
+      language: "typescript",
+    });
+
+    for (const ext of extendsExprs) {
+      const target = ext.getExpression().getText();
+      const edgeId = inheritanceEdgeId(fullName, target, "implements");
+      allRecords.push({
+        _type: "inheritance_edge",
+        id: edgeId,
+        source_class_id: iId,
+        source_class: fullName,
+        target_class: target,
+        relation: "implements",
+      });
+    }
+
+    for (const method of iface.getMethods()) {
+      extractMethod(method, fullName, iId, relPath, imports, [], allRecords);
+    }
+  }
+
+  // ── Enums ─────────────────────────────────────────────────────────────────
+  for (const enumDecl of sourceFile.getEnums()) {
+    const enumName = enumDecl.getName();
+    if (!enumName) continue;
+    const fullName = `${ns}.${enumName}`;
+    const eId = classId(fullName, relPath);
+
+    allRecords.push({
+      _type: "class",
+      id: eId,
+      package_name: ns,
+      name: enumName,
+      full_name: fullName,
+      file_path: relPath,
+      start_line: startLine(enumDecl),
+      end_line: endLine(enumDecl),
+      modifiers: enumDecl.getModifiers().map(m => m.getText()),
+      annotations: [],
+      extends: null,
+      implements: [],
+      imports,
+      stereotypes: ["enum"],
+      language: "typescript",
+    });
+
+    for (const member of enumDecl.getMembers()) {
+      const mName = member.getName();
+      let valText = mName;
+      try {
+        const init = member.getInitializer();
+        if (init) valText = init.getText();
+      } catch {}
+      const fId = fieldId(fullName, mName, relPath, startLine(member));
+      allRecords.push({
+        _type: "field",
+        id: fId,
+        class_id: eId,
+        name: mName,
+        type_name: valText,
+        modifiers: [],
+        file_path: relPath,
+        line: startLine(member),
+      });
     }
   }
 
@@ -477,7 +592,7 @@ function extractMethod(node, classFullName, cId, relPath, imports, classDecorato
     file_path: relPath,
     start_line: sl,
     end_line: endLine(node),
-    source: nodeSource(node),
+    source: nodeSourceWithDocs(node),
     class_context: classContext,
     annotations: decoratorNames,
     local_variable_types: {},
@@ -693,9 +808,58 @@ function extractCallSites(node, callerMethodId, relPath, records) {
 
 // ── Resolve call edges after all files processed ──────────────────────────────
 
-function resolveCallEdges(_records) {
-  // Edges are now emitted inline during extraction (resolved_candidates holds real method IDs).
-  return [];
+function resolveCallEdges(records) {
+  const extra = [];
+
+  // Build extends map: classFullName → parentFullName
+  const extendsMap = new Map();
+  for (const r of records) {
+    if (r._type === "class" && r.extends) {
+      extendsMap.set(r.full_name, r.extends);
+    }
+  }
+
+  // Build callerMethodId → classFullName map
+  const methodToClass = new Map();
+  for (const r of records) {
+    if (r._type === "method") {
+      methodToClass.set(r.id, r.class_full_name);
+    }
+  }
+
+  // Resolve super.method() callsites
+  for (const r of records) {
+    if (r._type !== "callsite" || r.receiver !== "super") continue;
+    const callerClass = methodToClass.get(r.caller_method_id);
+    if (!callerClass) continue;
+
+    let parentName = extendsMap.get(callerClass);
+    while (parentName) {
+      const prefix = `${parentName}#${r.callee_name}(`;
+      let found = false;
+      for (const [sig, mId] of methodRegistry.entries()) {
+        if (sig.startsWith(prefix) && !r.resolved_candidates.includes(mId)) {
+          r.resolved_candidates.push(mId);
+          r.resolution_status = "resolved";
+          r.resolution_reason = "super_resolution";
+          const reId = resolvedCallEdgeId(r.id, mId);
+          extra.push({
+            _type: "resolved_call_edge",
+            id: reId,
+            callsite_id: r.id,
+            caller_method_id: r.caller_method_id,
+            callee_method_id: mId,
+          });
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+      parentName = extendsMap.get(parentName);
+    }
+  }
+
+  return extra;
 }
 
 // ── JS/Frontend source root detection ────────────────────────────────────────
