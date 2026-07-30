@@ -2315,6 +2315,11 @@ def build_graph(
 
         return build_go_graph(codebase_root, on_progress=on_progress, skip_folders=skip_folders)
 
+    def _extract_csharp() -> Graph:
+        from .cs_extractor import build_cs_graph
+
+        return build_cs_graph(codebase_root, on_progress=on_progress, skip_folders=skip_folders)
+
     def _extract_java() -> Graph:
         g = _build_java_graph(
             codebase_root,
@@ -2333,6 +2338,7 @@ def build_graph(
         "python": _extract_python,
         "scala": _extract_scala,
         "go": _extract_go,
+        "csharp": _extract_csharp,
         "java": _extract_java,
     }
     active = [(lang, fn) for lang, fn in lang_tasks.items() if lang in langs]
@@ -2486,6 +2492,21 @@ def build_graph_for_files(files: set[Path], codebase_root: Path) -> tuple[Graph,
                 on_error=lambda item, exc: failed_files.add(item),
             )
             graphs.append(go_graph)
+        except (ImportError, AttributeError):
+            pass
+
+    # Extract C# files
+    cs_files = {f for f in files if f.suffix == ".cs"}
+    if cs_files:
+        try:
+            from .cs_extractor import build_cs_graph_for_files
+
+            cs_graph = build_cs_graph_for_files(
+                cs_files,
+                codebase_root,
+                on_error=lambda item, exc: failed_files.add(item),
+            )
+            graphs.append(cs_graph)
         except (ImportError, AttributeError):
             pass
 

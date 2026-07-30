@@ -259,6 +259,58 @@ class _FileExtractor:
                     self._emit_field(member, cls)
         return cls
 
+    def _emit_enum(self, node) -> None:
+        name_node = _child(node, "type_identifier")
+        if name_node is None:
+            return
+        name = _text(name_node, self.src)
+        full_name = f"{self.namespace}.{name}"
+        cid = class_id(full_name, self.rel)
+        cls = ClassEntry(
+            id=cid,
+            package_name=self.namespace,
+            name=name,
+            full_name=full_name,
+            file_path=self.rel,
+            start_line=node.start_point[0] + 1,
+            end_line=node.end_point[0] + 1,
+            modifiers=[],
+            annotations=[],
+            extends=None,
+            implements=[],
+            imports=list(self.imports),
+            stereotypes=["enum"],
+            language="typescript",
+        )
+        self.classes.append(cls)
+        body = _child(node, "enum_body")
+        if body is None:
+            return
+        for member in body.children:
+            if member.type == "enum_assignment":
+                name_n = member.child_by_field_name("name") or _child(member, "property_identifier")
+                val_n = member.child_by_field_name("value")
+                member_name = _text(name_n, self.src) if name_n else None
+                val_text = _text(val_n, self.src) if val_n else (member_name or "")
+            elif member.type in ("property_identifier", "identifier"):
+                member_name = _text(member, self.src)
+                val_text = member_name or ""
+            else:
+                continue
+            if not member_name:
+                continue
+            self.fields.append(
+                FieldEntry(
+                    id=field_id(cls.full_name, member_name, self.rel, member.start_point[0] + 1),
+                    class_id=cid,
+                    name=member_name,
+                    type_name=val_text,
+                    modifiers=[],
+                    file_path=self.rel,
+                    line=member.start_point[0] + 1,
+                )
+            )
+
     def _module_class_entry(self) -> ClassEntry:
         if self._module_class is None:
             name = _class_name_from_path(self.rel)
@@ -567,6 +619,7 @@ class _FileExtractor:
                     "interface_declaration",
                     "function_declaration",
                     "lexical_declaration",
+                    "enum_declaration",
                 ):
                     self._dispatch_top(c, inner_decorators)
             return
@@ -578,6 +631,8 @@ class _FileExtractor:
             self._emit_function(n)
         elif n.type == "lexical_declaration":
             self._emit_lexical(n)
+        elif n.type == "enum_declaration":
+            self._emit_enum(n)
 
 
 def _load_tsconfig_paths(codebase_root: Path) -> dict[str, str]:

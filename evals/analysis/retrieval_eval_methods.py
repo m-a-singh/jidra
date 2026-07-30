@@ -8,18 +8,20 @@ symbols only (fair comparison for JIDRA's method-centric architecture).
 12 cases per repo: 6 search + 6 explore.
 Explore runs both `explore` AND `get_agent_flow`, reports separately + combined.
 
-Usage:
+Usage (run from repo root):
     # Run one repo
-    PYTHONPATH=src python evals/retrieval_eval_all.py \
+    PYTHONPATH=src python evals/analysis/retrieval_eval_methods.py \
       --repo mtkruto \
-      --db /path/to/MTKruto/graph.db \
-      --out evals/results_mtkruto.json
+      --db /path/to/MTKruto/.jidra/graph.db \
+      --out evals/analysis/results/results_mtkruto.json
 
     # Compare against codegraph JSON
-    PYTHONPATH=src python evals/retrieval_eval_all.py \
+    PYTHONPATH=src python evals/analysis/retrieval_eval_methods.py \
       --repo mtkruto \
-      --db /path/to/graph.db \
+      --db /path/to/MTKruto/.jidra/graph.db \
       --compare /path/to/codegraph_results.json
+
+    # Available --repo values: mtkruto, trezor, postybirb, shapeshift
 """
 
 from __future__ import annotations

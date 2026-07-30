@@ -38,6 +38,13 @@
       "method": "sendMessage",
       "file_hint": "client_generic",
       "source_keywords": ["chatId", "text", "message", "params"]
+    },
+    {
+      "id": "TS6",
+      "prompt": "I'm changing the signature of `cleanObject`. List every file that calls it — I need the full blast radius.",
+      "checker": "change_impact",
+      "method": "cleanObject",
+      "min_files": 5
     }
   ]
 }

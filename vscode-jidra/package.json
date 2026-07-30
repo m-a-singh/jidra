@@ -1,0 +1,134 @@
+{
+  "name": "vscode-jidra",
+  "displayName": "JIDRA",
+  "description": "Call graph intelligence for your codebase",
+  "version": "0.2.0",
+  "publisher": "jidra",
+  "author": "Akhil Singh",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/masingh/jidra"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:java",
+    "onLanguage:python",
+    "onLanguage:csharp",
+    "onLanguage:go",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "jidra.findCallers",
+        "title": "JIDRA: Find Callers"
+      },
+      {
+        "command": "jidra.showFlow",
+        "title": "JIDRA: Show Call Flow"
+      },
+      {
+        "command": "jidra.blastRadius",
+        "title": "JIDRA: Blast Radius"
+      },
+      {
+        "command": "jidra.search",
+        "title": "JIDRA: Search Symbol"
+      },
+      {
+        "command": "jidra.reindex",
+        "title": "JIDRA: Reindex"
+      },
+      {
+        "command": "jidra.openGraph",
+        "title": "JIDRA: Open Graph"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "jidra.findCallers",
+          "when": "editorHasSelection || editorTextFocus",
+          "group": "jidra@1"
+        },
+        {
+          "command": "jidra.showFlow",
+          "when": "editorHasSelection || editorTextFocus",
+          "group": "jidra@2"
+        },
+        {
+          "command": "jidra.blastRadius",
+          "when": "editorHasSelection || editorTextFocus",
+          "group": "jidra@3"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "jidra.search",
+        "key": "ctrl+shift+j",
+        "mac": "cmd+shift+j"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "jidraCallers",
+          "name": "JIDRA: Callers"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "JIDRA",
+      "properties": {
+        "jidra.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:7474",
+          "description": "JIDRA UI server URL"
+        },
+        "jidra.graphPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to graph.db (empty = auto-discover)"
+        },
+        "jidra.codebasePath": {
+          "type": "string",
+          "default": "",
+          "description": "Codebase root (empty = workspace root)"
+        },
+        "jidra.autoReindex": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reindex on file save"
+        },
+        "jidra.codeLensEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show caller count CodeLens"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "package": "vsce package",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.19.0",
+    "typescript": "^5.3.0",
+    "vis-network": "^10.1.0"
+  }
+}

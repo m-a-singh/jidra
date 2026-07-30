@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-JIDRA's graph-based context reduction extends to **Go** codebases using an **in-process tree-sitter AST** approach — no Docker, no compiler, no external sidecar. Tested on [`thingsboard`](thingsboard), a real enterprise Go service, across two benchmarks measuring answer quality and tool call efficiency.
+JIDRA's graph-based context reduction extends to **Go** codebases using an **in-process tree-sitter AST** approach — no Docker, no compiler, no external sidecar. Tested on a real enterprise Go service, across two benchmarks measuring answer quality and tool call efficiency.
 
 ### Key Metrics — Go (tree-sitter call graph extraction)
 
@@ -16,11 +16,11 @@ JIDRA's graph-based context reduction extends to **Go** codebases using an **in-
 | MCP tools | All 6 |
 | CLAUDE.md injection | ✅ |
 
-### Graph — `thingsboard` (152 nodes, 2,310 edges)
+### Graph — Go logger package (152 nodes, 2,310 edges)
 
-![thingsboard call graph](docs/assets/go_graph_redacted.png)
+![Go call graph](docs/assets/go_graph_redacted.png)
 
-The graph shows the full extracted call graph for `thingsboard`. Blue nodes are structs/functions; yellow/orange nodes and edges highlight the active query path. Two distinct subgraphs are visible — the core logging pipeline (left, densely connected) and the redaction/context subsystem (right, with the yellow hot path through `redactStandard` → `thingsboard` that B2 queried). **152 nodes and 2,310 edges** from a ~20-file Go package — dense connectivity confirming the cross-file method resolution fix is working correctly.
+The graph shows the full extracted call graph for the Go logger package. Blue nodes are structs/functions; yellow/orange nodes and edges highlight the active query path. Two distinct subgraphs are visible — the core logging pipeline (left, densely connected) and the redaction/context subsystem (right, with the yellow hot path through `redactStandard` → `redactField` that B2 queried). **152 nodes and 2,310 edges** from a ~20-file Go package — dense connectivity confirming the cross-file method resolution fix is working correctly.
 
 ---
 
@@ -28,7 +28,7 @@ The graph shows the full extracted call graph for `thingsboard`. Blue nodes are 
 
 ---
 
-## Live Benchmarks — `thingsboard`
+## Live Benchmarks — Go logger package
 
 Both benchmarks run on the same enterprise Go service, same model (Sonnet 4.6, 1M context), sessions started fresh on the same repo.
 
@@ -36,7 +36,7 @@ Both benchmarks run on the same enterprise Go service, same model (Sonnet 4.6, 1
 
 ### Benchmark 1 — Symbol Location Query
 
-**Query:** "What does `thingsboard` in @logger/logger.go do?"
+**Query:** "What does `ensureRequestContext` in @logger/logger.go do?"
 
 | | Without JIDRA | With JIDRA |
 |---|---|---|
@@ -52,7 +52,7 @@ Both benchmarks run on the same enterprise Go service, same model (Sonnet 4.6, 1
 
 **With JIDRA:** One graph call. Answer immediately:
 
-> `thingsboard` (in `logger/context.go:72`) ensures a context has both a `thingsboard` and a `thingsboard`. It generates a new UUID-style ID once, then only sets each field if it's currently empty — so existing IDs are never overwritten. Returns the (possibly updated) context.
+> `ensureRequestContext` (in `logger/context.go:72`) ensures a context has both a `requestId` and a `traceId`. It generates a new UUID-style ID once, then only sets each field if it's currently empty — so existing IDs are never overwritten. Returns the (possibly updated) context.
 
 #### Key Insight — Wrong-File Elimination
 
@@ -62,14 +62,14 @@ The user named `logger/logger.go` in the query — a natural reference to the pa
 
 ### Benchmark 2 — Caller + Behavior Query
 
-**Query:** "Who calls `thingsboard` in @logger/redaction.go and what does it do?"
+**Query:** "Who calls `redactField` in @logger/redaction.go and what does it do?"
 
 | | Without JIDRA | With JIDRA |
 |---|---|---|
 | Tool calls | read `logger/redaction.go` (155 lines) | read `logger/redaction.go` (155 lines) + jidra ×2 |
 | Output tokens | **948** | **399** |
 | Time | 11s | 11s |
-| Caller identified | ✅ `redactStandard` at line 150 | ✅ `redactStandard` at line 150, inside `thingsboard` callback |
+| Caller identified | ✅ `redactStandard` at line 150 | ✅ `redactStandard` at line 150, inside `redactEntry` callback |
 | Security design insight | ❌ Absent | ✅ Present |
 
 #### Answer Quality
@@ -78,7 +78,7 @@ The user named `logger/logger.go` in the query — a natural reference to the pa
 
 **With JIDRA:** Read the file, called jidra twice (caller lookup + call chain), produced a 399-token answer with the same behavioral coverage plus the security design intent:
 
-Without JIDRA, the model described *what* `thingsboard` does. With JIDRA it described *why it exists* — because the graph lookup surfaced the full call chain showing this is a deliberate redaction pattern, not just a utility function.
+Without JIDRA, the model described *what* `redactField` does. With JIDRA it described *why it exists* — because the graph lookup surfaced the full call chain showing this is a deliberate redaction pattern, not just a utility function.
 
 #### Output Token Delta
 

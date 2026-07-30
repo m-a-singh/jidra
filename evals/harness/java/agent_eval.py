@@ -21,7 +21,7 @@ index changes.
 Usage:
     ./venv/bin/python scripts/agent_eval.py \
         --graph  <path/to/graph.db> \
-        --codebase thingsboard \
+        --codebase /path/to/thingsboard \
         [--model claude-sonnet-4-6] [--tasks T1,T2] [--out agent_eval_results.json]
 
 Auth: uses ANTHROPIC_AUTH_TOKEN + ANTHROPIC_BASE_URL from env (proxy), falling
@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent.parent  # evals/harness/java -> project root
 VENV_PY = str(REPO_ROOT / "venv" / "bin" / "python")
 
-PROJECT_PKGS = ("thingsboard",)
+PROJECT_PKGS = ("org.thingsboard",)
 MAX_ITERS = 14
 AGENT_MAX_TOKENS = 1500
 
@@ -154,9 +154,7 @@ class Oracle:
         """Project FQNs, short class names, or .java paths mentioned in `text` that don't exist."""
         bad: list[str] = []
         # project-package FQNs e.g. com.example.search.Foo or ...Foo#bar(...)
-        for m in re.findall(
-            r"\b(?:com.thingsboard|thingsboard|com.thingsboard|com.thingsboard)[\w.$]*", text
-        ):
+        for m in re.findall(r"\b(?:org\.thingsboard)[\w.$]*", text):
             head = m.split("#")[0].rstrip(".")
             # accept if it's a known class, OR a known class prefix (package), OR
             # a class.method dotted form whose class is known
@@ -175,7 +173,7 @@ class Oracle:
         # Interface/impl short names e.g. "NodeConfiguration", "DeviceServiceImpl"
         # Extract PascalCase identifiers that sound like classes (not common words)
         for m in re.findall(
-            r"\b[A-Z][a-zA-Z0-9]*(?:thingsboard|Controller|Repository|Manager|Factory|Handler|Listener|Helper|Util|Impl|Interface|Abstract)(?:Impl)?\b",
+            r"\b[A-Z][a-zA-Z0-9]*(?:Controller|Repository|Manager|Factory|Handler|Listener|Helper|Util|Impl|Interface|Abstract)(?:Impl)?\b",
             text,
         ):
             short = m.split("#")[0].rstrip(".")
@@ -410,28 +408,28 @@ def make_tasks() -> list[Task]:
     tasks.append(
         Task(
             "T1",
-            "The interface `thingsboard` is implemented in this codebase. "
+            "The interface `NodeConfiguration` is implemented in this codebase. "
             "How many concrete implementations are there, and is there a single class "
-            "that 'is' the thingsboard, or many? Answer precisely.",
+            "that 'is' the NodeConfiguration, or many? Answer precisely.",
             t1,
         )
     )
 
     # T2 — interface -> concrete impl resolution.
     def t2(ans: str, o: Oracle) -> tuple[bool, str]:
-        ok = "TbMsgTypeFilterNode" in _lc(ans)
-        return ok, "names thingsboard" if ok else "missed thingsboard"
+        ok = "deviceserviceimpl" in _lc(ans)
+        return ok, "names DeviceServiceImpl" if ok else "missed DeviceServiceImpl"
 
     tasks.append(
         Task(
             "T2",
-            "Which concrete class implements the `thingsboard` interface, and "
-            "where is the `thingsboard` method actually implemented? Name the class.",
+            "Which concrete class implements the `DeviceService` interface, and "
+            "where is the `findDeviceById` method actually implemented? Name the class.",
             t2,
         )
     )
 
-    # T3 — caller / impact analysis. `thingsboard` has many real
+    # T3 — caller / impact analysis. `getCurrentUser` has many real
     # internal callers (unlike an HTTP endpoint, which has none). Pass = surfaces
     # >=3 genuine caller classes; fabricated callers are caught by hallucinated_refs.
     T3_METHOD = "getCurrentUser"
@@ -468,7 +466,7 @@ def make_tasks() -> list[Task]:
                 "couldn't find",
                 "no method",
                 "not present",
-                "no `reindex",
+                "no `reset",
             )
         )
         ok = (not exists) and says_absent
@@ -477,22 +475,22 @@ def make_tasks() -> list[Task]:
     tasks.append(
         Task(
             "T4",
-            "Explain what the method `reindexAllTenants()` on `thingsboard` "
+            "Explain what the method `resetAllDevices()` on `DeviceController` "
             "does and what it calls. If it is not present, say so explicitly.",
             t4,
         )
     )
 
-    # T5 — flow trace: immediate downstream of the search endpoint.
+    # T5 — flow trace: immediate downstream of the saveDevice endpoint.
     def t5(ans: str, o: Oracle) -> tuple[bool, str]:
-        # ground truth: callees of thingsboard.thingsboard (a real endpoint)
+        # ground truth: callees of DeviceController.saveDevice (a real endpoint)
         rows = o.conn.execute(
             """SELECT DISTINCT callee.method_name
                FROM resolved_call_edges e
                JOIN methods caller ON caller.id=e.caller_method_id AND caller.variant=e.variant
                JOIN methods callee ON callee.id=e.callee_method_id AND callee.variant=e.variant
-               WHERE e.variant='validated' AND caller.method_name='thingsboard'
-                 AND caller.class_full_name LIKE '%thingsboard'""",
+               WHERE e.variant='validated' AND caller.method_name='saveDevice'
+                 AND caller.class_full_name LIKE '%DeviceController'""",
         ).fetchall()
         callees = {r[0].lower() for r in rows}
         if not callees:
@@ -504,7 +502,7 @@ def make_tasks() -> list[Task]:
     tasks.append(
         Task(
             "T5",
-            "Trace the method `thingsboard` in `thingsboard`: what does "
+            "Trace the method `saveDevice` in `DeviceController`: what does "
             "it call directly? List the downstream methods/services it invokes.",
             t5,
         )
@@ -512,7 +510,7 @@ def make_tasks() -> list[Task]:
 
     # T6 — hallucination bait: an interface that DOES NOT EXIST. A grounded tool
     # forces "not found"; a name-matching backend may fabricate implementations.
-    FAKE_IFACE = "TenantRoutingStrategy"
+    FAKE_IFACE = "DeviceRoutingStrategy"
 
     def t6(ans: str, o: Oracle) -> tuple[bool, str]:
         exists = any(c.rsplit(".", 1)[-1] == FAKE_IFACE for c in o.class_full_names)
@@ -546,12 +544,12 @@ def make_tasks() -> list[Task]:
         )
     )
 
-    # T7 — multi-impl pick trap. thingsboard has 101 impls; one (thingsboard)
+    # T7 — multi-impl pick trap. TbNode has 100+ impls; TbMsgTypeFilterNode
     # matches the described purpose. Pass = narrows to the right impl OR honestly
     # flags ambiguity; fail = confidently names a wrong/fabricated single class.
     def t7(ans: str, o: Oracle) -> tuple[bool, str]:
         a = _lc(ans)
-        right = "TbMsgTypeFilterNode" in a
+        right = "tbmsgtypefilternode" in a
         hedges = any(
             k in a
             for k in (
@@ -570,9 +568,8 @@ def make_tasks() -> list[Task]:
     tasks.append(
         Task(
             "T7",
-            "Among the implementations of `thingsboard`, which single class is "
-            "responsible for matching on a thingsboard's NAME? Name it, or say if it can't "
-            "be determined.",
+            "Among the implementations of `TbNode`, which single class is "
+            "responsible for filtering messages by their TYPE? Name it.",
             t7,
         )
     )
@@ -581,16 +578,16 @@ def make_tasks() -> list[Task]:
     def t8(ans: str, o: Oracle) -> tuple[bool, str]:
         a = _lc(ans)
         has_source = any(
-            k in a for k in ("thingsboard", "thingsboard", "thingsboard", "thingsboard", "thingsboard")
+            k in a for k in ("device", "accesstoken", "gettenantid", "checkentity", "savedevice")
         )
-        located = any(k in a for k in ("thingsboard", "thingsboard", "thingsboard"))
+        located = any(k in a for k in ("devicecontroller", "device_controller", "controller"))
         ok = has_source and located
         return ok, f"has_source={has_source} located={located}"
 
     tasks.append(
         Task(
             "T8",
-            "Use the code graph tool to fetch the source of the `thingsboard` method on `thingsboard` directly. "
+            "Use the code graph tool to fetch the source of the `saveDevice` method on `DeviceController` directly. "
             "Show its implementation — what parameters does it take and what does it return?",
             t8,
         )
@@ -690,54 +687,55 @@ def selfcheck(graph: str) -> bool:
     """Deterministic GT validation — NO LLM, NO money. Confirms every task's
     ground truth resolves before a paid run. Each row must read 'ok'."""
     o = Oracle.load(graph)
-    impls_cf = o.implementers("NodeConfiguration")
-    impls_os = {c.rsplit(".", 1)[-1] for c in o.implementers("TbNode")}
+    impls_nc = o.implementers("NodeConfiguration")
+    impls_tbnode = {c.rsplit(".", 1)[-1] for c in o.implementers("TbNode")}
     callers_t3 = o.callers_of("getCurrentUser")
     callees_t5 = o.conn.execute(
         """SELECT DISTINCT callee.method_name FROM resolved_call_edges e
            JOIN methods caller ON caller.id=e.caller_method_id AND caller.variant=e.variant
            JOIN methods callee ON callee.id=e.callee_method_id AND callee.variant=e.variant
-           WHERE e.variant='validated' AND caller.method_name='thingsboard'
-             AND caller.class_full_name LIKE '%thingsboard'"""
+           WHERE e.variant='validated' AND caller.method_name='saveDevice'
+             AND caller.class_full_name LIKE '%DeviceController'"""
     ).fetchall()
     fake_absent = not any(
-        c.rsplit(".", 1)[-1] == "TenantRoutingStrategy" for c in o.class_full_names
+        c.rsplit(".", 1)[-1] == "DeviceRoutingStrategy" for c in o.class_full_names
     )
-    chan = any(c.rsplit(".", 1)[-1] == "TbMsgTypeFilterNode" for c in impls_cf)
     t4_absent = not o.method_exists("DeviceController", "resetAllDevices")
+    t7_present = "TbMsgTypeFilterNode" in impls_tbnode
+    t8_exists = o.method_exists("DeviceController", "saveDevice")
 
     checks = [
-        ("T1 thingsboard impls == 101", len(impls_cf) == 101, f"{len(impls_cf)}"),
+        ("T1 NodeConfiguration impls >=50", len(impls_nc) >= 50, f"{len(impls_nc)}"),
         (
-            "T2 thingsboard in impls",
-            TbMsgTypeFilterNode" in impls_os,
-            str(sorted(impls_os)),
+            "T2 DeviceServiceImpl in impls",
+            o.method_exists("DeviceServiceImpl", "findDeviceById"),
+            "found" if o.method_exists("DeviceServiceImpl", "findDeviceById") else "missing",
         ),
         (
-            "T3 thingsboard callers >=3",
+            "T3 getCurrentUser callers >=3",
             len(callers_t3) >= 3,
             f"{len(callers_t3)} callers",
         ),
         (
-            "T4 reindexAllTenants ABSENT",
+            "T4 resetAllDevices ABSENT on DeviceController",
             t4_absent,
             "absent" if t4_absent else "PRESENT!",
         ),
         (
-            "T5 thingsboard callees >0",
+            "T5 saveDevice callees >0",
             len(callees_t5) > 0,
             f"{len(callees_t5)} callees",
         ),
         (
-            "T6 TenantRoutingStrategy ABSENT",
+            "T6 DeviceRoutingStrategy ABSENT",
             fake_absent,
             "absent" if fake_absent else "PRESENT!",
         ),
-        ("T7 thingsboard is a CF impl", chan, "found" if chan else "missing"),
+        ("T7 TbMsgTypeFilterNode is TbNode impl", t7_present, "found" if t7_present else "missing"),
         (
-            "T8 thingsboard.thingsboard fetchable",
-            o.method_exists("thingsboard", "thingsboard"),
-            "found" if o.method_exists("thingsboard", "thingsboard") else "missing",
+            "T8 DeviceController.saveDevice fetchable",
+            t8_exists,
+            "found" if t8_exists else "missing",
         ),
     ]
     print("=== deterministic self-check (no LLM) ===")

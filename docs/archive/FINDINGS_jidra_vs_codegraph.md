@@ -54,7 +54,7 @@ code-graph MCP that exposes a single broad tool (`codegraph_explore`).
 | **Receiver-type-aware** | resolution that figures out the *type* of `x` before matching `foo()` — accurate. Opposed to **name-match**: link to any method named `foo`, regardless of type. |
 | **FTS5 / BM25** | FTS5 = SQLite's full-text search index; BM25 = the relevance-ranking formula it uses. Not alternatives — used together. |
 | **AST** | abstract syntax tree — the parsed structure of source code (via the `tree-sitter` parser). |
-| **FQN** | fully-qualified name, e.g. `thingsboard` (vs the short name `Foo`). |
+| **FQN** | fully-qualified name, e.g. `org.thingsboard.server.controller.DeviceController` (vs the short name `DeviceController`). |
 | **smithy4j** | a code generator used by this repo; it emits Java source at build time (so some real classes are "generated," not hand-written). |
 | **Lombok / Spring Data** | Java libraries that synthesize methods at compile time (getters, CRUD ops) that never appear as source text. |
 | **Interface → impl** | finding the concrete class that implements an interface (Spring apps lean heavily on this). |
@@ -169,13 +169,13 @@ JIDRA correctly reports ambiguity; CodeGraph collapses many callers onto a singl
 ### The 7 tasks (what each agent was actually asked)
 | id | task given to the agent | what it probes | correct answer |
 |---|---|---|---|
-| **T1** | "How many concrete implementations does `thingsboard` have — one class, or many?" | enumeration / breadth | 101 implementations (a strategy pattern; not one) |
-| **T2** | "Which class implements `thingsboard`, and where is `thingsboard` implemented?" | interface→impl + method location | `thingsboard` |
-| **T3** | "Which classes call `thingsboard`?" (impact analysis) | caller / blast-radius recall | the real set of caller classes (39) |
-| **T4** | "What does `thingsboard()` on `thingsboard` do?" | negative — method does **not** exist | "it does not exist" |
-| **T5** | "Trace what `thingsboard` calls downstream." | multi-hop flow trace | the 8 real downstream callees |
-| **T6** | "Describe the `thingsboard` interface and its impls." | hallucination bait — interface does **not** exist | "it does not exist" |
-| **T7** | "Which single `thingsboard` impl matches on a channel's NAME?" | pick-one-among-many trap | `thingsboard` (or honestly flag ambiguity) |
+| **T1** | "How many concrete implementations does `NodeConfiguration` have — one class, or many?" | enumeration / breadth | 135 implementations (a strategy pattern; not one) |
+| **T2** | "Which class implements `DeviceService`, and where is `findDeviceById` implemented?" | interface→impl + method location | `DeviceServiceImpl` |
+| **T3** | "Which classes call `getCurrentUser`?" (impact analysis) | caller / blast-radius recall | the real set of caller classes (39) |
+| **T4** | "What does `resetAllDevices()` on `DeviceController` do?" | negative — method does **not** exist | "it does not exist" |
+| **T5** | "Trace what `saveDevice` calls downstream." | multi-hop flow trace | the real downstream callees |
+| **T6** | "Describe the `DeviceRoutingStrategy` interface and its impls." | hallucination bait — interface does **not** exist | "it does not exist" |
+| **T7** | "Which single `TbNode` impl filters by message TYPE?" | pick-one-among-many trap | `TbMsgTypeFilterNode` (or honestly flag ambiguity) |
 
 Ground truth for every task is computed from the graph database, not hand-written, and is
 validated by `--selfcheck` before any paid run.
@@ -234,7 +234,7 @@ JIDRA's token efficiency improves significantly with runtime context:
 **Why the 37% overhead without actuator?** On Graph B, JIDRA must re-explore ambiguities
 multiple times per task. For instance, when a method exists on multiple implementations of an
 interface, Graph B forces the agent to iterate callers, chase implementations, and backtrack.
-With actuator beans, Spring DI is resolved upfront: `thingsboard` is the *actual*
+With actuator beans, Spring DI is resolved upfront: `DeviceServiceImpl` is the *actual*
 runtime bean wiring a method call to, not a hypothesis. This eliminates 3–5 speculative
 tool calls per multi-impl task.
 
@@ -264,16 +264,16 @@ workloads. Do not disable if present.
 
 ## 5. Bugs found and fixed during the investigation
 1. **`get_implementations` returned 0** (this regressed T1 to 17 calls/275k). Two causes:
-   (a) the selector resolved `"thingsboard"` to `thingsboardImpl` (substring
+   (a) the selector resolved `"NodeConfiguration"` to `NodeConfigurationImpl` (substring
    match); (b) adjacency was keyed by fully-qualified name, but `inheritance_edges.target_class`
    is stored as the **short** name. **Fixed:** resolve by short name, prefer interface/abstract
-   stereotype, key adjacency by short name. `thingsboard` now → 101.
+   stereotype, key adjacency by short name. `NodeConfiguration` now → 135.
 2. **`_resolve_single_method` produced fuzzy guesses on a missing method** (the T2 spiral).
    When a selector named a real class but a non-existent method, it returned fuzzy
    cross-graph suggestions, so the agent kept searching. **Fixed:** when the class resolves
    but the method does not, return a **definitive** `method_not_found_on_class` payload that
-   lists the class's actual methods — the agent stops in 1 call. (T2's `thingsboard` was
-   in fact a fabricated method name in the task prompt; the real method is `thingsboard`,
+   lists the class's actual methods — the agent stops in 1 call. (T2's original method name was
+   in fact a fabricated method name in the task prompt; the real method is `findDeviceById`,
    and the task was repointed accordingly.)
 3. **`mcp_server` crash on empty suggestions** — `result.get("suggestions", [None])[0]` threw
    `IndexError` when a result carried `suggestions: []`. **Fixed** to `(... or [None])[0]`.
@@ -367,7 +367,7 @@ weak. None of these undercut the core verdict.
 # full agent-in-loop eval (spends LLM tokens via the proxy)
 ./venv/bin/python scripts/agent_eval.py \
   --graph    <path/to/graph.db> \
-  --codebase thingsboard \
+  --codebase /path/to/thingsboard \
   --model    claude-haiku-4-5-20251001 \
   --out      eval_agent_results.json
 # subset: --tasks T2,T5   · silence live logs: --quiet

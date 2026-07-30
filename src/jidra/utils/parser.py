@@ -16,6 +16,13 @@ def make_go_parser() -> Parser:
     return Parser(GO_LANGUAGE)
 
 
+def make_cs_parser() -> Parser:
+    """In-process C# parser. Raises ImportError if tree-sitter-c-sharp is missing."""
+    import tree_sitter_c_sharp as tscs
+
+    return Parser(Language(tscs.language()))
+
+
 def make_ts_parser(tsx: bool = False) -> Parser:
     """In-process TypeScript/TSX parser (Phase 7). Imported lazily so projects
     without the optional `tree-sitter-typescript` dependency still load; raises

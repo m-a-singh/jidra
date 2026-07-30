@@ -5,7 +5,7 @@
   "tasks": [
     {
       "id": "T1",
-      "prompt": "The interface `NodeConfiguration` is implemented in this codebase. How many concrete implementations are there? Answer with a count.",
+      "prompt": "The interface `NodeConfiguration` is implemented across this codebase. How many concrete implementations are there? Answer with a count.",
       "checker": "impl_count",
       "interface": "NodeConfiguration",
       "min_count": 50

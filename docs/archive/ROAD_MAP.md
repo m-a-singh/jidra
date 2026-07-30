@@ -457,7 +457,7 @@ Next immediate focus:
 **Scala Support** ✅ (NEW)
 - SemanticDB two-pass extraction (compiler-resolved call edges)
 - Scala 2 + Scala 3 auto-detection
-- Docker sidecar mirroring thingsboard Artifactory config
+- Docker sidecar with configurable registry support
 - ~90% call resolution — highest of any JIDRA language
 - Multi-language merge: Scala + TypeScript + Python in one graph
 - Manifest-only language detection (no false positives from node_modules)

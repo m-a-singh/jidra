@@ -223,7 +223,7 @@ python3 validate_jidra_analysis.py --graph .jidra/graph.jsonl
 Make sure the path is correct:
 ```bash
 # Absolute path
-python3 validate_jidra_analysis.py --graph /path/to/.../graph_validated.jsonl
+python3 validate_jidra_analysis.py --graph /path/to/jidra/graph_validated.jsonl
 
 # Relative path (from script directory)
 cd /path/to/jidra
