@@ -489,19 +489,19 @@ On activation, the extension scans workspace folders for `.jidra/graph.db`. If f
 
 `Find Callers | Show Flow` appears above every method in Java, Python, TypeScript, Go, C#, and JavaScript files.
 
-![CodeLens and Show Flow graph panel](docs/assets/vscode-show-flow.png)
+![CodeLens and Show Flow graph panel](docs/assets/vscode-show-flow.jpg)
 
 ### JIDRA: Callers sidebar
 
 Click **Find Callers** or run `JIDRA: Find Callers` from the command palette. The Explorer sidebar panel populates with every method that directly or transitively calls the target — upstream only, no callees. Click any entry to jump to that file and line.
 
-![Callers sidebar](docs/assets/vscode-callers-sidebar.png)
+![Callers sidebar](docs/assets/vscode-callers-sidebar.jpg)
 
 ### Hover card
 
 Hover any method — JIDRA shows the full qualified class name, complete signature, and inline links: **Find Callers · Show Flow · Blast Radius**.
 
-![Hover card](docs/assets/vscode-hover.png)
+![Hover card](docs/assets/vscode-hover.jpg)
 
 ### Show Flow
 
@@ -510,6 +510,12 @@ Opens a focused call graph panel beside the editor (`JIDRA Graph`). Renders only
 ### Blast Radius
 
 `JIDRA: Blast Radius` (or CodeLens → right-click) shows all upstream callers in the sidebar, identical to Find Callers but labelled as blast radius impact. Use it to assess risk before changing a method.
+
+Hovering a method surfaces inline **Blast Radius** link — one click triggers the full upstream impact analysis without leaving the editor:
+
+<p align="center">
+  <img src="docs/assets/vscode-blast-radius-hover.jpg" alt="Hover card with Blast Radius link and impact notification" width="800">
+</p>
 
 ### Search
 
