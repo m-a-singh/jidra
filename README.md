@@ -489,7 +489,7 @@ On activation, the extension scans workspace folders for `.jidra/graph.db`. If f
 
 `Find Callers | Show Flow` appears above every method in Java, Python, TypeScript, Go, C#, and JavaScript files.
 
-![CodeLens and Show Flow graph panel](docs/assets/vscode-show-flow.jpg)
+![CodeLens — Find Callers and Show Flow above every method](docs/assets/vscode-callers-sidebar.jpg)
 
 ### JIDRA: Callers sidebar
 
@@ -504,6 +504,8 @@ Hover any method — JIDRA shows the full qualified class name, complete signatu
 ![Hover card](docs/assets/vscode-hover.jpg)
 
 ### Show Flow
+
+![Show Flow graph panel — 2-hop subgraph with focus method in amber](docs/assets/vscode-show-flow.jpg)
 
 Opens a focused call graph panel beside the editor (`JIDRA Graph`). Renders only the 2-hop subgraph centred on the target method — callers above, callees below — using vis-network with hierarchical layout. The focus method is highlighted in amber.
 
